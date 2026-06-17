@@ -66,8 +66,9 @@ export interface ClearanceStat {
 
 export interface AnalyticsKpi {
   label: Bilingual;
-  value: string;
+  value: string; // used when `amount` is absent
   delta: string;
+  amount?: number; // when set, the component formats it as locale-aware SAR
 }
 
 export interface RevenueRow {
