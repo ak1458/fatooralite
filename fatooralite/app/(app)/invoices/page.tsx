@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { invoices } from "@/data/invoices";
 import { Icon } from "@/components/ui/Icon";
@@ -44,7 +45,8 @@ export default function InvoicesPage() {
             <Icon name="filter" size={15} sw={2} />
             {t.filter}
           </button>
-          <button
+          <Link
+            href="/invoices/new"
             style={{
               display: "flex",
               alignItems: "center",
@@ -59,11 +61,12 @@ export default function InvoicesPage() {
               cursor: "pointer",
               fontFamily: "inherit",
               boxShadow: "0 8px 22px -10px var(--ac)",
+              textDecoration: "none",
             }}
           >
             <Icon name="plus" size={15} sw={2.4} />
             {t.create}
-          </button>
+          </Link>
         </div>
       </div>
 

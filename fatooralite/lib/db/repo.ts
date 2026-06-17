@@ -19,6 +19,18 @@ export async function getCompany(id: string, db: PrismaClient = defaultDb) {
   return db.company.findUnique({ where: { id }, include: { branches: true, certificates: true } });
 }
 
+/** The company's active certificate (holds the signing key pair). */
+export async function getActiveCertificate(companyId: string, db: PrismaClient = defaultDb) {
+  return db.certificate.findFirst({
+    where: { companyId, status: "active" },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function getInvoice(id: string, db: PrismaClient = defaultDb) {
+  return db.invoice.findUnique({ where: { id }, include: { lines: true, records: true } });
+}
+
 export interface CreateInvoiceArgs {
   companyId: string;
   branchId?: string;

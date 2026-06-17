@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { counters, kpis } from "@/data/kpis";
 import { Icon } from "@/components/ui/Icon";
@@ -88,7 +89,8 @@ export default function DashboardPage() {
             <Icon name="compliance" size={16} sw={1.8} />
             {t.runAudit}
           </button>
-          <button
+          <Link
+            href="/invoices/new"
             style={{
               display: "flex",
               alignItems: "center",
@@ -103,11 +105,12 @@ export default function DashboardPage() {
               cursor: "pointer",
               fontFamily: "inherit",
               boxShadow: "0 8px 22px -10px var(--ac)",
+              textDecoration: "none",
             }}
           >
             <Icon name="plus" size={16} sw={2.4} />
             {t.create}
-          </button>
+          </Link>
         </div>
       </div>
 
