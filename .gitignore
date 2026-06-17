@@ -23,3 +23,6 @@
 .DS_Store
 Thumbs.db
 *.log
+
+# playwright MCP artifacts
+.playwright-mcp/
