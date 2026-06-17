@@ -42,6 +42,11 @@ const L = {
   status: { en: "Status", ar: "الحالة" },
   viewXml: { en: "View XML", ar: "عرض XML" },
   another: { en: "Create another", ar: "إنشاء أخرى" },
+  submitClear: { en: "Submit to ZATCA", ar: "إرسال للهيئة" },
+  submittingZatca: { en: "Submitting…", ar: "جارٍ الإرسال…" },
+  cleared: { en: "Cleared by ZATCA", ar: "تمت الإجازة" },
+  reported: { en: "Reported to ZATCA", ar: "تم الإبلاغ" },
+  rejected: { en: "Rejected", ar: "مرفوضة" },
 };
 
 export function NewInvoiceForm() {
@@ -56,10 +61,15 @@ export function NewInvoiceForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<null | {
+    invoiceId: string;
     signed: { uuid: string; hash: string; xml: string; totals: { grandTotal: number } };
     status: string;
   }>(null);
   const [showXml, setShowXml] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearance, setClearance] = useState<null | { status: string; code: string; message: string }>(
+    null,
+  );
 
   // Suggest an invoice number on mount (client-only; random is impure in render).
   useEffect(() => {
@@ -118,6 +128,23 @@ export function NewInvoiceForm() {
     }
   }
 
+  async function submitToZatca(invoiceId: string) {
+    setClearing(true);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/clear`, { method: "POST" });
+      const data = await res.json();
+      setClearance({
+        status: data.status ?? "error",
+        code: data.response?.code ?? "",
+        message: data.response?.message ?? data.error ?? "",
+      });
+    } catch {
+      setClearance({ status: "error", code: "", message: "Network error" });
+    } finally {
+      setClearing(false);
+    }
+  }
+
   const label = (k: keyof typeof L) => L[k][lang];
   const inputStyle: React.CSSProperties = {
     width: "100%",
@@ -160,7 +187,53 @@ export function NewInvoiceForm() {
           <Row k={label("uuid")} v={result.signed.uuid} mono />
           <Row k={label("hash")} v={result.signed.hash.slice(0, 32) + "…"} mono />
           <Row k={label("total")} v={sar(result.signed.totals.grandTotal, lang)} />
+
+          {clearance && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: "12px 14px",
+                borderRadius: 10,
+                background:
+                  clearance.status === "rejected" || clearance.status === "error"
+                    ? "var(--dangs)"
+                    : "var(--acs)",
+                border: "1px solid var(--bd)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  color:
+                    clearance.status === "rejected" || clearance.status === "error"
+                      ? "var(--dang)"
+                      : "var(--ac)",
+                }}
+              >
+                {clearance.status === "cleared"
+                  ? label("cleared")
+                  : clearance.status === "reported"
+                    ? label("reported")
+                    : label("rejected")}
+                {clearance.code ? ` · ${clearance.code}` : ""}
+              </div>
+              {clearance.message && (
+                <div style={{ fontSize: 12, color: "var(--t2)", marginTop: 4 }}>{clearance.message}</div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+            {!clearance && (
+              <button
+                onClick={() => submitToZatca(result.invoiceId)}
+                disabled={clearing}
+                style={{ ...btnPrimary, opacity: clearing ? 0.7 : 1 }}
+              >
+                {clearing ? label("submittingZatca") : label("submitClear")}
+              </button>
+            )}
             <button onClick={() => setShowXml((s) => !s)} style={{ ...btnGhost }}>
               {label("viewXml")}
             </button>
@@ -168,10 +241,11 @@ export function NewInvoiceForm() {
               onClick={() => {
                 setResult(null);
                 setShowXml(false);
+                setClearance(null);
                 setNumber(genNumber());
                 setLines([{ description: "", quantity: 1, unitPrice: 0 }]);
               }}
-              style={{ ...btnPrimary }}
+              style={{ ...btnGhost }}
             >
               {label("another")}
             </button>
