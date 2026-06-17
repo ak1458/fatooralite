@@ -1,26 +1,142 @@
 @import "tailwindcss";
 
+/* ============================================================
+   FatooraLite design tokens (ported from the approved design).
+   Components reference ONLY these vars — never literal colors.
+   Theme is switched via [data-theme] on <html>.
+   ============================================================ */
+
+:root,
+[data-theme="dark"] {
+  --bg: #07090b;
+  --s1: #0e1216;
+  --s2: #141a1f;
+  --s3: #1b232a;
+  --bd: rgba(255, 255, 255, 0.08);
+  --bds: rgba(255, 255, 255, 0.15);
+  --tx: #eef2f1;
+  --t2: #98a29e;
+  --t3: #5d6863;
+  --ac: #059669;
+  --acb: #10b981;
+  --acs: rgba(16, 185, 129, 0.13);
+  --warn: #f59e0b;
+  --warns: rgba(245, 158, 11, 0.14);
+  --dang: #fb7185;
+  --dangs: rgba(244, 63, 94, 0.14);
+  --info: #60a5fa;
+  --infos: rgba(96, 165, 250, 0.14);
+  --sh: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 34px -20px rgba(0, 0, 0, 0.75);
+  --glow: rgba(16, 185, 129, 0.16);
+  --glow2: rgba(59, 130, 246, 0.09);
+}
+
+[data-theme="light"] {
+  --bg: #eef1ef;
+  --s1: #ffffff;
+  --s2: #f7faf9;
+  --s3: #eaefec;
+  --bd: rgba(12, 22, 17, 0.09);
+  --bds: rgba(12, 22, 17, 0.18);
+  --tx: #0b1411;
+  --t2: #56615d;
+  --t3: #8a938f;
+  --ac: #059669;
+  --acb: #059669;
+  --acs: rgba(5, 150, 105, 0.12);
+  --warn: #b45309;
+  --warns: rgba(180, 83, 9, 0.1);
+  --dang: #e11d48;
+  --dangs: rgba(225, 29, 72, 0.1);
+  --info: #2563eb;
+  --infos: rgba(37, 99, 235, 0.09);
+  --sh: 0 1px 2px rgba(12, 22, 17, 0.05), 0 18px 44px -24px rgba(12, 22, 17, 0.2);
+  --glow: rgba(5, 150, 105, 0.1);
+  --glow2: rgba(37, 99, 235, 0.06);
+}
+
+/* Font stacks. The --font-* vars are provided by next/font on <html>.
+   Arabic swaps the UI + display stacks to IBM Plex Sans Arabic. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --fui: var(--font-ui), system-ui, sans-serif;
+  --fdisp: var(--font-display), var(--font-ui), system-ui, sans-serif;
+  --fmono: var(--font-mono), ui-monospace, monospace;
+}
+[data-lang="ar"] {
+  --fui: var(--font-arabic), system-ui, sans-serif;
+  --fdisp: var(--font-arabic), system-ui, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--tx);
+  font-family: var(--fui);
+  -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+::selection {
+  background: rgba(16, 185, 129, 0.28);
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.28);
+  border-radius: 20px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.45);
+  background-clip: content-box;
+}
+
+@keyframes flPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
   }
 }
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes flPing {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  70%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+@keyframes flFade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes flSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes flFlow {
+  to {
+    stroke-dashoffset: -200;
+  }
 }
