@@ -19,8 +19,12 @@ export function ThemeProvider({
 }) {
   const [theme, setThemeState] = useState<Theme>(initial);
 
+  // Sync React state with the persisted choice after mount. The first client
+  // render intentionally matches the server (SSR-safe); we adopt localStorage
+  // once mounted. Theme only drives CSS variables, so no markup mismatch.
   useEffect(() => {
     const saved = (localStorage.getItem("fl-theme") as Theme) || initial;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setThemeState(saved);
     document.documentElement.setAttribute("data-theme", saved);
   }, [initial]);

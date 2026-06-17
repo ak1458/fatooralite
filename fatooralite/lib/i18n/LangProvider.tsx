@@ -30,9 +30,11 @@ export function LangProvider({
   const [lang, setLangState] = useState<Lang>(initial);
 
   // Adopt any persisted choice after mount (the anti-flash script already set
-  // the <html> attributes; this syncs React state to match).
+  // the <html> attributes; this syncs React state to match). The first client
+  // render matches the server (SSR-safe) before we switch.
   useEffect(() => {
     const saved = (localStorage.getItem("fl-lang") as Lang) || initial;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLangState(saved);
   }, [initial]);
 
