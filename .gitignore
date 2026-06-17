@@ -26,3 +26,7 @@ Thumbs.db
 
 # playwright MCP artifacts
 .playwright-mcp/
+
+# prisma local db
+*.db
+*.db-journal

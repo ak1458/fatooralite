@@ -1,0 +1,137 @@
+// FatooraLite data model.
+// Provider is SQLite for zero-friction local dev; switch to "postgresql" and
+// update DATABASE_URL to deploy on Postgres (no model changes required).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  nameAr    String?
+  vatNumber String   @unique
+  crNumber  String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  branches     Branch[]
+  certificates Certificate[]
+  invoices     Invoice[]
+  users        User[]
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  nameAr    String?
+  city      String?
+  createdAt DateTime @default(now())
+
+  company  Company   @relation(fields: [companyId], references: [id])
+  invoices Invoice[]
+}
+
+model Certificate {
+  id          String    @id @default(cuid())
+  companyId   String
+  kind        String // "compliance" | "production"
+  serial      String?
+  csrPem      String?
+  privateKey  String? // PEM (encrypt at rest in production)
+  certificate String? // issued cert PEM/base64
+  status      String    @default("pending") // pending|active|expired|failed
+  issuedAt    DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  company Company @relation(fields: [companyId], references: [id])
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  companyId     String
+  branchId      String?
+  invoiceNumber String
+  uuid          String   @unique
+  kind          String // standard | simplified
+  documentType  String   @default("invoice")
+  status        String   @default("draft") // draft|signed|submitted|cleared|reported|rejected
+  issueDate     String
+  issueTime     String   @default("00:00:00")
+  buyerName     String?
+  buyerVat      String?
+  taxableAmount Float    @default(0)
+  vatAmount     Float    @default(0)
+  grandTotal    Float    @default(0)
+  xml           String?
+  signedXml     String?
+  hash          String?
+  previousHash  String?
+  signature     String?
+  qr            String?
+  resultCode    String? // e.g. BR-KSA-83 on rejection
+  createdAt     DateTime @default(now())
+
+  company  Company          @relation(fields: [companyId], references: [id])
+  branch   Branch?          @relation(fields: [branchId], references: [id])
+  lines    InvoiceLine[]
+  records  ClearanceRecord[]
+  audit    AuditEntry[]
+
+  @@unique([companyId, invoiceNumber])
+}
+
+model InvoiceLine {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Float
+  unitPrice   Float
+  vatRate     Float   @default(0.15)
+  netAmount   Float
+  vatAmount   Float
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model ClearanceRecord {
+  id           String   @id @default(cuid())
+  invoiceId    String
+  action       String // clearance | reporting
+  status       String // accepted | rejected | warning | pending
+  responseCode String?
+  message      String?
+  rawResponse  String?
+  createdAt    DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model AuditEntry {
+  id        String   @id @default(cuid())
+  invoiceId String?
+  kind      String // xml | signedXml | qr | apiResponse | event
+  payload   String
+  createdAt DateTime @default(now())
+
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+}
+
+model User {
+  id           String   @id @default(cuid())
+  companyId    String?
+  email        String   @unique
+  name         String
+  role         String   @default("employee") // owner|accountant|manager|auditor|employee
+  passwordHash String?
+  createdAt    DateTime @default(now())
+
+  company Company? @relation(fields: [companyId], references: [id])
+}

@@ -1,0 +1,152 @@
+import type { PrismaClient } from "@prisma/client";
+import { prisma as defaultDb } from "./client";
+import type { InvoiceInput } from "@/lib/zatca/types";
+import { invoiceTotals, lineNet, lineVat, STANDARD_VAT_RATE } from "@/lib/zatca/money";
+
+/**
+ * Thin repository over Prisma. Every function takes an optional `db` so tests
+ * can inject a throwaway client; app code uses the shared singleton.
+ */
+
+export async function createCompany(
+  data: { name: string; nameAr?: string; vatNumber: string; crNumber?: string; address?: string },
+  db: PrismaClient = defaultDb,
+) {
+  return db.company.create({ data });
+}
+
+export async function getCompany(id: string, db: PrismaClient = defaultDb) {
+  return db.company.findUnique({ where: { id }, include: { branches: true, certificates: true } });
+}
+
+export interface CreateInvoiceArgs {
+  companyId: string;
+  branchId?: string;
+  input: InvoiceInput;
+}
+
+/**
+ * Persist a draft invoice plus its lines, computing money totals from the
+ * engine so the DB and the signed XML always agree.
+ */
+export async function createInvoice(
+  { companyId, branchId, input }: CreateInvoiceArgs,
+  uuid: string,
+  db: PrismaClient = defaultDb,
+) {
+  const totals = invoiceTotals(input.lines);
+  return db.invoice.create({
+    data: {
+      companyId,
+      branchId,
+      invoiceNumber: input.invoiceNumber,
+      uuid,
+      kind: input.kind,
+      documentType: input.documentType ?? "invoice",
+      status: "draft",
+      issueDate: input.issueDate,
+      issueTime: input.issueTime ?? "00:00:00",
+      buyerName: input.buyer?.name,
+      buyerVat: input.buyer?.vatNumber,
+      taxableAmount: totals.taxableAmount,
+      vatAmount: totals.vatAmount,
+      grandTotal: totals.grandTotal,
+      lines: {
+        create: input.lines.map((l) => ({
+          description: l.description,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          vatRate: l.vatRate ?? STANDARD_VAT_RATE,
+          netAmount: lineNet(l),
+          vatAmount: lineVat(l),
+        })),
+      },
+    },
+    include: { lines: true },
+  });
+}
+
+export async function attachSignature(
+  invoiceId: string,
+  fields: { xml: string; hash: string; signature: string; qr: string; previousHash?: string },
+  db: PrismaClient = defaultDb,
+) {
+  return db.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      xml: fields.xml,
+      signedXml: fields.xml,
+      hash: fields.hash,
+      signature: fields.signature,
+      qr: fields.qr,
+      previousHash: fields.previousHash,
+      status: "signed",
+    },
+  });
+}
+
+export async function setInvoiceStatus(
+  invoiceId: string,
+  status: string,
+  resultCode: string | null = null,
+  db: PrismaClient = defaultDb,
+) {
+  return db.invoice.update({
+    where: { id: invoiceId },
+    data: { status, resultCode },
+  });
+}
+
+export async function listInvoices(
+  companyId: string,
+  filter?: { status?: string },
+  db: PrismaClient = defaultDb,
+) {
+  return db.invoice.findMany({
+    where: { companyId, ...(filter?.status ? { status: filter.status } : {}) },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function getLastInvoiceHash(
+  companyId: string,
+  db: PrismaClient = defaultDb,
+): Promise<string | null> {
+  const last = await db.invoice.findFirst({
+    where: { companyId, hash: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { hash: true },
+  });
+  return last?.hash ?? null;
+}
+
+export async function addClearanceRecord(
+  data: {
+    invoiceId: string;
+    action: string;
+    status: string;
+    responseCode?: string;
+    message?: string;
+    rawResponse?: string;
+  },
+  db: PrismaClient = defaultDb,
+) {
+  return db.clearanceRecord.create({ data });
+}
+
+export async function addAuditEntry(
+  data: { invoiceId?: string; kind: string; payload: string },
+  db: PrismaClient = defaultDb,
+) {
+  return db.auditEntry.create({ data });
+}
+
+export async function searchAudit(
+  query: { invoiceId?: string; kind?: string },
+  db: PrismaClient = defaultDb,
+) {
+  return db.auditEntry.findMany({
+    where: { ...(query.invoiceId ? { invoiceId: query.invoiceId } : {}), ...(query.kind ? { kind: query.kind } : {}) },
+    orderBy: { createdAt: "desc" },
+  });
+}
