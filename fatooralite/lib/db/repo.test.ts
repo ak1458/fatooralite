@@ -14,6 +14,8 @@ import {
   addClearanceRecord,
   addAuditEntry,
   searchAudit,
+  searchInvoices,
+  getInvoiceAudit,
 } from "./repo";
 import type { InvoiceInput } from "@/lib/zatca/types";
 
@@ -98,5 +100,29 @@ describe("db repository", () => {
     const found = await searchAudit({ invoiceId: inv.id, kind: "xml" }, db);
     expect(found).toHaveLength(1);
     expect(found[0].payload).toBe("<xml/>");
+  });
+
+  it("searches invoices and returns a full audit view", async () => {
+    const company = await createCompany(
+      { name: "Bin Dawood", vatNumber: "311122334400055" },
+      db,
+    );
+    const inv = await createInvoice(
+      { companyId: company.id, input: { ...input, invoiceNumber: "INV-AUDIT-9", buyer: { name: "Acme", vatNumber: "300000000000003" } } },
+      "uuid-audit-9",
+      db,
+    );
+    await addAuditEntry({ invoiceId: inv.id, kind: "qr", payload: "QR==" }, db);
+    await addClearanceRecord({ invoiceId: inv.id, action: "clearance", status: "accepted" }, db);
+
+    const byNumber = await searchInvoices(company.id, "AUDIT-9", db);
+    expect(byNumber).toHaveLength(1);
+    const byUuid = await searchInvoices(company.id, "uuid-audit-9", db);
+    expect(byUuid).toHaveLength(1);
+
+    const full = await getInvoiceAudit(inv.id, db);
+    expect(full?.audit.length).toBeGreaterThanOrEqual(1);
+    expect(full?.records.length).toBe(1);
+    expect(full?.company.name).toBe("Bin Dawood");
   });
 });

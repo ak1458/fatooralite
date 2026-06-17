@@ -1,8 +1,5 @@
-"use client";
-import { StubScreen } from "@/components/common/StubScreen";
-import { usePageMeta } from "@/lib/usePageMeta";
+import { AuditVault } from "@/components/audit/AuditVault";
 
-export default function Page() {
-  const { title, sub } = usePageMeta();
-  return <StubScreen icon="audit" title={title} sub={sub} />;
+export default function AuditPage() {
+  return <AuditVault />;
 }

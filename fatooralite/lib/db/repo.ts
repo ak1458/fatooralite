@@ -31,6 +31,44 @@ export async function getInvoice(id: string, db: PrismaClient = defaultDb) {
   return db.invoice.findUnique({ where: { id }, include: { lines: true, records: true } });
 }
 
+/** Full audit view of one invoice: lines, gateway records, and stored artifacts. */
+export async function getInvoiceAudit(id: string, db: PrismaClient = defaultDb) {
+  return db.invoice.findUnique({
+    where: { id },
+    include: {
+      lines: true,
+      records: { orderBy: { createdAt: "desc" } },
+      audit: { orderBy: { createdAt: "desc" } },
+      company: { select: { name: true, nameAr: true, vatNumber: true } },
+    },
+  });
+}
+
+/** Search a company's invoices by number, UUID, or buyer name (audit vault). */
+export async function searchInvoices(
+  companyId: string,
+  query: string,
+  db: PrismaClient = defaultDb,
+) {
+  const q = query.trim();
+  return db.invoice.findMany({
+    where: {
+      companyId,
+      ...(q
+        ? {
+            OR: [
+              { invoiceNumber: { contains: q } },
+              { uuid: { contains: q } },
+              { buyerName: { contains: q } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+}
+
 export interface CreateInvoiceArgs {
   companyId: string;
   branchId?: string;
