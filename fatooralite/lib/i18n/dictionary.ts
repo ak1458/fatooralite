@@ -1,0 +1,100 @@
+/**
+ * The shape of a language dictionary. Both `ar` and `en` must implement every
+ * key — TypeScript errors if one is missing, so translations can't drift.
+ */
+export interface Dict {
+  // nav group labels
+  gOverview: string;
+  gOps: string;
+  gCompliance: string;
+  gIntel: string;
+  gAdmin: string;
+  // nav item labels
+  nDashboard: string;
+  nInvoices: string;
+  nCredit: string;
+  nDebit: string;
+  nCustomers: string;
+  nProducts: string;
+  nReports: string;
+  nAnalytics: string;
+  nIntegration: string;
+  nCompliance: string;
+  nAudit: string;
+  nAI: string;
+  nNotifications: string;
+  nUsers: string;
+  nSettings: string;
+  // shell
+  brandTag: string;
+  workspace: string;
+  workspaceSub: string;
+  searchPh: string;
+  profileName: string;
+  profileRole: string;
+  // dashboard
+  ccTitle: string;
+  ccSub: string;
+  greeting: string;
+  date: string;
+  create: string;
+  runAudit: string;
+  live: string;
+  viewAll: string;
+  compliant: string;
+  trustReady: string;
+  trustPhase2: string;
+  trustProd: string;
+  trustEnc: string;
+  complianceHealth: string;
+  healthSub: string;
+  apiHealthTitle: string;
+  apiSub: string;
+  integrationStatus: string;
+  liveActivity: string;
+  invoiceVolume: string;
+  last7: string;
+  invToday: string;
+  bClearance: string;
+  bReporting: string;
+  bCert: string;
+  bValidation: string;
+  fCleared: string;
+  fRejected: string;
+  fPending: string;
+  kZatca: string;
+  kCsid: string;
+  kCert: string;
+  kApi: string;
+  kActive: string;
+  kOperational: string;
+  kDays: string;
+  kUptime: string;
+  svcCsid: string;
+  svcStamp: string;
+  svcVal: string;
+  svcQr: string;
+  svcClear: string;
+  svcReport: string;
+  svcSandbox: string;
+  svcProd: string;
+  svcDegraded: string;
+  // shared across modules
+  filter: string;
+  export: string;
+  smCleared: string;
+  smPending: string;
+  smRejected: string;
+  vatTrend: string;
+  mtd: string;
+  aiInsightsLabel: string;
+  viewXml: string;
+  prepareFix: string;
+  aiPlaceholder: string;
+  certTitle: string;
+  renew: string;
+  networkTitle: string;
+  dailyTitle: string;
+  revTitle: string;
+  successDonut: string;
+}
