@@ -6,73 +6,78 @@ ZATCA Phase 2 e-invoicing compliance platform for Saudi SMEs.
 > accounting software.
 
 The Next.js app lives in `fatooralite/`. Bilingual (Arabic-RTL default /
-English), dark/light themed.
+English), dark/light themed, **installable as a PWA**.
 
 ## What's built
 
-- **UI** — six modules: Compliance Command Center (dashboard), Invoice
-  Operations, ZATCA Integration Hub, Clearance Monitoring, Analytics, AI
+- **UI** — six modules: Compliance Command Center, Invoice Operations, ZATCA
+  Integration Hub (with onboarding), Clearance Monitoring, Analytics, AI
   Assistant + a New Invoice form and an Audit Vault.
-- **Compliance engine** (`lib/zatca`) — UBL 2.1 XML, SHA-256 invoice hash,
-  secp256k1 ECDSA cryptographic stamp, TLV/base64 QR, PKCS#10 CSR, PIH chaining.
-- **Database** (`prisma/`, `lib/db`) — Prisma + SQLite (Postgres-ready): Company,
-  Branch, Certificate, Invoice (+lines), ClearanceRecord, AuditEntry, User.
-- **Invoice issuing** — `POST /api/invoices` creates → signs → chains → stores.
-- **Clearance / reporting** — ZATCA client with `simulation` (offline, default),
-  `sandbox`, and `production` modes; BR-KSA validation; `POST /api/invoices/:id/clear`.
+- **Compliance engine** (`lib/zatca`) — UBL 2.1 XML, SHA-256 hash, secp256k1
+  ECDSA stamp, TLV/base64 QR, PKCS#10 CSR, PIH chaining.
+- **Real ZATCA gateway** (`lib/zatca/client`, `lib/zatca/onboarding`) — Compliance
+  CSID → Production CSID onboarding, then real clearance (standard) / reporting
+  (simplified) against the Fatoora sandbox or production gateway. No simulation.
+- **Database** — Prisma + **PostgreSQL** (Supabase in prod; local via Docker).
+- **Invoice issuing / clearance** — `POST /api/invoices`, `POST /api/invoices/:id/clear`.
 - **Audit vault** — searchable signed-XML / QR / gateway-response archive.
 - **Auth + RBAC** — scrypt passwords, role→permission matrix, jose session
-  cookies, login page, `proxy.ts` route guard (opt-in via `AUTH_ENFORCE`).
+  cookies, login, `proxy.ts` guard (opt-in via `AUTH_ENFORCE`).
 
-## Run
+## Run locally
 
 ```bash
 cd fatooralite
-npm install
-cp .env.example .env        # SQLite + AUTH_SECRET defaults work out of the box
-npm run db:migrate          # create the SQLite schema
-npm run db:seed             # seed Almarai + users + sample invoices
+npm install                 # also runs `prisma generate`
+cp .env.example .env
+
+docker compose up -d        # local Postgres (or point .env at Supabase)
+npm run db:migrate          # apply migrations
+npm run db:seed             # Almarai + users + sample data
 npm run dev                 # http://localhost:3000
 
-npm test                    # unit + integration (Vitest)
-npm run test:e2e            # Playwright (smoke + auth)
+npm test                    # unit + engine + auth (DB tests skip w/o TEST_DATABASE_URL)
+npm run test:e2e            # Playwright
 npm run lint
-npm run build               # production build
+npm run build
 ```
 
 **Demo logins** (after seed): `khalid@almarai.example / owner1234` (owner),
 `accountant@almarai.example / account1234`, `auditor@almarai.example / auditor1234`.
 
-### Config flags (`.env`)
+## ZATCA onboarding (required for real clearance)
 
-- `AUTH_ENFORCE=true` — require login + RBAC on every page (off by default so the
-  demo runs open).
-- `ZATCA_MODE=simulation|sandbox|production` — clearance backend. `simulation`
-  needs no credentials; `sandbox`/`production` require a real CSID.
+Real clearance needs *your* certificate. Register the entity on the ZATCA Fatoora
+portal, get the OTP, then in the app: **ZATCA Integration → Onboarding** →
+"Request Compliance CSID" (CSR + OTP) → "Request Production CSID". After that,
+issued invoices can be cleared/reported. Until then, signing works but the
+gateway will reject (no valid CSID).
+
+## Config (`.env`)
+
+- `DATABASE_URL` / `DIRECT_URL` — Postgres (Supabase pooled + direct).
+- `AUTH_SECRET` — session signing secret (required & validated in production).
+- `AUTH_ENFORCE=true` — require login + RBAC on every page.
+- `ZATCA_MODE=sandbox|production`, `ZATCA_SANDBOX_BASE_URL`, `ZATCA_PRODUCTION_BASE_URL`.
+
+## Deploy (free tier)
+
+**Supabase (DB) + Vercel (host).** See `doc/DEPLOY.md`. Summary: create a Supabase
+project → set `DATABASE_URL`/`DIRECT_URL`; import the repo on Vercel with **Root
+Directory = `fatooralite`**, add env vars, deploy; run `npm run db:migrate` against
+Supabase once.
 
 ## Tech
 
-Next.js 16 (App Router) · React 19 · TypeScript (strict) · Tailwind v4 + CSS
-variables · Prisma 6 · jose · node-forge · xmlbuilder2 · Vitest + Testing
-Library · Playwright.
+Next.js 16 · React 19 · TypeScript (strict) · Tailwind v4 · Prisma 6 · jose ·
+node-forge · xmlbuilder2 · Vitest · Playwright. PWA via `app/manifest.ts` + `public/sw.js`.
 
 ## Architecture (intern-friendly)
 
-- **One component / module = one purpose.**
-- **Theming** via CSS custom properties switched by `data-theme` on `<html>`.
-- **i18n** via a typed dictionary (`lib/i18n`) that flips `dir` + font stack.
-- **Engine is pure** (`lib/zatca`) — no I/O, fully unit-tested.
-- **Services** (`lib/services`) orchestrate engine + DB; **repositories**
-  (`lib/db`) wrap Prisma with an injectable client for testing.
-- **UI data** still uses the typed mock layer (`data/*.ts`) shaped like the DB
-  DTOs; see `doc/data-flow.md`.
+- **Layers:** pure engine (`lib/zatca`, no I/O) → repositories (`lib/db`) →
+  services (`lib/services`) → API routes (`app/api`) → UI (`app/(app)`).
+- Colors/fonts only via CSS variables; text via the typed `Bilingual` shape.
+- Engine + auth are pure and unit-tested; repositories take an injectable client.
 
-## Roadmap status
-
-Done: UI · Compliance Engine · Data model · Invoice creation · Clearance/Reporting
-· Audit Vault · Auth/RBAC.
-Next (v2): real CSID onboarding flow, live dashboard data, AI backend,
-notifications, billing.
-
-Internal docs, specs, design reference, and the data-flow chart live in `doc/`
-(git-ignored, not deployed).
+Internal docs (specs, plans, data-flow chart, deploy guide, project report,
+design reference, screenshots) live in `doc/` (git-ignored, not deployed).

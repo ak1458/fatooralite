@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import {
   Space_Grotesk,
   Hanken_Grotesk,
@@ -8,6 +8,7 @@ import {
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme/ThemeProvider";
 import { LangProvider } from "@/lib/i18n/LangProvider";
+import { PWARegister } from "@/components/common/PWARegister";
 
 const display = Space_Grotesk({
   subsets: ["latin"],
@@ -33,6 +34,14 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "FatooraLite — ZATCA Compliance",
   description: "ZATCA Phase 2 e-invoicing compliance for Saudi SMEs",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "FatooraLite", statusBarStyle: "black-translucent" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#07090b",
+  width: "device-width",
+  initialScale: 1,
 };
 
 // Applies the persisted theme/lang before first paint to avoid a flash.
@@ -67,6 +76,7 @@ export default function RootLayout({
         <ThemeProvider>
           <LangProvider>{children}</LangProvider>
         </ThemeProvider>
+        <PWARegister />
       </body>
     </html>
   );

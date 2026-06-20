@@ -10,8 +10,13 @@ export interface SessionPayload {
 
 export const SESSION_COOKIE = "fl_session";
 
+const DEV_SECRET = "dev-insecure-secret-change-me-1234567890";
+
 function secretKey(): Uint8Array {
-  const secret = process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me-1234567890";
+  const secret = process.env.AUTH_SECRET ?? DEV_SECRET;
+  if (process.env.NODE_ENV === "production" && secret === DEV_SECRET) {
+    throw new Error("AUTH_SECRET must be set to a strong value in production");
+  }
   return new TextEncoder().encode(secret);
 }
 
