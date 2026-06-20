@@ -26,7 +26,10 @@ jobs:
           cache-dependency-path: fatooralite/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        # npm install (not ci) tolerates cross-OS optional-dep drift in the
+        # lockfile (e.g. linux-only @emnapi/* wasm bindings absent when the lock
+        # is generated on Windows).
+        run: npm install --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
