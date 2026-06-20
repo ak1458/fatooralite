@@ -191,6 +191,17 @@ export async function addAuditEntry(
   return db.auditEntry.create({ data });
 }
 
+export async function createUser(
+  data: { companyId?: string; email: string; name: string; role: string; passwordHash: string },
+  db: PrismaClient = defaultDb,
+) {
+  return db.user.create({ data });
+}
+
+export async function findUserByEmail(email: string, db: PrismaClient = defaultDb) {
+  return db.user.findUnique({ where: { email } });
+}
+
 export async function searchAudit(
   query: { invoiceId?: string; kind?: string },
   db: PrismaClient = defaultDb,

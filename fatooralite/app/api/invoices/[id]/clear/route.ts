@@ -4,11 +4,15 @@ import {
   InvoiceNotFoundError,
   InvoiceNotSignedError,
 } from "@/lib/services/clearance-service";
+import { requirePermission } from "@/lib/auth/server";
 
 export const runtime = "nodejs";
 
 /** POST /api/invoices/:id/clear — submit a signed invoice to ZATCA. */
-export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { deny } = await requirePermission(req, "invoice:clear");
+  if (deny) return deny;
+
   const { id } = await ctx.params;
   try {
     const result = await submitInvoice(id);

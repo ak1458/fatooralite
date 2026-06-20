@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { generateKeyPair, generateCsr, generateSignedInvoice } from "../lib/zatca/index";
+import { hashPassword } from "../lib/auth/password";
 import type { InvoiceInput } from "../lib/zatca/types";
 
 const prisma = new PrismaClient();
@@ -48,7 +49,31 @@ async function main() {
   });
 
   const owner = await prisma.user.create({
-    data: { companyId: company.id, email: "khalid@almarai.example", name: "Khalid Al-Otaibi", role: "owner" },
+    data: {
+      companyId: company.id,
+      email: "khalid@almarai.example",
+      name: "Khalid Al-Otaibi",
+      role: "owner",
+      passwordHash: hashPassword("owner1234"),
+    },
+  });
+  await prisma.user.createMany({
+    data: [
+      {
+        companyId: company.id,
+        email: "accountant@almarai.example",
+        name: "Sara Al-Harbi",
+        role: "accountant",
+        passwordHash: hashPassword("account1234"),
+      },
+      {
+        companyId: company.id,
+        email: "auditor@almarai.example",
+        name: "Faisal Al-Qahtani",
+        role: "auditor",
+        passwordHash: hashPassword("auditor1234"),
+      },
+    ],
   });
 
   const samples: InvoiceInput[] = [

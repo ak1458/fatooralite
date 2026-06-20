@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { issueInvoice, NoCertificateError } from "@/lib/services/invoice-service";
 import { listInvoices } from "@/lib/db/repo";
+import { requirePermission } from "@/lib/auth/server";
 import type { InvoiceInput } from "@/lib/zatca/types";
 
 export const runtime = "nodejs";
 
 /** POST /api/invoices — issue (create + sign) a new invoice. */
 export async function POST(req: Request) {
+  const { deny } = await requirePermission(req, "invoice:create");
+  if (deny) return deny;
+
   let body: { companyId?: string; input?: InvoiceInput };
   try {
     body = await req.json();
