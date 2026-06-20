@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/ak1458/fatooralite/security/policy
+    about: Please report security issues privately — see our Security Policy.
+  - name: Licensing / commercial enquiry
+    url: mailto:ashrafkamal1458@gmail.com
+    about: For purchase, licensing, or commercial use of FatooraLite.
