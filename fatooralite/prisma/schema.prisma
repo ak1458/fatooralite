@@ -1,14 +1,15 @@
-// FatooraLite data model.
-// Provider is SQLite for zero-friction local dev; switch to "postgresql" and
-// update DATABASE_URL to deploy on Postgres (no model changes required).
+// FatooraLite data model — PostgreSQL (Supabase in production).
+// Local dev: run `docker compose up -d` for a local Postgres, or point
+// DATABASE_URL/DIRECT_URL at a Supabase project. Migrations use DIRECT_URL.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooled connection (Supabase pgBouncer, port 6543)
+  directUrl = env("DIRECT_URL") // direct connection for migrations (port 5432)
 }
 
 model Company {
@@ -44,9 +45,13 @@ model Certificate {
   kind        String // "compliance" | "production"
   serial      String?
   csrPem      String?
-  privateKey  String? // PEM (encrypt at rest in production)
-  certificate String? // issued cert PEM/base64
-  status      String    @default("pending") // pending|active|expired|failed
+  privateKey  String? // EC private key PEM (encrypt at rest in production)
+  publicKey   String? // EC public key PEM (used for the QR public key)
+  certificate String? // decoded issued certificate PEM, if available
+  token       String? // ZATCA binarySecurityToken (CSID certificate, base64)
+  secret      String? // ZATCA CSID secret
+  requestId   String? // ZATCA request id
+  status      String    @default("pending") // pending|compliance|active|expired|failed
   issuedAt    DateTime?
   expiresAt   DateTime?
   createdAt   DateTime  @default(now())

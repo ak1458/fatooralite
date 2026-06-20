@@ -3,11 +3,13 @@ import { environments } from "@/data/company";
 import { EnvCard } from "@/components/integration/EnvCard";
 import { NetworkTopology } from "@/components/integration/NetworkTopology";
 import { CertificateWidget } from "@/components/integration/CertificateWidget";
+import { OnboardingPanel } from "@/components/integration/OnboardingPanel";
 import { IntegrationStatus } from "@/components/dashboard/IntegrationStatus";
 
 export default function IntegrationPage() {
   return (
     <div style={{ maxWidth: 1480, margin: "0 auto" }}>
+      <OnboardingPanel />
       <div
         style={{
           display: "grid",

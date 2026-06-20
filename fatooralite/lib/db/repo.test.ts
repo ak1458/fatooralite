@@ -1,9 +1,6 @@
-import { execSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
+import { hasTestDb, pushTestSchema, testClient } from "./test-db";
 import {
   createCompany,
   createInvoice,
@@ -19,23 +16,16 @@ import {
 } from "./repo";
 import type { InvoiceInput } from "@/lib/zatca/types";
 
-const dbFile = path.join(os.tmpdir(), `fl-test-${Date.now()}.db`).replace(/\\/g, "/");
-const url = `file:${dbFile}`;
 let db: PrismaClient;
 
 beforeAll(() => {
-  // Create the schema in a throwaway SQLite file.
-  execSync("npx prisma db push --skip-generate --accept-data-loss", {
-    cwd: process.cwd(),
-    env: { ...process.env, DATABASE_URL: url },
-    stdio: "ignore",
-  });
-  db = new PrismaClient({ datasourceUrl: url });
+  if (!hasTestDb) return;
+  pushTestSchema();
+  db = testClient();
 }, 120_000);
 
 afterAll(async () => {
   if (db) await db.$disconnect();
-  for (const f of [dbFile, `${dbFile}-journal`]) if (existsSync(f)) rmSync(f);
 });
 
 const input: InvoiceInput = {
@@ -46,7 +36,7 @@ const input: InvoiceInput = {
   lines: [{ description: "Milk", quantity: 10, unitPrice: 12 }],
 };
 
-describe("db repository", () => {
+describe.skipIf(!hasTestDb)("db repository", () => {
   it("creates a company and an invoice with lines + totals", async () => {
     const company = await createCompany(
       { name: "Almarai", vatNumber: "311122334400003" },

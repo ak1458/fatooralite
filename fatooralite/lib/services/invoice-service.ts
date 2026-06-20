@@ -42,7 +42,7 @@ export async function issueInvoice(
   db: PrismaClient = defaultDb,
 ): Promise<IssueResult> {
   const cert = await getActiveCertificate(companyId, db);
-  if (!cert || !cert.privateKey || !cert.certificate) throw new NoCertificateError();
+  if (!cert || !cert.privateKey || !cert.publicKey) throw new NoCertificateError();
 
   const uuid = newUuid();
   const previousHash = (await getLastInvoiceHash(companyId, db)) ?? genesisHash();
@@ -60,7 +60,7 @@ export async function issueInvoice(
     vatTotal: draft.vatAmount.toFixed(2),
     hash,
     signature,
-    publicKey: publicKeyDerBase64(cert.certificate),
+    publicKey: publicKeyDerBase64(cert.publicKey),
   });
 
   await attachSignature(draft.id, { xml, hash, signature, qr, previousHash }, db);
@@ -76,7 +76,7 @@ export async function issueInvoice(
       xml,
       hash,
       signature,
-      publicKeyPem: cert.certificate,
+      publicKeyPem: cert.publicKey,
       qr,
       totals: {
         taxableAmount: draft.taxableAmount,

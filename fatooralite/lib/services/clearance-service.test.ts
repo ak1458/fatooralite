@@ -1,39 +1,51 @@
-import { execSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
+import { hasTestDb, pushTestSchema, testClient } from "@/lib/db/test-db";
 import { issueInvoice } from "./invoice-service";
 import { submitInvoice } from "./clearance-service";
-import { ZatcaClient } from "@/lib/zatca/client";
+import type { ZatcaSubmitter, SubmitArgs } from "@/lib/zatca/client";
+import { validateInvoice } from "@/lib/zatca/validate";
 import { generateKeyPair } from "@/lib/zatca/index";
 import type { InvoiceInput } from "@/lib/zatca/types";
 
-const dbFile = path.join(os.tmpdir(), `fl-clr-${Date.now()}.db`).replace(/\\/g, "/");
-const url = `file:${dbFile}`;
 let db: PrismaClient;
 let companyId: string;
-const client = new ZatcaClient("simulation");
+
+// Stub gateway: accepts valid invoices, rejects ones failing BR-KSA validation.
+const client: ZatcaSubmitter = {
+  actionFor: (kind) => (kind === "standard" ? "clearance" : "reporting"),
+  submit: async (args: SubmitArgs) => {
+    const action = args.input.kind === "standard" ? "clearance" : "reporting";
+    const issue = validateInvoice(args.input);
+    if (issue) {
+      return { action, status: "rejected", code: issue.code, message: issue.message, raw: "{}" };
+    }
+    return { action, status: "accepted", code: "ACCEPTED", message: "ok", raw: "{}" };
+  },
+};
 
 beforeAll(async () => {
-  execSync("npx prisma db push --skip-generate --accept-data-loss", {
-    cwd: process.cwd(),
-    env: { ...process.env, DATABASE_URL: url },
-    stdio: "ignore",
-  });
-  db = new PrismaClient({ datasourceUrl: url });
+  if (!hasTestDb) return;
+  pushTestSchema();
+  db = testClient();
   const kp = generateKeyPair();
   const company = await db.company.create({ data: { name: "Almarai", vatNumber: "311122334400003" } });
   companyId = company.id;
   await db.certificate.create({
-    data: { companyId, kind: "production", status: "active", privateKey: kp.privateKeyPem, certificate: kp.publicKeyPem },
+    data: {
+      companyId,
+      kind: "production",
+      status: "active",
+      privateKey: kp.privateKeyPem,
+      publicKey: kp.publicKeyPem,
+      token: "test-token",
+      secret: "test-secret",
+    },
   });
 }, 120_000);
 
 afterAll(async () => {
   if (db) await db.$disconnect();
-  for (const f of [dbFile, `${dbFile}-journal`]) if (existsSync(f)) rmSync(f);
 });
 
 const standard: InvoiceInput = {
@@ -45,7 +57,7 @@ const standard: InvoiceInput = {
   lines: [{ description: "Milk", quantity: 10, unitPrice: 12 }],
 };
 
-describe("submitInvoice", () => {
+describe.skipIf(!hasTestDb)("submitInvoice", () => {
   it("clears a valid standard invoice and records it", async () => {
     const issued = await issueInvoice(companyId, standard, db);
     const res = await submitInvoice(issued.invoiceId, client, db);

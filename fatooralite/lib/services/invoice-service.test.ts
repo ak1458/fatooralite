@@ -1,25 +1,17 @@
-import { execSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
+import { hasTestDb, pushTestSchema, testClient } from "@/lib/db/test-db";
 import { issueInvoice, NoCertificateError } from "./invoice-service";
 import { generateKeyPair, verifyHash } from "@/lib/zatca/index";
 import type { InvoiceInput } from "@/lib/zatca/types";
 
-const dbFile = path.join(os.tmpdir(), `fl-svc-${Date.now()}.db`).replace(/\\/g, "/");
-const url = `file:${dbFile}`;
 let db: PrismaClient;
 let companyId: string;
 
 beforeAll(async () => {
-  execSync("npx prisma db push --skip-generate --accept-data-loss", {
-    cwd: process.cwd(),
-    env: { ...process.env, DATABASE_URL: url },
-    stdio: "ignore",
-  });
-  db = new PrismaClient({ datasourceUrl: url });
+  if (!hasTestDb) return;
+  pushTestSchema();
+  db = testClient();
   const kp = generateKeyPair();
   const company = await db.company.create({
     data: { name: "Almarai", vatNumber: "311122334400003" },
@@ -31,14 +23,15 @@ beforeAll(async () => {
       kind: "production",
       status: "active",
       privateKey: kp.privateKeyPem,
-      certificate: kp.publicKeyPem,
+      publicKey: kp.publicKeyPem,
+      token: "test-token",
+      secret: "test-secret",
     },
   });
 }, 120_000);
 
 afterAll(async () => {
   if (db) await db.$disconnect();
-  for (const f of [dbFile, `${dbFile}-journal`]) if (existsSync(f)) rmSync(f);
 });
 
 const input: InvoiceInput = {
@@ -49,13 +42,13 @@ const input: InvoiceInput = {
   lines: [{ description: "Milk", quantity: 10, unitPrice: 12 }],
 };
 
-describe("issueInvoice", () => {
+describe.skipIf(!hasTestDb)("issueInvoice", () => {
   it("signs, persists, and the signature verifies", async () => {
     const res = await issueInvoice(companyId, input, db);
     expect(res.status).toBe("signed");
     expect(res.signed.totals.grandTotal).toBe(138);
     const cert = await db.certificate.findFirstOrThrow({ where: { companyId } });
-    expect(verifyHash(res.signed.hash, res.signed.signature, cert.certificate!)).toBe(true);
+    expect(verifyHash(res.signed.hash, res.signed.signature, cert.publicKey!)).toBe(true);
 
     const stored = await db.invoice.findUniqueOrThrow({ where: { id: res.invoiceId } });
     expect(stored.status).toBe("signed");

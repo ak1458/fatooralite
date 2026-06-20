@@ -40,7 +40,11 @@ async function main() {
       kind: "production",
       csrPem: csr,
       privateKey: kp.privateKeyPem,
-      certificate: kp.publicKeyPem,
+      publicKey: kp.publicKeyPem,
+      // Placeholder CSID — replace by running real ZATCA onboarding (Settings →
+      // Onboarding). Signing works locally; gateway clearance needs real values.
+      token: "PLACEHOLDER-CSID-TOKEN",
+      secret: "PLACEHOLDER-CSID-SECRET",
       status: "active",
       issuedAt: new Date("2025-12-19"),
       expiresAt: new Date("2026-12-19"),

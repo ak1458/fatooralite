@@ -1,8 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultDb } from "@/lib/db/client";
-import { addClearanceRecord, addAuditEntry, setInvoiceStatus } from "@/lib/db/repo";
+import { addClearanceRecord, addAuditEntry, setInvoiceStatus, getActiveCertificate } from "@/lib/db/repo";
 import { ZatcaClient } from "@/lib/zatca/client";
-import type { ZatcaResponse } from "@/lib/zatca/client";
+import type { ZatcaResponse, ZatcaSubmitter } from "@/lib/zatca/client";
 import type { InvoiceInput } from "@/lib/zatca/types";
 
 export class InvoiceNotFoundError extends Error {
@@ -15,6 +15,12 @@ export class InvoiceNotSignedError extends Error {
   constructor() {
     super("Invoice must be signed before submission");
     this.name = "InvoiceNotSignedError";
+  }
+}
+export class NoCredentialsError extends Error {
+  constructor() {
+    super("No active production certificate with ZATCA credentials");
+    this.name = "NoCredentialsError";
   }
 }
 
@@ -32,7 +38,7 @@ export interface SubmitResult {
  */
 export async function submitInvoice(
   invoiceId: string,
-  client: ZatcaClient = new ZatcaClient(),
+  submitter?: ZatcaSubmitter,
   db: PrismaClient = defaultDb,
 ): Promise<SubmitResult> {
   const invoice = await db.invoice.findUnique({
@@ -41,6 +47,15 @@ export async function submitInvoice(
   });
   if (!invoice) throw new InvoiceNotFoundError();
   if (!invoice.signedXml || !invoice.hash) throw new InvoiceNotSignedError();
+
+  // Build the real ZATCA client from the company's production credentials
+  // unless a submitter was injected (tests).
+  let client = submitter;
+  if (!client) {
+    const cert = await getActiveCertificate(invoice.companyId, db);
+    if (!cert?.token || !cert.secret) throw new NoCredentialsError();
+    client = new ZatcaClient({ token: cert.token, secret: cert.secret });
+  }
 
   const input: InvoiceInput = {
     invoiceNumber: invoice.invoiceNumber,
@@ -61,6 +76,7 @@ export async function submitInvoice(
 
   const response = await client.submit({
     input,
+    uuid: invoice.uuid,
     signedXmlBase64: Buffer.from(invoice.signedXml, "utf8").toString("base64"),
     hash: invoice.hash,
   });

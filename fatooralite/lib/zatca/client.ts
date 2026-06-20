@@ -1,7 +1,7 @@
 import type { InvoiceInput } from "./types";
 import { validateInvoice } from "./validate";
 
-export type ZatcaMode = "simulation" | "sandbox" | "production";
+export type ZatcaMode = "sandbox" | "production";
 export type ZatcaAction = "clearance" | "reporting";
 export type ZatcaStatus = "accepted" | "rejected" | "warning";
 
@@ -10,48 +10,77 @@ export interface ZatcaResponse {
   status: ZatcaStatus;
   code: string;
   message: string;
-  icv?: number; // invoice counter value (cleared invoices)
-  raw: string; // raw JSON the gateway returned (or the simulated equivalent)
+  clearedInvoiceBase64?: string; // ZATCA returns the cleared (re-stamped) XML
+  raw: string;
 }
 
 export interface SubmitArgs {
   input: InvoiceInput;
+  uuid: string;
   signedXmlBase64: string;
   hash: string;
 }
 
-const BASE_URLS: Record<Exclude<ZatcaMode, "simulation">, string> = {
-  sandbox:
+/** Production-CSID credentials used to authenticate gateway calls. */
+export interface ZatcaCredentials {
+  /** base64 of the binary security token (the production CSID certificate). */
+  token: string;
+  /** the production CSID secret. */
+  secret: string;
+}
+
+/** Anything that can submit an invoice — lets services be tested with a stub. */
+export interface ZatcaSubmitter {
+  actionFor(kind: InvoiceInput["kind"]): ZatcaAction;
+  submit(args: SubmitArgs): Promise<ZatcaResponse>;
+}
+
+export function gatewayBaseUrl(mode: ZatcaMode): string {
+  if (mode === "production") {
+    return (
+      process.env.ZATCA_PRODUCTION_BASE_URL ??
+      "https://gw-fatoora.zatca.gov.sa/e-invoicing/core"
+    );
+  }
+  return (
     process.env.ZATCA_SANDBOX_BASE_URL ??
-    "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal",
-  production: process.env.ZATCA_PRODUCTION_BASE_URL ?? "https://gw-fatoora.zatca.gov.sa/e-invoicing/core",
-};
+    "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal"
+  );
+}
+
+export class MissingCredentialsError extends Error {
+  constructor() {
+    super("ZATCA production credentials are required to submit invoices");
+    this.name = "MissingCredentialsError";
+  }
+}
 
 /**
- * Client for the ZATCA Fatoora gateway.
- * - `simulation` (default): validates locally and returns a deterministic
- *   accepted/rejected response — no network, perfect for demos and tests.
- * - `sandbox` / `production`: POST the signed invoice to the real gateway.
- *   Requires a real CSID/credentials (passed via auth header).
+ * Real ZATCA Fatoora gateway client.
+ * - standard invoices are *cleared*, simplified are *reported*.
+ * - a local BR-KSA validation runs first so obviously-invalid invoices are
+ *   rejected before a network call.
+ * Requires production-CSID credentials (obtained via onboarding).
  */
-export class ZatcaClient {
-  constructor(
-    private readonly mode: ZatcaMode = (process.env.ZATCA_MODE as ZatcaMode) ?? "simulation",
-    private readonly auth?: string,
-  ) {}
+export class ZatcaClient implements ZatcaSubmitter {
+  private readonly mode: ZatcaMode;
+  private readonly credentials?: ZatcaCredentials;
 
-  /** Standard invoices are *cleared*; simplified are *reported*. */
+  constructor(
+    credentials?: ZatcaCredentials,
+    mode: ZatcaMode = (process.env.ZATCA_MODE as ZatcaMode) ?? "sandbox",
+  ) {
+    this.credentials = credentials;
+    this.mode = mode === "production" ? "production" : "sandbox";
+  }
+
   actionFor(kind: InvoiceInput["kind"]): ZatcaAction {
     return kind === "standard" ? "clearance" : "reporting";
   }
 
   async submit(args: SubmitArgs): Promise<ZatcaResponse> {
     const action = this.actionFor(args.input.kind);
-    if (this.mode === "simulation") return this.simulate(action, args);
-    return this.callGateway(action, args);
-  }
 
-  private simulate(action: ZatcaAction, args: SubmitArgs): ZatcaResponse {
     const issue = validateInvoice(args.input);
     if (issue) {
       return {
@@ -59,40 +88,54 @@ export class ZatcaClient {
         status: "rejected",
         code: issue.code,
         message: issue.message,
-        raw: JSON.stringify({ simulated: true, status: "rejected", ...issue }),
+        raw: JSON.stringify({ status: "rejected", ...issue }),
       };
     }
-    const icv = Math.floor(1000 + Math.random() * 9000);
-    return {
-      action,
-      status: "accepted",
-      code: action === "clearance" ? "CLEARED" : "REPORTED",
-      message: action === "clearance" ? "Invoice cleared" : "Invoice reported",
-      icv,
-      raw: JSON.stringify({ simulated: true, status: "accepted", icv }),
-    };
-  }
 
-  private async callGateway(action: ZatcaAction, args: SubmitArgs): Promise<ZatcaResponse> {
-    const base = BASE_URLS[this.mode as Exclude<ZatcaMode, "simulation">];
-    const path = action === "clearance" ? "/invoices/clearance/single" : "/invoices/reporting/single";
+    if (!this.credentials) throw new MissingCredentialsError();
+
+    const base = gatewayBaseUrl(this.mode);
+    const path =
+      action === "clearance" ? "/invoices/clearance/single" : "/invoices/reporting/single";
+    const auth = Buffer.from(`${this.credentials.token}:${this.credentials.secret}`).toString(
+      "base64",
+    );
+
     const res = await fetch(`${base}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
         "Accept-Version": "V2",
-        ...(this.auth ? { Authorization: this.auth } : {}),
+        "Accept-Language": "en",
+        ...(action === "clearance" ? { "Clearance-Status": "1" } : {}),
+        Authorization: `Basic ${auth}`,
       },
-      body: JSON.stringify({ invoiceHash: args.hash, invoice: args.signedXmlBase64 }),
+      body: JSON.stringify({
+        invoiceHash: args.hash,
+        uuid: args.uuid,
+        invoice: args.signedXmlBase64,
+      }),
     });
+
     const raw = await res.text();
-    const status: ZatcaStatus = res.ok ? "accepted" : "rejected";
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      /* gateway returned non-JSON */
+    }
+
+    const reported = (parsed.reportingStatus ?? parsed.clearanceStatus) as string | undefined;
+    const accepted = res.ok && reported !== "NOT_REPORTED" && reported !== "NOT_CLEARED";
+
     return {
       action,
-      status,
-      code: String(res.status),
-      message: res.ok ? "Submitted to ZATCA" : "Gateway rejected the invoice",
+      status: accepted ? "accepted" : "rejected",
+      code: String(reported ?? res.status),
+      message: accepted ? "Accepted by ZATCA" : "Rejected by ZATCA",
+      clearedInvoiceBase64:
+        typeof parsed.clearedInvoice === "string" ? parsed.clearedInvoice : undefined,
       raw,
     };
   }
