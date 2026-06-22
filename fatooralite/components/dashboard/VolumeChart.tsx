@@ -2,12 +2,16 @@
 import { useLang } from "@/lib/i18n/LangProvider";
 import { num } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
-import { volume } from "@/data/volume";
-import { counters } from "@/data/kpis";
 import { AnimatedCounter } from "@/components/common/AnimatedCounter";
+import type { VolumeBar } from "@/types";
 
-export function VolumeChart() {
+export function VolumeChart({ initialData }: { initialData?: VolumeBar[] }) {
   const { t, lang } = useLang();
+  const volumeData = initialData ?? [];
+
+  // Calculate total volume for today (assuming highlight is today)
+  const todayCount = volumeData.find(v => v.highlight)?.pct || 0;
+
   return (
     <Card style={{ display: "flex", flexDirection: "column" }}>
       <div
@@ -23,7 +27,7 @@ export function VolumeChart() {
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 18 }}>
         <span style={{ fontSize: 26, fontWeight: 700, fontFamily: "var(--fdisp)" }}>
-          <AnimatedCounter to={counters.inv} format={(n) => num(n, lang)} />
+          <AnimatedCounter to={todayCount} format={(n) => num(n, lang)} />
         </span>
         <span style={{ fontSize: 12, color: "var(--ac)", fontWeight: 600 }}>{t.invToday}</span>
       </div>
@@ -36,7 +40,7 @@ export function VolumeChart() {
           minHeight: 120,
         }}
       >
-        {volume.map((v, i) => (
+        {volumeData.map((v, i) => (
           <div
             key={i}
             style={{

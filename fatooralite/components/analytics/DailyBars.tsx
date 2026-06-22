@@ -1,11 +1,10 @@
 "use client";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Card } from "@/components/ui/Card";
-import { dailyBars } from "@/data/analytics";
 
-export function DailyBars() {
+export function DailyBars({ data }: { data: number[] }) {
   const { t } = useLang();
-  const last = dailyBars.length - 1;
+  const last = data.length - 1;
   return (
     <Card>
       <div
@@ -20,7 +19,7 @@ export function DailyBars() {
         <span style={{ fontSize: 11.5, color: "var(--t3)" }}>{t.mtd}</span>
       </div>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 7, height: 170 }}>
-        {dailyBars.map((h, i) => (
+        {data.map((h, i) => (
           <div key={i} style={{ flex: 1, height: "100%", display: "flex", alignItems: "flex-end" }}>
             <div
               style={{

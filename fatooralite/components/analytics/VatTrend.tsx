@@ -2,9 +2,8 @@
 import { useLang } from "@/lib/i18n/LangProvider";
 import { sar } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
-import { vatCollected } from "@/data/analytics";
 
-export function VatTrend() {
+export function VatTrend({ vatCollected }: { vatCollected: number }) {
   const { t, lang } = useLang();
   return (
     <Card>

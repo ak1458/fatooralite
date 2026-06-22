@@ -1,8 +1,26 @@
 import { createHash } from "node:crypto";
+import { getInvoiceBodyForHashing } from "./canonicalize";
 
-/** SHA-256 of the given string (UTF-8), returned base64 — the invoice hash. */
+/**
+ * SHA-256 of the canonicalized invoice XML (excluding UBLExtensions/signature),
+ * returned as base64. This is the ZATCA-compliant invoice hash.
+ */
 export function invoiceHash(xml: string): string {
-  return createHash("sha256").update(xml, "utf8").digest("base64");
+  const canonical = getInvoiceBodyForHashing(xml);
+  return createHash("sha256").update(canonical, "utf8").digest("base64");
+}
+
+/**
+ * SHA-256 hash of a raw string, base64-encoded.
+ * Used for signing properties digest, etc.
+ */
+export function rawHash(data: string): string {
+  return createHash("sha256").update(data, "utf8").digest("base64");
+}
+
+/** SHA-256 hash of raw bytes, base64-encoded. */
+export function rawHashBytes(data: Buffer): string {
+  return createHash("sha256").update(data).digest("base64");
 }
 
 /** Genesis previous-invoice-hash (PIH) used for the first invoice in a chain. */

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { issueInvoice, NoCertificateError } from "@/lib/services/invoice-service";
-import { listInvoices } from "@/lib/db/repo";
+import { getInvoiceList } from "@/lib/db/queries";
+import { createInvoiceSchema } from "@/lib/validation/schemas";
 import { requirePermission } from "@/lib/auth/server";
 import type { InvoiceInput } from "@/lib/zatca/types";
 
@@ -8,9 +9,6 @@ export const runtime = "nodejs";
 
 /** POST /api/invoices — issue (create + sign) a new invoice. */
 export async function POST(req: Request) {
-  const { deny } = await requirePermission(req, "invoice:create");
-  if (deny) return deny;
-
   let body: { companyId?: string; input?: InvoiceInput };
   try {
     body = await req.json();
@@ -19,17 +17,34 @@ export async function POST(req: Request) {
   }
 
   const { companyId, input } = body;
-  if (!companyId || !input?.invoiceNumber || !input.lines?.length) {
+  if (!companyId || !input) {
     return NextResponse.json(
-      { error: "companyId, input.invoiceNumber and input.lines are required" },
+      { error: "companyId and input are required" },
       { status: 400 },
     );
   }
 
+  const { deny } = await requirePermission(req, "invoice:create", companyId);
+  if (deny) return deny;
+
   try {
-    const result = await issueInvoice(companyId, input);
+    const validData = createInvoiceSchema.parse(input);
+    const typedInput = {
+      ...validData,
+      issueTime: validData.issueTime ?? "00:00:00",
+      lines: validData.lines.map(line => ({
+        ...line,
+        vatRate: line.vatRate ?? 0.15,
+        taxCategory: line.taxCategory ?? "S"
+      }))
+    } as InvoiceInput;
+    
+    const result = await issueInvoice(companyId, typedInput);
     return NextResponse.json(result, { status: 201 });
-  } catch (err) {
+  } catch (err: any) {
+    if (err.name === "ZodError") {
+      return NextResponse.json({ error: err.errors }, { status: 400 });
+    }
     if (err instanceof NoCertificateError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }
@@ -46,6 +61,10 @@ export async function GET(req: Request) {
   if (!companyId) {
     return NextResponse.json({ error: "companyId is required" }, { status: 400 });
   }
-  const invoices = await listInvoices(companyId, status ? { status } : undefined);
-  return NextResponse.json({ invoices });
+  
+  const { deny } = await requirePermission(req, "audit:view", companyId);
+  if (deny) return deny;
+
+  const data = await getInvoiceList(companyId, status ? { status } : undefined);
+  return NextResponse.json(data);
 }

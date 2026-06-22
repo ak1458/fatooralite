@@ -29,6 +29,7 @@ export async function getUserFromRequest(req: Request): Promise<SessionPayload |
 export async function requirePermission(
   req: Request,
   permission: Permission,
+  targetCompanyId?: string,
 ): Promise<{ user: SessionPayload | null; deny?: NextResponse }> {
   if (process.env.AUTH_ENFORCE !== "true") {
     return { user: await getUserFromRequest(req) };
@@ -39,6 +40,9 @@ export async function requirePermission(
   }
   if (!can(user.role, permission)) {
     return { user, deny: NextResponse.json({ error: "Insufficient permissions" }, { status: 403 }) };
+  }
+  if (targetCompanyId && user.companyId && user.companyId !== targetCompanyId) {
+    return { user, deny: NextResponse.json({ error: "Tenant mismatch. Access denied to this company's resources." }, { status: 403 }) };
   }
   return { user };
 }

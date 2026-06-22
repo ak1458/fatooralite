@@ -2,11 +2,13 @@
 import Link from "next/link";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Card } from "@/components/ui/Card";
-import { feed } from "@/data/feed";
 import { statusMeta, feedLabel } from "@/lib/status";
+import type { FeedEvent } from "@/types";
 
-export function LiveFeed() {
+export function LiveFeed({ initialEvents }: { initialEvents?: FeedEvent[] }) {
   const { t, lang } = useLang();
+  const events = initialEvents ?? [];
+
   return (
     <Card>
       <div
@@ -58,7 +60,7 @@ export function LiveFeed() {
           }}
         />
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          {feed.map((f, i) => {
+          {events.map((f, i) => {
             const m = statusMeta(f.status, t, lang);
             return (
               <div

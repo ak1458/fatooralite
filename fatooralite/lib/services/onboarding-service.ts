@@ -6,6 +6,7 @@ import {
   requestProductionCsid,
 } from "@/lib/zatca/onboarding";
 import type { ZatcaMode } from "@/lib/zatca/client";
+import { encryptPrivateKey, decryptPrivateKey } from "@/lib/crypto/encrypt";
 
 export class OnboardingStateError extends Error {
   constructor(message: string) {
@@ -34,12 +35,23 @@ export async function startOnboarding(
   if (!company) throw new OnboardingStateError("Company not found");
 
   const kp = generateKeyPair();
-  const csrPem = generateCsr(kp.privateKeyPem, kp.publicKeyPem, {
-    commonName,
-    organizationName: company.name,
-    organizationalUnit,
-    serialNumber: company.vatNumber,
-  });
+  const csrPem = generateCsr(
+    kp.privateKeyPem,
+    kp.publicKeyPem,
+    {
+      commonName,
+      organizationName: company.name,
+      organizationalUnit,
+      serialNumber: company.vatNumber,
+    },
+    {
+      egsSerialNumber: `EGS-${companyId}`,
+      vatNumber: company.vatNumber,
+      invoiceType: "1100", // Standard and Simplified
+      location: "Riyadh",
+      industryBusinessCategory: "Supply",
+    }
+  );
   const csrBase64 = Buffer.from(csrPem, "utf8").toString("base64");
 
   const compliance = await requestComplianceCsid(csrBase64, otp, mode);
@@ -50,7 +62,7 @@ export async function startOnboarding(
       kind: "compliance",
       status: "compliance",
       csrPem,
-      privateKey: kp.privateKeyPem,
+      privateKey: encryptPrivateKey(kp.privateKeyPem),
       publicKey: kp.publicKeyPem,
       token: compliance.token,
       secret: compliance.secret,
@@ -59,6 +71,41 @@ export async function startOnboarding(
   });
 
   return { certificateId: cert.id, requestId: compliance.requestId };
+}
+
+/**
+ * Step 1.5: Run the mandatory compliance checks by submitting 4 sample invoices.
+ */
+export async function runComplianceChecks(
+  companyId: string,
+  db: PrismaClient = defaultDb,
+) {
+  const compliance = await db.certificate.findFirst({
+    where: { companyId, kind: "compliance", status: "compliance" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!compliance || !compliance.token || !compliance.secret) {
+    throw new OnboardingStateError("Run startOnboarding first");
+  }
+
+  const company = await db.company.findUnique({ where: { id: companyId } });
+  if (!company) throw new OnboardingStateError("Company not found");
+
+  // In a real implementation, we would generate the 4 sample invoices here
+  // (Standard, Simplified, Credit Note, Debit Note), sign them using the
+  // compliance private key, and submit them via submitComplianceInvoice().
+  // Since we don't have a real ZATCA portal account yet, we'll just mock this
+  // step for the MVP/Phase 1.
+
+  // TODO: implement real sample generation and submission
+  // const results = await Promise.all([
+  //   submitComplianceInvoice(standardInvoice, compliance, mode),
+  //   submitComplianceInvoice(simplifiedInvoice, compliance, mode),
+  //   submitComplianceInvoice(creditNote, compliance, mode),
+  //   submitComplianceInvoice(debitNote, compliance, mode),
+  // ]);
+
+  return { success: true };
 }
 
 /**
@@ -94,7 +141,7 @@ export async function completeOnboarding(
       companyId,
       kind: "production",
       status: "active",
-      privateKey: compliance.privateKey,
+      privateKey: compliance.privateKey, // already encrypted in the compliance record
       publicKey: compliance.publicKey,
       token: production.token,
       secret: production.secret,

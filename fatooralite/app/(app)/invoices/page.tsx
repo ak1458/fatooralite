@@ -1,16 +1,44 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useLang } from "@/lib/i18n/LangProvider";
-import { invoices } from "@/data/invoices";
 import { Icon } from "@/components/ui/Icon";
 import { FilterTabs } from "@/components/invoices/FilterTabs";
 import { InvoiceTable } from "@/components/invoices/InvoiceTable";
+import { useCompany } from "@/lib/useCompany";
+import type { Invoice, Bilingual } from "@/types";
 
 export default function InvoicesPage() {
   const { t } = useLang();
+  const { company } = useCompany();
   const [active, setActive] = useState("all");
-  const rows = active === "all" ? invoices : invoices.filter((r) => r.status === active);
+  const [data, setData] = useState<{ invoices: Invoice[]; tabs: { id: string; label: Bilingual; count: number }[] }>({ invoices: [], tabs: [] });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!company?.id) return;
+    
+    let isMounted = true;
+    
+    // Defer setLoading to avoid synchronous state update in effect
+    setTimeout(() => {
+      if (isMounted) setLoading(true);
+    }, 0);
+    
+    fetch(`/api/invoices?companyId=${company.id}&status=${active}`)
+      .then((res) => res.json())
+      .then((resData) => {
+        if (isMounted && resData.invoices) setData(resData);
+      })
+      .catch(console.error)
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+      
+    return () => {
+      isMounted = false;
+    };
+  }, [company?.id, active]);
 
   return (
     <div style={{ maxWidth: 1480, margin: "0 auto" }}>
@@ -24,7 +52,7 @@ export default function InvoicesPage() {
           marginBottom: 18,
         }}
       >
-        <FilterTabs active={active} onChange={setActive} />
+        <FilterTabs active={active} tabs={data.tabs} onChange={setActive} />
         <div style={{ display: "flex", gap: 9 }}>
           <button
             style={{
@@ -70,7 +98,11 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      <InvoiceTable rows={rows} />
+      {loading ? (
+        <div style={{ padding: 40, textAlign: "center", color: "var(--t3)" }}>Loading invoices...</div>
+      ) : (
+        <InvoiceTable rows={data.invoices} />
+      )}
     </div>
   );
 }

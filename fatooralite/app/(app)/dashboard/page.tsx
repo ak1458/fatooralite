@@ -1,7 +1,7 @@
 "use client";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useLang } from "@/lib/i18n/LangProvider";
-import { counters, kpis } from "@/data/kpis";
 import { Icon } from "@/components/ui/Icon";
 import { HealthRing } from "@/components/dashboard/HealthRing";
 import { KpiCard } from "@/components/dashboard/KpiCard";
@@ -10,9 +10,28 @@ import { ApiSparkline } from "@/components/dashboard/ApiSparkline";
 import { IntegrationStatus } from "@/components/dashboard/IntegrationStatus";
 import { LiveFeed } from "@/components/dashboard/LiveFeed";
 import { VolumeChart } from "@/components/dashboard/VolumeChart";
+import { useCompany } from "@/lib/useCompany";
+import type { Kpi, FeedEvent, VolumeBar } from "@/types";
 
 export default function DashboardPage() {
   const { t } = useLang();
+  const { company } = useCompany();
+  const [data, setData] = useState<{ kpis: { counters: Record<string, number>, kpis: Kpi[] }; feed: FeedEvent[]; volume: VolumeBar[] } | null>(null);
+
+  useEffect(() => {
+    if (!company?.id) return;
+    fetch(`/api/dashboard?companyId=${company.id}`)
+      .then((res) => res.json())
+      .then(setData)
+      .catch(console.error);
+  }, [company?.id]);
+
+  // Use real data if loaded, otherwise fallback structure (handled by components internally or pass nulls)
+  const dashboardCounters = data?.kpis?.counters ?? { score: 0, vat: 0, inv: 0, succ: 0 };
+  const dashboardKpis = data?.kpis?.kpis ?? [];
+  const dashboardFeed = data?.feed ?? [];
+  const dashboardVolume = data?.volume ?? [];
+
   return (
     <div style={{ maxWidth: 1480, margin: "0 auto" }}>
       {/* header */}
@@ -125,11 +144,11 @@ export default function DashboardPage() {
           marginBottom: 18,
         }}
       >
-        <HealthRing score={counters.score} />
+        <HealthRing score={dashboardCounters.score} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          {kpis.map((k) => (
+          {dashboardKpis.length > 0 ? dashboardKpis.map((k: Kpi) => (
             <KpiCard key={k.label.en} kpi={k} />
-          ))}
+          )) : <div style={{ color: "var(--t3)" }}>Loading KPIs...</div>}
         </div>
       </div>
 
@@ -148,8 +167,8 @@ export default function DashboardPage() {
 
       {/* row 3: live feed + volume */}
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18 }}>
-        <LiveFeed />
-        <VolumeChart />
+        <LiveFeed initialEvents={dashboardFeed} />
+        <VolumeChart initialData={dashboardVolume} />
       </div>
     </div>
   );

@@ -1,15 +1,15 @@
 "use client";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Card } from "@/components/ui/Card";
-import { revenueByCustomer } from "@/data/analytics";
+import type { RevenueRow } from "@/types";
 
-export function RevenueByCustomer() {
+export function RevenueByCustomer({ data }: { data: RevenueRow[] }) {
   const { t, lang } = useLang();
   return (
     <Card>
       <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 18 }}>{t.revTitle}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
-        {revenueByCustomer.map((r) => (
+        {data.map((r) => (
           <div key={r.name.en}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <span

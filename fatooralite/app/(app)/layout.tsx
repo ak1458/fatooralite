@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/shell/Sidebar";
 import { Topbar } from "@/components/shell/Topbar";
 import { GlowBackground } from "@/components/common/GlowBackground";
+import { CompanyProvider } from "@/lib/useCompany";
 
 export default function AppLayout({
   children,
@@ -29,7 +30,9 @@ export default function AppLayout({
         >
           <Topbar />
           <main style={{ flex: 1, overflowY: "auto", padding: "26px 28px 60px" }}>
-            {children}
+            <CompanyProvider>
+              {children}
+            </CompanyProvider>
           </main>
         </div>
       </div>

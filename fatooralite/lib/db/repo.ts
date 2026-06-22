@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultDb } from "./client";
 import type { InvoiceInput } from "@/lib/zatca/types";
 import { invoiceTotals, lineNet, lineVat, STANDARD_VAT_RATE } from "@/lib/zatca/money";
+import { decryptPrivateKey } from "@/lib/crypto/encrypt";
 
 /**
  * Thin repository over Prisma. Every function takes an optional `db` so tests
@@ -21,10 +22,14 @@ export async function getCompany(id: string, db: PrismaClient = defaultDb) {
 
 /** The company's active certificate (holds the signing key pair). */
 export async function getActiveCertificate(companyId: string, db: PrismaClient = defaultDb) {
-  return db.certificate.findFirst({
+  const cert = await db.certificate.findFirst({
     where: { companyId, status: "active" },
     orderBy: { createdAt: "desc" },
   });
+  if (cert && cert.privateKey) {
+    cert.privateKey = decryptPrivateKey(cert.privateKey);
+  }
+  return cert;
 }
 
 export async function getInvoice(id: string, db: PrismaClient = defaultDb) {
@@ -168,6 +173,16 @@ export async function getLastInvoiceHash(
     select: { hash: true },
   });
   return last?.hash ?? null;
+}
+
+export async function getNextIcv(
+  companyId: string,
+  db: PrismaClient = defaultDb,
+): Promise<number> {
+  const count = await db.invoice.count({
+    where: { companyId },
+  });
+  return count + 1;
 }
 
 export async function addClearanceRecord(

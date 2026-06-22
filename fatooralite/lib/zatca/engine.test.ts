@@ -9,11 +9,12 @@ import {
   tlv,
   buildQrBase64,
   generateKeyPair,
+  generateCsr,
+  generateSignedInvoice,
+  canonicalizeInvoice,
+  buildInvoiceXml,
   signHash,
   verifyHash,
-  generateCsr,
-  buildInvoiceXml,
-  generateSignedInvoice,
 } from "./index";
 import type { InvoiceInput } from "./types";
 
@@ -22,8 +23,16 @@ const sampleInput: InvoiceInput = {
   kind: "standard",
   issueDate: "2026-06-17",
   issueTime: "09:42:18",
-  seller: { name: "Almarai Company", vatNumber: "311122334400003" },
-  buyer: { name: "Tamimi Markets", vatNumber: "300000000000003" },
+  seller: { 
+    name: "Almarai Company", 
+    vatNumber: "311122334400003",
+    address: { streetName: "King Fahd Road", buildingNumber: "1234", cityName: "Riyadh", postalZone: "12211", countryCode: "SA" }
+  },
+  buyer: { 
+    name: "Tamimi Markets", 
+    vatNumber: "300000000000003",
+    address: { streetName: "Prince Sultan St", buildingNumber: "5678", cityName: "Jeddah", postalZone: "23456", countryCode: "SA" }
+  },
   lines: [
     { description: "Fresh milk carton", quantity: 100, unitPrice: 12 },
     { description: "Laban bottle", quantity: 40, unitPrice: 8.5 },
@@ -48,7 +57,55 @@ describe("money", () => {
     expect(t.vatAmount).toBe(231); // 15%
     expect(t.grandTotal).toBe(1771);
   });
+  it("computes per-category subtotals", () => {
+    const inputWithZeroRated: InvoiceInput = {
+      ...sampleInput,
+      lines: [
+        { description: "Standard", quantity: 1, unitPrice: 100, taxCategory: "S" },
+        { description: "Zero", quantity: 1, unitPrice: 50, taxCategory: "Z", exemptionReason: "Export" },
+      ]
+    };
+    const t = invoiceTotals(inputWithZeroRated.lines);
+    expect(t.taxableAmount).toBe(150);
+    expect(t.vatAmount).toBe(15);
+    expect(t.taxSubtotals).toHaveLength(2);
+    expect(t.taxSubtotals.find(s => s.taxCategory === "S")?.taxableAmount).toBe(100);
+    expect(t.taxSubtotals.find(s => s.taxCategory === "Z")?.taxableAmount).toBe(50);
+  });
+  it("handles line-level allowances", () => {
+    const lines = [
+      { 
+        description: "Discounted Item", 
+        quantity: 1, 
+        unitPrice: 100, 
+        allowances: [{ isCharge: false, amount: 20 }] 
+      }
+    ];
+    const t = invoiceTotals(lines);
+    expect(t.taxableAmount).toBe(80);
+    expect(t.vatAmount).toBe(12); // 15% of 80
+  });
 });
+
+describe("canonicalize", () => {
+  it("strips UBLExtensions and serializes without pretty print", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+  <ext:UBLExtensions>
+    <ext:UBLExtension>
+      <ext:ExtensionContent>
+        <Signature>123</Signature>
+      </ext:ExtensionContent>
+    </ext:UBLExtension>
+  </ext:UBLExtensions>
+  <ID>123</ID>
+</Invoice>`;
+    const canonical = canonicalizeInvoice(xml);
+    expect(canonical).not.toContain("UBLExtensions");
+    expect(canonical).not.toContain("<?xml");
+    expect(canonical).toContain("<ID>123</ID>");
+    expect(canonical).not.toContain("\n  <ID>"); // Should not be pretty printed
+  });
 
 describe("hash", () => {
   it("is deterministic base64 SHA-256", () => {
@@ -73,6 +130,21 @@ describe("qr TLV", () => {
     });
     const decoded = Buffer.from(qr, "base64");
     expect(decoded[0]).toBe(1); // first tag
+  });
+  it("handles binary data for tags 6-9", () => {
+    const qr = buildQrBase64({
+      sellerName: "Seller",
+      vatNumber: "311122334400003",
+      timestamp: "2026-06-17T09:42:18",
+      invoiceTotal: "1771.00",
+      vatTotal: "231.00",
+      hash: "YWJjZGU=", // "abcde" in base64
+    });
+    const decoded = Buffer.from(qr, "base64");
+    // Should contain the raw bytes 'abcde', not the base64 string
+    expect(decoded.toString('utf8')).toContain("abcde");
+    expect(decoded.toString('utf8')).not.toContain("YWJjZGU=");
+  });
   });
 });
 
@@ -99,6 +171,8 @@ describe("xml", () => {
     expect(xml).toContain("Almarai Company");
     expect(xml).toContain('currencyID="SAR"');
     expect(xml).toContain("1771.00"); // payable
+    expect(xml).toContain("<cbc:StreetName>King Fahd Road</cbc:StreetName>"); // addresses added
+    expect(xml).toContain("<ext:UBLExtensions>"); // UBLExtensions placeholder present
   });
 });
 
@@ -123,6 +197,24 @@ describe("csr", () => {
     const secp256k1Oid = forge.asn1.oidToDer("1.3.132.0.10").getBytes();
     expect(der).toContain(secp256k1Oid);
   });
+  it("includes ZATCA extensions when provided", () => {
+    const kp = generateKeyPair();
+    const pem = generateCsr(kp.privateKeyPem, kp.publicKeyPem, {
+      commonName: "FatooraLite-EGS",
+      organizationName: "Almarai Company",
+      organizationalUnit: "Riyadh HQ",
+    }, {
+      egsSerialNumber: "1-TST|2-TST|3-123",
+      vatNumber: "311122334400003",
+    });
+    const der = forge.util.decode64(
+      pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, ""),
+    );
+    // Should contain the CertificateTemplateName OID
+    expect(der).toContain(forge.asn1.oidToDer("1.3.6.1.4.1.311.20.2").getBytes());
+    // Should contain the SAN values
+    expect(der).toContain("1-TST|2-TST|3-123");
+  });
 });
 
 describe("generateSignedInvoice", () => {
@@ -131,6 +223,7 @@ describe("generateSignedInvoice", () => {
     const signed = generateSignedInvoice(sampleInput, kp);
     expect(signed.uuid).toBeTruthy();
     expect(signed.xml).toContain("INV-2026-04417");
+    expect(signed.xml).toContain("<ds:Signature"); // XAdES signature injected
     expect(signed.totals.grandTotal).toBe(1771);
     expect(verifyHash(signed.hash, signed.signature, kp.publicKeyPem)).toBe(true);
     expect(Buffer.from(signed.qr, "base64")[0]).toBe(1);

@@ -15,6 +15,13 @@ export interface ProductionCsidResult {
   raw: string;
 }
 
+export interface ComplianceCheckResult {
+  status: "PASS" | "FAIL";
+  reportingStatus?: string;
+  clearanceStatus?: string;
+  raw: string;
+}
+
 export class OnboardingError extends Error {
   constructor(
     message: string,
@@ -57,7 +64,61 @@ export async function requestComplianceCsid(
 }
 
 /**
- * Step 2 — after passing compliance checks, request the Production CSID.
+ * Step 2 — submit a compliance invoice (ZATCA requires passing these checks
+ * before issuing a production CSID).
+ *
+ * You must submit sample invoices (standard, simplified, credit note, debit note)
+ * to the compliance/invoices endpoint using the compliance CSID as authentication.
+ *
+ * POST {base}/compliance/invoices  (Basic auth with compliance CSID).
+ */
+export async function submitComplianceInvoice(
+  args: {
+    signedXmlBase64: string;
+    invoiceHash: string;
+    uuid: string;
+  },
+  compliance: { token: string; secret: string },
+  mode: ZatcaMode = "sandbox",
+): Promise<ComplianceCheckResult> {
+  const auth = Buffer.from(`${compliance.token}:${compliance.secret}`).toString("base64");
+  const res = await fetch(`${gatewayBaseUrl(mode)}/compliance/invoices`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "Accept-Version": "V2",
+      "Accept-Language": "en",
+      Authorization: `Basic ${auth}`,
+    },
+    body: JSON.stringify({
+      invoiceHash: args.invoiceHash,
+      uuid: args.uuid,
+      invoice: args.signedXmlBase64,
+    }),
+  });
+
+  const raw = await res.text();
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    /* gateway returned non-JSON */
+  }
+
+  const reported = (parsed.reportingStatus ?? parsed.clearanceStatus) as string | undefined;
+  const passed = res.ok && reported !== "NOT_REPORTED" && reported !== "NOT_CLEARED";
+
+  return {
+    status: passed ? "PASS" : "FAIL",
+    reportingStatus: parsed.reportingStatus as string | undefined,
+    clearanceStatus: parsed.clearanceStatus as string | undefined,
+    raw,
+  };
+}
+
+/**
+ * Step 3 — after passing compliance checks, request the Production CSID.
  * POST {base}/production/csids  (Basic auth with the compliance CSID,
  * body { compliance_request_id }).
  */

@@ -1,6 +1,5 @@
 "use client";
 import { useLang } from "@/lib/i18n/LangProvider";
-import { invoiceTabs } from "@/data/invoices";
 
 const LABELS: Record<string, { en: string; ar: string }> = {
   all: { en: "All", ar: "الكل" },
@@ -12,9 +11,11 @@ const LABELS: Record<string, { en: string; ar: string }> = {
 
 export function FilterTabs({
   active,
+  tabs,
   onChange,
 }: {
   active: string;
+  tabs: { id: string; count: string | number }[];
   onChange: (id: string) => void;
 }) {
   const { lang } = useLang();
@@ -29,7 +30,7 @@ export function FilterTabs({
         padding: 4,
       }}
     >
-      {invoiceTabs.map((tab) => {
+      {tabs.map((tab) => {
         const on = tab.id === active;
         return (
           <button

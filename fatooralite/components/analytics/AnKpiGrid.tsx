@@ -1,9 +1,9 @@
 "use client";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { sar } from "@/lib/format";
-import { anKpis } from "@/data/analytics";
+import type { AnalyticsKpi } from "@/types";
 
-export function AnKpiGrid() {
+export function AnKpiGrid({ kpis }: { kpis: AnalyticsKpi[] }) {
   const { lang } = useLang();
   return (
     <div
@@ -14,7 +14,7 @@ export function AnKpiGrid() {
         marginBottom: 18,
       }}
     >
-      {anKpis.map((k) => {
+      {kpis.map((k) => {
         const down = k.delta.startsWith("-");
         const value = k.amount !== undefined ? sar(k.amount, lang) : k.value;
         return (

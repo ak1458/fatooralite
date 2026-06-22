@@ -1,8 +1,5 @@
-"use client";
-import { StubScreen } from "@/components/common/StubScreen";
-import { usePageMeta } from "@/lib/usePageMeta";
+import { NewNoteForm } from "@/components/invoices/NewNoteForm";
 
-export default function Page() {
-  const { title, sub } = usePageMeta();
-  return <StubScreen icon="creditNote" title={title} sub={sub} />;
+export default function CreditNotesPage() {
+  return <NewNoteForm type="credit" />;
 }

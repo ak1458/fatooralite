@@ -7,9 +7,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL") // pooled connection (Supabase pgBouncer, port 6543)
-  directUrl = env("DIRECT_URL") // direct connection for migrations (port 5432)
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model Company {
@@ -25,6 +24,8 @@ model Company {
   certificates Certificate[]
   invoices     Invoice[]
   users        User[]
+  customers    Customer[]
+  products     Product[]
 }
 
 model Branch {
@@ -63,6 +64,7 @@ model Invoice {
   id            String   @id @default(cuid())
   companyId     String
   branchId      String?
+  customerId    String?
   invoiceNumber String
   uuid          String   @unique
   kind          String // standard | simplified
@@ -86,6 +88,7 @@ model Invoice {
 
   company  Company          @relation(fields: [companyId], references: [id])
   branch   Branch?          @relation(fields: [branchId], references: [id])
+  customer Customer?        @relation(fields: [customerId], references: [id])
   lines    InvoiceLine[]
   records  ClearanceRecord[]
   audit    AuditEntry[]
@@ -139,4 +142,35 @@ model User {
   createdAt    DateTime @default(now())
 
   company Company? @relation(fields: [companyId], references: [id])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  nameAr    String?
+  vatNumber String?
+  crNumber  String?
+  address   String?
+  city      String?
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+
+  company  Company   @relation(fields: [companyId], references: [id])
+  invoices Invoice[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  nameAr      String?
+  sku         String?
+  unitPrice   Float
+  vatCategory String   @default("S") // S, Z, E, O
+  unitCode    String   @default("PCE")
+  createdAt   DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id])
 }

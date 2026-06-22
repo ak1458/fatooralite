@@ -5,6 +5,7 @@ import { sar } from "@/lib/format";
 import { invoiceTotals } from "@/lib/zatca/money";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
+import type { Invoice } from "@prisma/client";
 
 interface Company {
   id: string;
@@ -28,16 +29,19 @@ interface ProductData {
 }
 
 const L = {
-  title: { en: "New Invoice", ar: "فاتورة جديدة" },
+  titleCredit: { en: "New Credit Note", ar: "إشعار دائن جديد" },
+  titleDebit: { en: "New Debit Note", ar: "إشعار مدين جديد" },
   company: { en: "Company", ar: "الشركة" },
-  number: { en: "Invoice number", ar: "رقم الفاتورة" },
+  number: { en: "Note number", ar: "رقم الإشعار" },
   kind: { en: "Type", ar: "النوع" },
   standard: { en: "Standard", ar: "ضريبية" },
   simplified: { en: "Simplified", ar: "مبسطة" },
+  origInv: { en: "Original Invoice", ar: "الفاتورة الأصلية" },
+  reason: { en: "Reason for Note", ar: "سبب الإشعار" },
   customer: { en: "Select Customer", ar: "اختر العميل" },
   buyer: { en: "Buyer name", ar: "اسم العميل" },
-  buyerVat: { en: "Buyer VAT (optional)", ar: "الرقم الضريبي للعميل (اختياري)" },
-  lines: { en: "Line items", ar: "بنود الفاتورة" },
+  buyerVat: { en: "Buyer VAT", ar: "الرقم الضريبي للعميل" },
+  lines: { en: "Line items", ar: "بنود الإشعار" },
   product: { en: "Select Product", ar: "اختر المنتج" },
   desc: { en: "Description", ar: "الوصف" },
   qty: { en: "Qty", ar: "الكمية" },
@@ -48,7 +52,7 @@ const L = {
   total: { en: "Total", ar: "الإجمالي" },
   submit: { en: "Create & Sign", ar: "إنشاء وتوقيع" },
   signing: { en: "Signing…", ar: "جارٍ التوقيع…" },
-  success: { en: "Invoice signed", ar: "تم توقيع الفاتورة" },
+  success: { en: "Note signed", ar: "تم توقيع الإشعار" },
   uuid: { en: "UUID", ar: "المعرّف" },
   hash: { en: "Hash", ar: "البصمة" },
   status: { en: "Status", ar: "الحالة" },
@@ -61,7 +65,7 @@ const L = {
   rejected: { en: "Rejected", ar: "مرفوضة" },
 };
 
-export function NewInvoiceForm() {
+export function NewNoteForm({ type }: { type: "credit" | "debit" }) {
   const { lang } = useLang();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyId, setCompanyId] = useState("");
@@ -69,9 +73,15 @@ export function NewInvoiceForm() {
   const [kind, setKind] = useState<"standard" | "simplified">("standard");
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [products, setProducts] = useState<ProductData[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [buyerName, setBuyerName] = useState("");
   const [buyerVat, setBuyerVat] = useState("");
+  
+  const [billingReferenceId, setBillingReferenceId] = useState("");
+  const [instructionNote, setInstructionNote] = useState("");
+  
   const [lines, setLines] = useState<Line[]>([{ description: "", quantity: 1, unitPrice: 0 }]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -86,11 +96,10 @@ export function NewInvoiceForm() {
     null,
   );
 
-  // Suggest an invoice number on mount (client-only; random is impure in render).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setNumber(genNumber());
-  }, []);
+    setNumber(genNumber(type));
+  }, [type]);
 
   useEffect(() => {
     fetch("/api/companies")
@@ -110,6 +119,9 @@ export function NewInvoiceForm() {
     fetch(`/api/products?companyId=${companyId}`)
       .then(res => res.json())
       .then(data => setProducts(data.products || []));
+    fetch(`/api/invoices?companyId=${companyId}&status=all`)
+      .then(res => res.json())
+      .then(data => setInvoices(data.invoices || []));
   }, [companyId]);
 
   const totals = invoiceTotals(lines.map((l) => ({ ...l, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice) })));
@@ -132,17 +144,23 @@ export function NewInvoiceForm() {
 
   async function submit() {
     setError("");
+    if (!billingReferenceId) return setError("Original invoice reference is required.");
+    if (!instructionNote) return setError("Reason for note is required.");
+    
     setSubmitting(true);
     try {
       const company = companies.find((c) => c.id === companyId);
       const input = {
         invoiceNumber: number,
         kind,
+        documentType: type,
         issueDate: new Date().toISOString().slice(0, 10),
         issueTime: new Date().toISOString().slice(11, 19),
         seller: { name: company?.name ?? "", vatNumber: company?.vatNumber ?? "" },
         buyer: buyerName ? { name: buyerName, vatNumber: buyerVat || undefined } : undefined,
         lines: lines.map((l) => ({ description: l.description, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice) })),
+        billingReferenceId,
+        instructionNote,
       };
       const res = await fetch("/api/invoices", {
         method: "POST",
@@ -273,7 +291,7 @@ export function NewInvoiceForm() {
                 setResult(null);
                 setShowXml(false);
                 setClearance(null);
-                setNumber(genNumber());
+                setNumber(genNumber(type));
                 setLines([{ description: "", quantity: 1, unitPrice: 0 }]);
               }}
               style={{ ...btnGhost }}
@@ -308,7 +326,7 @@ export function NewInvoiceForm() {
     <div style={{ maxWidth: 720, margin: "0 auto" }}>
       <Card style={{ padding: 26 }}>
         <h1 style={{ margin: "0 0 18px", fontSize: 22, fontWeight: 700, fontFamily: "var(--fdisp)" }}>
-          {label("title")}
+          {type === "credit" ? label("titleCredit") : label("titleDebit")}
         </h1>
 
         <Field label={label("company")}>
@@ -330,6 +348,24 @@ export function NewInvoiceForm() {
               <option value="standard">{label("standard")}</option>
               <option value="simplified">{label("simplified")}</option>
             </select>
+          </Field>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label={label("origInv")}>
+            <select 
+              value={billingReferenceId}
+              onChange={(e) => setBillingReferenceId(e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">-- Select Original Invoice --</option>
+              {invoices.filter(i => i.documentType === "invoice").map((inv) => (
+                <option key={inv.id} value={inv.invoiceNumber}>{inv.invoiceNumber} ({sar(inv.grandTotal, lang)})</option>
+              ))}
+            </select>
+          </Field>
+          <Field label={label("reason")}>
+            <input value={instructionNote} onChange={(e) => setInstructionNote(e.target.value)} style={inputStyle} placeholder="e.g., Return / Adjustment" />
           </Field>
         </div>
 
@@ -458,8 +494,9 @@ function Stat({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
   );
 }
 
-function genNumber(): string {
-  return `INV-2026-${Math.floor(10000 + Math.random() * 89999)}`;
+function genNumber(type: "credit" | "debit"): string {
+  const prefix = type === "credit" ? "CN" : "DN";
+  return `${prefix}-2026-${Math.floor(10000 + Math.random() * 89999)}`;
 }
 
 const btnPrimary: React.CSSProperties = {
