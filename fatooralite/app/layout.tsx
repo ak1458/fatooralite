@@ -72,7 +72,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: ANTI_FLASH }} />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <ThemeProvider>
           <LangProvider>{children}</LangProvider>
         </ThemeProvider>

@@ -12,9 +12,11 @@ export async function GET(req: Request) {
   }
 
   try {
-    const kpis = await getDashboardKpis(companyId);
-    const feed = await getDashboardFeed(companyId);
-    const volume = await getDashboardVolume(companyId);
+    const [kpis, feed, volume] = await Promise.all([
+      getDashboardKpis(companyId),
+      getDashboardFeed(companyId),
+      getDashboardVolume(companyId),
+    ]);
 
     return NextResponse.json({ kpis, feed, volume });
   } catch (err) {

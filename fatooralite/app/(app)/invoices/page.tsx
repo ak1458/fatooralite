@@ -1,44 +1,37 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Icon } from "@/components/ui/Icon";
 import { FilterTabs } from "@/components/invoices/FilterTabs";
 import { InvoiceTable } from "@/components/invoices/InvoiceTable";
+import { AsyncBoundary } from "@/components/common/AsyncBoundary";
+import { NoCompanyState } from "@/components/common/NoCompanyState";
+import { EmptyState } from "@/components/common/EmptyState";
 import { useCompany } from "@/lib/useCompany";
+import { useAsyncData } from "@/lib/async/useAsyncData";
 import type { Invoice, Bilingual } from "@/types";
+
+interface InvoicesData {
+  invoices: Invoice[];
+  tabs: { id: string; label: Bilingual; count: number }[];
+}
 
 export default function InvoicesPage() {
   const { t } = useLang();
-  const { company } = useCompany();
+  const { company, isLoading: companyLoading } = useCompany();
   const [active, setActive] = useState("all");
-  const [data, setData] = useState<{ invoices: Invoice[]; tabs: { id: string; label: Bilingual; count: number }[] }>({ invoices: [], tabs: [] });
-  const [loading, setLoading] = useState(true);
+  const { state, retry } = useAsyncData<InvoicesData>(
+    async (signal) => {
+      const res = await fetch(`/api/invoices?companyId=${company!.id}&status=${active}`, { signal });
+      if (!res.ok) throw new Error(`Failed to load invoices (${res.status})`);
+      return (await res.json()) as InvoicesData;
+    },
+    [company?.id, active],
+    { enabled: !!company?.id },
+  );
 
-  useEffect(() => {
-    if (!company?.id) return;
-    
-    let isMounted = true;
-    
-    // Defer setLoading to avoid synchronous state update in effect
-    setTimeout(() => {
-      if (isMounted) setLoading(true);
-    }, 0);
-    
-    fetch(`/api/invoices?companyId=${company.id}&status=${active}`)
-      .then((res) => res.json())
-      .then((resData) => {
-        if (isMounted && resData.invoices) setData(resData);
-      })
-      .catch(console.error)
-      .finally(() => {
-        if (isMounted) setLoading(false);
-      });
-      
-    return () => {
-      isMounted = false;
-    };
-  }, [company?.id, active]);
+  const tabs = state.status === "success" ? state.data.tabs : [];
 
   return (
     <div style={{ maxWidth: 1480, margin: "0 auto" }}>
@@ -52,7 +45,7 @@ export default function InvoicesPage() {
           marginBottom: 18,
         }}
       >
-        <FilterTabs active={active} tabs={data.tabs} onChange={setActive} />
+        <FilterTabs active={active} tabs={tabs} onChange={setActive} />
         <div style={{ display: "flex", gap: 9 }}>
           <button
             style={{
@@ -98,10 +91,40 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      {loading ? (
-        <div style={{ padding: 40, textAlign: "center", color: "var(--t3)" }}>Loading invoices...</div>
+      {!company?.id && !companyLoading ? (
+        <NoCompanyState />
       ) : (
-        <InvoiceTable rows={data.invoices} />
+        <AsyncBoundary
+          state={state}
+          isEmpty={(d) => d.invoices.length === 0}
+          empty={
+            <EmptyState
+              icon="invoices"
+              title="No invoices yet"
+              hint="Create your first ZATCA-compliant invoice to get started."
+              action={
+                <Link
+                  href="/invoices/new"
+                  style={{
+                    display: "inline-block",
+                    padding: "9px 16px",
+                    borderRadius: 10,
+                    background: "linear-gradient(150deg,var(--acb),var(--ac))",
+                    color: "#04130d",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    textDecoration: "none",
+                  }}
+                >
+                  Create Invoice
+                </Link>
+              }
+            />
+          }
+          onRetry={retry}
+        >
+          {(d) => <InvoiceTable rows={d.invoices} />}
+        </AsyncBoundary>
       )}
     </div>
   );

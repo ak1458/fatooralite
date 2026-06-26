@@ -6,6 +6,14 @@ import type { InvoiceInput } from "../lib/zatca/types";
 const prisma = new PrismaClient();
 
 async function main() {
+  // Demo seed is opt-in only. Production / real use starts empty: users register
+  // their own company via the onboarding flow. Set SEED_DEMO=true for a local
+  // fixture (Almarai sample tenant).
+  if (process.env.SEED_DEMO !== "true") {
+    console.log("Skipping demo seed. Set SEED_DEMO=true to load the Almarai sample tenant.");
+    return;
+  }
+
   // Fresh start for repeatable seeds.
   await prisma.auditEntry.deleteMany();
   await prisma.clearanceRecord.deleteMany();
