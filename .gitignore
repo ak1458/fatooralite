@@ -11,6 +11,12 @@
 **/.env.*
 !**/.env.example
 
+# secrets — LOCAL ONLY, never commit, never ship to live
+creds.md
+**/creds.md
+/archive/
+**/*.secret
+
 # test
 **/coverage/
 **/playwright-report/
