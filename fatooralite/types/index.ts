@@ -79,7 +79,7 @@ export interface RevenueRow {
 
 export interface AiMessage {
   role: "user" | "assistant";
-  text: Bilingual;
+  text: Bilingual | string;
 }
 
 export interface AiInsight {

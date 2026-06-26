@@ -2,8 +2,18 @@
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Icon } from "@/components/ui/Icon";
 
-export function ChatInput() {
+import { useState } from "react";
+
+export function ChatInput({ onSend, isLoading }: { onSend: (text: string) => void; isLoading?: boolean }) {
   const { t } = useLang();
+  const [input, setInput] = useState("");
+
+  const handleSend = () => {
+    if (!input.trim() || isLoading) return;
+    onSend(input);
+    setInput("");
+  };
+
   return (
     <div
       style={{
@@ -16,8 +26,16 @@ export function ChatInput() {
         background: "var(--s2)",
       }}
     >
-      <span style={{ flex: 1, fontSize: 13.5, color: "var(--t3)" }}>{t.aiPlaceholder}</span>
+      <input 
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") handleSend(); }}
+        placeholder={t.aiPlaceholder as string}
+        style={{ flex: 1, fontSize: 13.5, color: "var(--tx)", background: "transparent", border: "none", outline: "none" }} 
+      />
       <button
+        onClick={handleSend}
+        disabled={isLoading || !input.trim()}
         aria-label="Send"
         style={{
           width: 38,

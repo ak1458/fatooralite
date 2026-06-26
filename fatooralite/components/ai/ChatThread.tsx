@@ -1,13 +1,78 @@
 "use client";
+import { useState, useRef, useEffect } from "react";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Icon } from "@/components/ui/Icon";
-import { aiMessages } from "@/data/ai";
 import { MessageBubble } from "./MessageBubble";
 import { PromptChips } from "./PromptChips";
 import { ChatInput } from "./ChatInput";
+import type { AiMessage } from "@/types";
 
 export function ChatThread() {
   const { t } = useLang();
+  const [messages, setMessages] = useState<AiMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = async (text: string) => {
+    const newMsg: AiMessage = { role: "user", text };
+    const history = [...messages, newMsg];
+    setMessages(history);
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history }),
+      });
+
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        setMessages((prev) => [...prev, { role: "assistant", text: data.error || "Request failed." }]);
+        return;
+      }
+
+      // Keep the "Typing…" indicator until the first real token arrives, then
+      // open the assistant bubble and stream into it. Avoids a long empty bubble
+      // while a free reasoning model thinks before emitting content.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      let opened = false;
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        if (!acc) continue;
+        if (!opened) {
+          opened = true;
+          setMessages((prev) => [...prev, { role: "assistant", text: acc }]);
+        } else {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = { role: "assistant", text: acc };
+            return next;
+          });
+        }
+      }
+
+      if (!opened) {
+        setMessages((prev) => [...prev, { role: "assistant", text: "No response received. Please try again." }]);
+      }
+    } catch (err) {
+      setMessages((prev) => [...prev, { role: "assistant", text: "Connection error. Please try again." }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -78,6 +143,7 @@ export function ChatThread() {
 
       {/* messages */}
       <div
+        ref={scrollRef}
         style={{
           flex: 1,
           padding: 20,
@@ -87,15 +153,26 @@ export function ChatThread() {
           overflowY: "auto",
         }}
       >
-        {aiMessages.map((m, i) => (
-          <MessageBubble key={i} msg={m} />
-        ))}
+        {messages.length === 0 ? (
+          <div style={{ margin: "auto", color: "var(--t3)", fontSize: 13.5 }}>
+            Ask me anything about ZATCA regulations...
+          </div>
+        ) : (
+          messages.map((m, i) => <MessageBubble key={i} msg={m} />)
+        )}
+        {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
+          <div style={{ display: "flex", gap: 12, maxWidth: "88%", opacity: 0.7 }}>
+            <div style={{ padding: "13px 16px", borderRadius: "4px 16px 16px 16px", background: "var(--s2)", border: "1px solid var(--bd)", fontSize: 13.5 }}>
+              Typing...
+            </div>
+          </div>
+        )}
       </div>
 
       {/* composer */}
       <div style={{ padding: "14px 20px 18px" }}>
-        <PromptChips />
-        <ChatInput />
+        {messages.length === 0 && <PromptChips onSelect={handleSend} />}
+        <ChatInput onSend={handleSend} isLoading={isLoading} />
       </div>
     </div>
   );

@@ -22,8 +22,8 @@ const sparkAvatar = (
 );
 
 export function MessageBubble({ msg }: { msg: AiMessage }) {
-  const { t, lang } = useLang();
-  const text = msg.text[lang];
+  const { lang } = useLang();
+  const text = typeof msg.text === "string" ? msg.text : msg.text[lang];
 
   if (msg.role === "user") {
     return (
@@ -58,44 +58,11 @@ export function MessageBubble({ msg }: { msg: AiMessage }) {
             fontSize: 13.5,
             lineHeight: 1.7,
             color: "var(--tx)",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
           }}
         >
           {text}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <button
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
-              padding: "8px 13px",
-              borderRadius: 10,
-              border: "none",
-              background: "linear-gradient(150deg,var(--acb),var(--ac))",
-              color: "#04130d",
-              fontSize: 12.5,
-              fontWeight: 700,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            {t.prepareFix}
-          </button>
-          <button
-            style={{
-              padding: "8px 13px",
-              borderRadius: 10,
-              border: "1px solid var(--bd)",
-              background: "var(--s1)",
-              color: "var(--t2)",
-              fontSize: 12.5,
-              fontWeight: 600,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            {t.viewXml}
-          </button>
         </div>
       </div>
     </div>
