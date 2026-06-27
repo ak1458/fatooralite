@@ -19,6 +19,10 @@ model Company {
   vatNumber String   @unique
   crNumber  String?
   address   String?
+  // Onboarding lifecycle: pending -> in_progress -> complete. Drives the
+  // first-run wizard guard; new tenants start "pending".
+  onboardingStatus String @default("pending")
+  onboardingStep   Int    @default(0)
   createdAt DateTime @default(now())
 
   branches     Branch[]

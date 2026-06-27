@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/shell/Sidebar";
 import { Topbar } from "@/components/shell/Topbar";
 import { GlowBackground } from "@/components/common/GlowBackground";
+import { OnboardingGuard } from "@/components/common/OnboardingGuard";
 import { CompanyProvider } from "@/lib/useCompany";
 
 export default function AppLayout({
@@ -9,33 +10,33 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ minHeight: "100vh", position: "relative", overflowX: "hidden" }}>
-      <GlowBackground />
-      <div
-        style={{
-          display: "flex",
-          minHeight: "100vh",
-          position: "relative",
-          zIndex: 1,
-        }}
-      >
-        <Sidebar />
+    <CompanyProvider>
+      <div style={{ minHeight: "100vh", position: "relative", overflowX: "hidden" }}>
+        <GlowBackground />
         <div
           style={{
-            flex: 1,
-            minWidth: 0,
             display: "flex",
-            flexDirection: "column",
+            minHeight: "100vh",
+            position: "relative",
+            zIndex: 1,
           }}
         >
-          <Topbar />
-          <main style={{ flex: 1, overflowY: "auto", padding: "26px 28px 60px" }}>
-            <CompanyProvider>
-              {children}
-            </CompanyProvider>
-          </main>
+          <Sidebar />
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <Topbar />
+            <main style={{ flex: 1, overflowY: "auto", padding: "26px 28px 60px" }}>
+              <OnboardingGuard>{children}</OnboardingGuard>
+            </main>
+          </div>
         </div>
       </div>
-    </div>
+    </CompanyProvider>
   );
 }

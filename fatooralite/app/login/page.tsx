@@ -134,8 +134,11 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div style={{ marginTop: 16, fontSize: 11.5, color: "var(--t3)", textAlign: "center", fontFamily: "var(--fmono)" }}>
-          {t("demo")}
+        <div style={{ marginTop: 16, fontSize: 13, color: "var(--t3)", textAlign: "center" }}>
+          {lang === "ar" ? "ليس لديك حساب؟ " : "Don't have an account? "}
+          <a href="/register" style={{ color: "var(--ac)", fontWeight: 600, textDecoration: "none" }}>
+            {lang === "ar" ? "أنشئ شركتك" : "Create your company"}
+          </a>
         </div>
       </div>
     </div>

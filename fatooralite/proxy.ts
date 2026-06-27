@@ -50,7 +50,11 @@ export async function proxy(req: NextRequest) {
   if (process.env.AUTH_ENFORCE !== "true") return NextResponse.next();
 
   const { pathname } = req.nextUrl;
-  if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/api/auth")
+  ) {
     return NextResponse.next();
   }
 

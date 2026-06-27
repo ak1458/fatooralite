@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+// --- Auth ---
+export const registerSchema = z.object({
+  name: z.string().min(1, "Your name is required").max(100),
+  email: z.string().email("Enter a valid email").max(200),
+  password: z.string().min(8, "Password must be at least 8 characters").max(200),
+  companyName: z.string().min(1, "Company name is required").max(100),
+  vatNumber: z
+    .string()
+    .length(15, "VAT must be exactly 15 digits")
+    .regex(/^[0-9]+$/, "VAT must contain only digits"),
+});
+export type RegisterInput = z.infer<typeof registerSchema>;
+
 // --- Companies ---
 export const updateCompanySchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
