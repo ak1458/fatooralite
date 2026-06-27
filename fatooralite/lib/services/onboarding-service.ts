@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultDb } from "@/lib/db/client";
-import { generateKeyPair, generateCsr } from "@/lib/zatca/index";
+import { generateKeyPair, generateCsr, publicKeyDerBase64 } from "@/lib/zatca/index";
 import {
   requestComplianceCsid,
   requestProductionCsid,
@@ -13,6 +13,55 @@ export class OnboardingStateError extends Error {
     super(message);
     this.name = "OnboardingStateError";
   }
+}
+
+/**
+ * Provision a LOCAL signing certificate so a company can issue (sign + QR + PDF)
+ * invoices immediately, even before completing real ZATCA onboarding. This is a
+ * self-managed EGS key pair stored as an active "production" certificate with a
+ * placeholder CSID. It enables local/sandbox signing; real gateway clearance
+ * still requires connecting to ZATCA (which replaces this with a real CSID).
+ * Idempotent: returns the existing active cert if one is already present.
+ */
+export async function provisionLocalCertificate(
+  companyId: string,
+  db: PrismaClient = defaultDb,
+): Promise<{ certificateId: string; created: boolean }> {
+  const existing = await db.certificate.findFirst({
+    where: { companyId, kind: "production", status: "active" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (existing) return { certificateId: existing.id, created: false };
+
+  const company = await db.company.findUnique({ where: { id: companyId } });
+  if (!company) throw new OnboardingStateError("Company not found");
+
+  const kp = generateKeyPair();
+  const csrPem = generateCsr(
+    kp.privateKeyPem,
+    kp.publicKeyPem,
+    { commonName: "FatooraLite-EGS", organizationName: company.name, organizationalUnit: "Main", serialNumber: company.vatNumber },
+    { egsSerialNumber: `EGS-${companyId}`, vatNumber: company.vatNumber, invoiceType: "1100", location: "Riyadh", industryBusinessCategory: "Supply" },
+  );
+
+  const cert = await db.certificate.create({
+    data: {
+      companyId,
+      kind: "production",
+      status: "active",
+      csrPem,
+      privateKey: encryptPrivateKey(kp.privateKeyPem),
+      publicKey: kp.publicKeyPem,
+      // Local placeholder CSID — valid base64 so the XAdES cert digest computes;
+      // replaced by a real binarySecurityToken when ZATCA onboarding runs.
+      token: publicKeyDerBase64(kp.publicKeyPem),
+      secret: "LOCAL-DEV-SECRET",
+      issuedAt: new Date(),
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      serial: "LOCAL-DEV",
+    },
+  });
+  return { certificateId: cert.id, created: true };
 }
 
 export interface StartOnboardingArgs {

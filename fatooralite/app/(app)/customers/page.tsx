@@ -1,15 +1,18 @@
 "use client";
+import { useState } from "react";
 import { useCompany } from "@/lib/useCompany";
 import { useAsyncData } from "@/lib/async/useAsyncData";
 import { AsyncBoundary } from "@/components/common/AsyncBoundary";
 import { NoCompanyState } from "@/components/common/NoCompanyState";
 import { EmptyState } from "@/components/common/EmptyState";
+import { Modal, modalInput, modalLabel, modalPrimary } from "@/components/common/Modal";
 import { Icon } from "@/components/ui/Icon";
 
 import type { Customer } from "@prisma/client";
 
 export default function CustomersPage() {
   const { company, isLoading: companyLoading } = useCompany();
+  const [open, setOpen] = useState(false);
   const { state, retry } = useAsyncData<Customer[]>(
     async (signal) => {
       const res = await fetch(`/api/customers?companyId=${company!.id}`, { signal });
@@ -26,6 +29,8 @@ export default function CustomersPage() {
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Customers</h1>
         <button
+          onClick={() => setOpen(true)}
+          disabled={!company?.id}
           style={{
             display: "flex",
             alignItems: "center",
@@ -45,6 +50,13 @@ export default function CustomersPage() {
           New Customer
         </button>
       </div>
+
+      <Modal open={open} onClose={() => setOpen(false)} title="New customer">
+        <CustomerForm
+          companyId={company?.id ?? ""}
+          onCreated={() => { setOpen(false); retry(); }}
+        />
+      </Modal>
 
       {!company?.id && !companyLoading ? (
         <NoCompanyState />
@@ -82,5 +94,66 @@ export default function CustomersPage() {
         </AsyncBoundary>
       )}
     </div>
+  );
+}
+
+function CustomerForm({ companyId, onCreated }: { companyId: string; onCreated: () => void }) {
+  const [form, setForm] = useState({ name: "", vatNumber: "", city: "", email: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError("");
+    try {
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId,
+          name: form.name,
+          vatNumber: form.vatNumber || null,
+          city: form.city || null,
+          email: form.email || null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Could not create customer");
+      onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create customer");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <div style={{ marginBottom: 12 }}>
+        <label style={modalLabel}>Name</label>
+        <input style={modalInput} value={form.name} onChange={set("name")} required />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+        <div>
+          <label style={modalLabel}>VAT number (optional)</label>
+          <input style={{ ...modalInput, fontFamily: "var(--fmono)" }} value={form.vatNumber} onChange={set("vatNumber")} maxLength={15} inputMode="numeric" />
+        </div>
+        <div>
+          <label style={modalLabel}>City</label>
+          <input style={modalInput} value={form.city} onChange={set("city")} />
+        </div>
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <label style={modalLabel}>Email (optional)</label>
+        <input style={modalInput} type="email" value={form.email} onChange={set("email")} />
+      </div>
+      {error && <div style={{ color: "var(--dang)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button type="submit" disabled={busy} style={{ ...modalPrimary, opacity: busy ? 0.7 : 1 }}>
+          {busy ? "Saving…" : "Add customer"}
+        </button>
+      </div>
+    </form>
   );
 }

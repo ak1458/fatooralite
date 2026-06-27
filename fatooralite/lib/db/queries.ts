@@ -183,6 +183,11 @@ export async function getInvoiceList(
     status: inv.status as Invoice["status"],
     uuid: inv.uuid.substring(0, 8) + "…",
     result: inv.status === "cleared" ? "✓" : inv.resultCode ? inv.resultCode : "—",
+    // Raw fields consumed by forms (e.g. the credit/debit note reference picker).
+    id: inv.id,
+    invoiceNumber: inv.invoiceNumber,
+    grandTotal: inv.grandTotal,
+    documentType: inv.documentType,
   }));
 
   return { invoices: formatted, tabs };

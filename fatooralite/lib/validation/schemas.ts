@@ -25,9 +25,13 @@ export const updateCompanySchema = z.object({
 // --- Customers ---
 export const createCustomerSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
+  nameAr: z.string().max(100).optional().nullable(),
   vatNumber: z.string().length(15).regex(/^[0-9]+$/).optional().nullable(),
   crNumber: z.string().max(20).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
+  city: z.string().max(100).optional().nullable(),
+  phone: z.string().max(40).optional().nullable(),
+  email: z.string().email().max(200).optional().nullable().or(z.literal("")),
 });
 
 // --- Products ---

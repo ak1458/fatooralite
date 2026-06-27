@@ -119,6 +119,13 @@ export default function OnboardingPage() {
               onFinish={async () => {
                 setBusy(true); setError("");
                 try {
+                  // Ensure the company can sign invoices locally (idempotent —
+                  // a real ZATCA cert from the connect step is left untouched).
+                  await fetch("/api/onboarding/local-cert", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ companyId: company.id }),
+                  });
                   await patchCompany({ onboardingStatus: "complete", onboardingStep: 4 });
                   router.push("/dashboard");
                   router.refresh();

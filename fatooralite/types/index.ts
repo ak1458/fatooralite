@@ -24,6 +24,11 @@ export interface Invoice {
   status: InvoiceStatus;
   uuid: string; // short display form
   result: string; // "✓" | code like "BR-KSA-83" | "—"
+  // Raw fields (present when served from getInvoiceList) used by forms/pickers.
+  id?: string;
+  invoiceNumber?: string;
+  grandTotal?: number;
+  documentType?: string;
 }
 
 export interface FeedEvent {
