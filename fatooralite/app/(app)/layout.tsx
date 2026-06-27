@@ -2,6 +2,7 @@ import { Sidebar } from "@/components/shell/Sidebar";
 import { Topbar } from "@/components/shell/Topbar";
 import { GlowBackground } from "@/components/common/GlowBackground";
 import { OnboardingGuard } from "@/components/common/OnboardingGuard";
+import { AssistantDock } from "@/components/ai/AssistantDock";
 import { CompanyProvider } from "@/lib/useCompany";
 
 export default function AppLayout({
@@ -36,6 +37,7 @@ export default function AppLayout({
             </main>
           </div>
         </div>
+        <AssistantDock />
       </div>
     </CompanyProvider>
   );

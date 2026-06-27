@@ -15,18 +15,19 @@ export function isConfigured(): boolean {
   return !!process.env.OPENROUTER_API_KEY;
 }
 
-/** Primary model first, then the fallback, for OpenRouter's `models` routing. */
-function modelList(): string[] {
-  const primary = process.env.OPENROUTER_MODEL || "openai/gpt-oss-120b:free";
+/** Primary model first, then the fallback, for OpenRouter's `models` routing.
+ *  An explicit `override` (e.g. user-selected model) is tried first. */
+function modelList(override?: string): string[] {
+  const primary = override || process.env.OPENROUTER_MODEL || "openai/gpt-oss-120b:free";
   const fallback = process.env.OPENROUTER_FALLBACK_MODEL || "openai/gpt-oss-20b:free";
   return primary === fallback ? [primary] : [primary, fallback];
 }
 
 /** Shared request body. `reasoning.effort: low` keeps free reasoning models from
  *  burning their whole token budget on hidden chain-of-thought before answering. */
-function requestBody(messages: ChatMessage[], stream: boolean, maxTokens: number) {
+function requestBody(messages: ChatMessage[], stream: boolean, maxTokens: number, model?: string) {
   return JSON.stringify({
-    models: modelList(),
+    models: modelList(model),
     messages,
     stream,
     max_tokens: maxTokens,
@@ -62,11 +63,11 @@ export async function chatText(messages: ChatMessage[], maxTokens = 1024): Promi
  * (the SSE framing and JSON envelopes are stripped here so the client just
  * appends raw text).
  */
-export async function chatStream(messages: ChatMessage[], maxTokens = 1024): Promise<ReadableStream<Uint8Array>> {
+export async function chatStream(messages: ChatMessage[], maxTokens = 1024, model?: string): Promise<ReadableStream<Uint8Array>> {
   const res = await fetch(`${BASE_URL}/chat/completions`, {
     method: "POST",
     headers: headers(),
-    body: requestBody(messages, true, maxTokens),
+    body: requestBody(messages, true, maxTokens, model),
   });
   if (!res.ok || !res.body) {
     throw new Error(`OpenRouter ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);

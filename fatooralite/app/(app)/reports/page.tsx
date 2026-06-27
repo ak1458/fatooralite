@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { usePageMeta } from "@/lib/usePageMeta";
 import { useCompany } from "@/lib/useCompany";
 
@@ -7,17 +8,20 @@ export default function Page() {
   const { title } = usePageMeta();
   const { company } = useCompany();
   const companyId = company?.id;
+  const searchParams = useSearchParams();
+  const rangeDays = searchParams.get("rangeDays");
+  const rangeQuery = rangeDays && /^\d+$/.test(rangeDays) ? `&rangeDays=${rangeDays}` : "";
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!companyId) return;
     setLoading(true);
-    fetch(`/api/reports?companyId=${companyId}`)
+    fetch(`/api/reports?companyId=${companyId}${rangeQuery}`)
       .then((res) => res.json())
       .then((data) => setReport(data))
       .finally(() => setLoading(false));
-  }, [companyId]);
+  }, [companyId, rangeQuery]);
 
   if (loading) return <div style={{ padding: 40 }}>Loading...</div>;
 
@@ -42,7 +46,7 @@ export default function Page() {
         </div>
         <div style={{ marginTop: 20 }}>
           <a
-            href={companyId ? `/api/reports?companyId=${companyId}&format=csv` : undefined}
+            href={companyId ? `/api/reports?companyId=${companyId}&format=csv${rangeQuery}` : undefined}
             style={{
               display: "inline-block",
               padding: "10px 16px",

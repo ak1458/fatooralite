@@ -192,3 +192,19 @@ model Notification {
 
   company   Company  @relation(fields: [companyId], references: [id])
 }
+
+// Vector store for the AI assistant's retrieval (RAG). `scope=global` rows hold
+// ZATCA regulation knowledge shared by all tenants; `scope=company` rows hold a
+// tenant's own data summaries. Embeddings are stored as a float array and ranked
+// by cosine similarity in the app layer (swappable to pgvector later).
+model KnowledgeChunk {
+  id        String   @id @default(cuid())
+  scope     String   @default("global") // global | company
+  companyId String?
+  source    String // e.g. "zatca-rules" | "invoice" | "customer"
+  text      String
+  embedding Float[]
+  createdAt DateTime @default(now())
+
+  @@index([scope, companyId])
+}

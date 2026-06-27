@@ -39,7 +39,16 @@ export async function GET(req: Request) {
   const { deny } = await requirePermission(req, "audit:view", companyId);
   if (deny) return deny;
 
-  const { start, end, label } = resolveMonth(searchParams.get("month"));
+  const rangeDaysParam = searchParams.get("rangeDays");
+  let start: Date, end: Date, label: string;
+  if (rangeDaysParam && /^\d+$/.test(rangeDaysParam)) {
+    const days = Math.min(parseInt(rangeDaysParam, 10), 366);
+    end = new Date();
+    start = new Date(end.getTime() - days * 86_400_000);
+    label = `Last ${days} days`;
+  } else {
+    ({ start, end, label } = resolveMonth(searchParams.get("month")));
+  }
   const format = searchParams.get("format");
 
   const invoices = await prisma.invoice.findMany({
