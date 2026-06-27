@@ -44,6 +44,56 @@ function headers(): Record<string, string> {
   };
 }
 
+export interface ToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+export interface AssistantMessage {
+  role: "assistant";
+  content: string | null;
+  tool_calls?: ToolCall[];
+}
+
+/**
+ * Tool-calling completion. Sends the conversation plus tool schemas and returns
+ * the assistant message, which may contain `tool_calls` to execute.
+ */
+export async function chatWithTools(
+  messages: unknown[],
+  tools: unknown[],
+  model?: string,
+  maxTokens = 1024,
+  toolChoice: "auto" | "required" = "auto",
+): Promise<AssistantMessage> {
+  const body = JSON.stringify({
+    models: modelList(model),
+    messages,
+    tools,
+    tool_choice: toolChoice,
+    stream: false,
+    max_tokens: maxTokens,
+    reasoning: { effort: "low" },
+  });
+
+  // Free models are intermittently rate-limited upstream; retry once briefly.
+  let data: { choices?: { message?: { content?: string | null; tool_calls?: ToolCall[] } }[]; error?: { code?: number } } | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch(`${BASE_URL}/chat/completions`, { method: "POST", headers: headers(), body });
+    data = await res.json().catch(() => null);
+    if (res.ok && data?.choices?.length) break;
+    const rateLimited = res.status === 429 || data?.error?.code === 429;
+    if (attempt === 0 && rateLimited) {
+      await new Promise((r) => setTimeout(r, 1500));
+      continue;
+    }
+    if (!res.ok) throw new Error(`OpenRouter ${res.status}`);
+  }
+
+  const m = data?.choices?.[0]?.message ?? {};
+  return { role: "assistant", content: m.content ?? null, tool_calls: m.tool_calls };
+}
+
 /** Non-streaming completion. Returns the assistant text (or throws). */
 export async function chatText(messages: ChatMessage[], maxTokens = 1024): Promise<string> {
   const res = await fetch(`${BASE_URL}/chat/completions`, {

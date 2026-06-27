@@ -37,48 +37,20 @@ export function AssistantDock() {
 
   async function send(text: string) {
     if (!text.trim() || busy) return;
-    setMessages((m) => [...m, { role: "user", text }]);
+    const history = [...messages, { role: "user" as const, text }];
+    setMessages(history);
     setInput("");
     setBusy(true);
     try {
-      // 1) Try to handle it as a command (agent).
-      const agent = await fetch("/api/ai/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, companyId: company?.id, model }),
-      }).then((r) => r.json()).catch(() => ({ handled: false }));
-
-      if (agent?.handled) {
-        setMessages((m) => [...m, { role: "assistant", text: agent.message }]);
-        if (agent.navigate) setTimeout(() => router.push(agent.navigate), 600);
-        return;
-      }
-
-      // 2) Otherwise answer as a grounded chat (streaming).
-      const history = [...messages, { role: "user" as const, text }];
-      const res = await fetch("/api/ai", {
+      // Unified agent: reads/acts via tools and answers ZATCA questions (RAG).
+      const res = await fetch("/api/ai/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: history, companyId: company?.id, model }),
       });
-      if (!res.ok || !res.body) {
-        const d = await res.json().catch(() => ({}));
-        setMessages((m) => [...m, { role: "assistant", text: d.error || "Request failed." }]);
-        return;
-      }
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let acc = "";
-      let opened = false;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        acc += dec.decode(value, { stream: true });
-        if (!acc) continue;
-        if (!opened) { opened = true; setMessages((m) => [...m, { role: "assistant", text: acc }]); }
-        else setMessages((m) => { const n = [...m]; n[n.length - 1] = { role: "assistant", text: acc }; return n; });
-      }
-      if (!opened) setMessages((m) => [...m, { role: "assistant", text: "No response. Try again." }]);
+      const data = await res.json().catch(() => ({}));
+      setMessages((m) => [...m, { role: "assistant", text: data.message || data.error || "No response. Try again." }]);
+      if (data.navigate) setTimeout(() => router.push(data.navigate), 600);
     } catch {
       setMessages((m) => [...m, { role: "assistant", text: "Connection error." }]);
     } finally {

@@ -1,69 +1,113 @@
 import { NextResponse } from "next/server";
-import { chatText, isConfigured } from "@/lib/ai/openrouter";
-import { listActions, parseActionJson, runAction } from "@/lib/ai/actions";
+import { chatWithTools, isConfigured } from "@/lib/ai/openrouter";
+import { toolSchemas, executeTool } from "@/lib/ai/tools";
+import { retrieve } from "@/lib/ai/vector-store";
+import { ZATCA_SYSTEM_PROMPT } from "@/lib/ai/zatca-prompt";
 import { requirePermission, getUserFromRequest } from "@/lib/auth/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
+
+interface InboundMessage {
+  role: "user" | "assistant" | "model";
+  text?: string;
+  content?: string;
+}
+
+const MAX_ROUNDS = 5;
 
 /**
- * POST /api/ai/agent — turn a natural-language command into a validated, RBAC-gated
- * action. Returns { handled, message, navigate? }. If the message isn't a command,
- * returns { handled: false } so the client falls back to the RAG chat.
+ * POST /api/ai/agent — the do-anything assistant. The model can call app tools
+ * (create/read invoices, customers, products, reports, submit to ZATCA, navigate)
+ * in a loop, and answers ZATCA questions grounded in retrieved knowledge. Every
+ * tool is zod-validated and RBAC-gated server-side.
  */
 export async function POST(req: Request) {
   const { deny } = await requirePermission(req, "audit:view");
   if (deny) return deny;
 
   const user = await getUserFromRequest(req);
-  let body: { message?: string; companyId?: string; model?: string };
+  let body: { messages?: InboundMessage[]; message?: string; companyId?: string; model?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  const message = (body.message ?? "").toString().trim();
+
   const companyId = body.companyId ?? user?.companyId;
-  if (!message) return NextResponse.json({ error: "message is required" }, { status: 400 });
-  if (!companyId) return NextResponse.json({ handled: false, message: "No active company." });
+  if (!companyId) return NextResponse.json({ message: "No active company.", navigate: null });
 
-  // Without an AI key we can't route; let the client use chat.
-  if (!isConfigured()) return NextResponse.json({ handled: false });
+  const history = (body.messages ?? (body.message ? [{ role: "user" as const, text: body.message }] : []))
+    .map((m) => ({
+      role: (m.role === "model" ? "assistant" : m.role) as "user" | "assistant",
+      content: (m.text ?? m.content ?? "").toString(),
+    }))
+    .filter((m) => m.content.trim().length > 0);
+  if (history.length === 0) return NextResponse.json({ error: "message is required" }, { status: 400 });
 
-  const actionsList = listActions().map((a) => `- ${a.name}: ${a.description}`).join("\n");
-  let routed: { action: string; params: Record<string, unknown> } | null = null;
+  if (!isConfigured()) {
+    return NextResponse.json({
+      message: "I'm in mock mode — add OPENROUTER_API_KEY to enable live actions.",
+      navigate: null,
+    });
+  }
+
+  // Ground ZATCA questions with retrieved knowledge.
+  const lastUser = [...history].reverse().find((m) => m.role === "user");
+  let grounding = "";
   try {
-    const reply = await chatText(
-      [
-        {
-          role: "system",
-          content:
-            "You are an action router for a ZATCA e-invoicing app. If the user's message is a COMMAND " +
-            "that maps to one of these actions, reply with ONLY a JSON object " +
-            '{"action":"<name>","params":{...}}. If it is a question or no action fits, reply ' +
-            '{"action":"none"}. No prose.\n\nActions:\n' + actionsList +
-            '\n\nExamples:\n"make a 7 day report" => {"action":"generateReport","params":{"rangeDays":7}}\n' +
-            '"add customer ACME vat 300000000000003" => {"action":"addCustomer","params":{"name":"ACME","vatNumber":"300000000000003"}}\n' +
-            '"open invoices" => {"action":"navigate","params":{"to":"/invoices"}}',
-        },
-        { role: "user", content: message },
-      ],
-      256,
-    );
-    routed = parseActionJson(reply);
-  } catch (e) {
-    console.error("Agent routing error:", e);
-    return NextResponse.json({ handled: false });
+    const hits = await retrieve(lastUser?.content ?? "", companyId, 4);
+    if (hits.length > 0) {
+      grounding = "\n\nZATCA knowledge you may use (cite as [n]):\n" + hits.map((h, i) => `[${i + 1}] ${h.text}`).join("\n");
+    }
+  } catch { /* continue without grounding */ }
+
+  const system = {
+    role: "system" as const,
+    content:
+      ZATCA_SYSTEM_PROMPT +
+      "\n\nYou are an in-app assistant with TOOLS to read and change the user's data (invoices, " +
+      "customers, products, reports, compliance, ZATCA submission, navigation).\n" +
+      "RULES:\n" +
+      "- If the user asks to CREATE, ADD, ISSUE, LIST, SHOW, FIND, SUBMIT, REPORT, or OPEN anything, you " +
+      "MUST call the matching tool. Do not answer from memory and NEVER claim you did something unless a " +
+      "tool call actually returned success.\n" +
+      "- After a tool returns, confirm with the specifics it gave you (e.g. the created invoice number or the queried numbers).\n" +
+      "- Only answer directly (no tool) for general ZATCA rule questions; ground those in the knowledge below and cite [n]." +
+      grounding,
+  };
+
+  const ctx = { companyId, userRole: user?.role ?? "owner" };
+  const messages: unknown[] = [system, ...history];
+  let navigate: string | null = null;
+
+  // Force a tool call on the first round when the message is clearly a command,
+  // so free models don't reply "done" without actually acting.
+  const isCommand = /^\s*(create|add|issue|make|generate|list|show|find|get|submit|report|open|go to|new|update|set|delete|remove)\b/i.test(
+    lastUser?.content ?? "",
+  );
+
+  try {
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      const toolChoice = round === 0 && isCommand ? "required" : "auto";
+      const assistant = await chatWithTools(messages, toolSchemas(), body.model, 1024, toolChoice);
+
+      if (assistant.tool_calls && assistant.tool_calls.length > 0) {
+        messages.push({ role: "assistant", content: assistant.content ?? "", tool_calls: assistant.tool_calls });
+        for (const call of assistant.tool_calls) {
+          const outcome = await executeTool(call.function.name, call.function.arguments, ctx);
+          if (outcome.navigate) navigate = outcome.navigate;
+          messages.push({ role: "tool", tool_call_id: call.id, content: outcome.content });
+        }
+        continue;
+      }
+
+      return NextResponse.json({ message: assistant.content ?? "Done.", navigate });
+    }
+    // Hit the round cap — return whatever we have.
+    return NextResponse.json({ message: "Done.", navigate });
+  } catch (err) {
+    console.error("Agent error:", err);
+    return NextResponse.json({ message: "The assistant hit an error. Please try again.", navigate: null });
   }
-
-  if (!routed || routed.action === "none") {
-    return NextResponse.json({ handled: false });
-  }
-
-  const result = await runAction(routed.action, routed.params, {
-    companyId,
-    userRole: user?.role ?? "owner",
-  });
-
-  return NextResponse.json({ handled: result.ok, ...result });
 }
