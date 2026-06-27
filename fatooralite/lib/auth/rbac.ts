@@ -48,3 +48,8 @@ export function can(role: string, permission: Permission): boolean {
   if (!isRole(role)) return false;
   return MATRIX[role].includes(permission);
 }
+
+/** The full role → permissions matrix, for the Users & Roles admin view. */
+export function roleMatrix(): { role: Role; permissions: Permission[] }[] {
+  return ROLES.map((role) => ({ role, permissions: MATRIX[role] }));
+}

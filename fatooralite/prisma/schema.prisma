@@ -144,6 +144,8 @@ model User {
   email        String   @unique
   name         String
   role         String   @default("employee") // owner|accountant|manager|auditor|employee
+  title        String?  // job designation, e.g. "Chief Accountant"
+  status       String   @default("active") // active|invited|disabled
   passwordHash String?
   createdAt    DateTime @default(now())
 

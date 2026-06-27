@@ -13,6 +13,20 @@ export const registerSchema = z.object({
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
 
+export const inviteUserSchema = z.object({
+  email: z.string().email("Enter a valid email").max(200),
+  name: z.string().min(1, "Name is required").max(100),
+  role: z.string().min(1),
+  title: z.string().max(100).optional().nullable(),
+  password: z.string().min(8).max(200).optional(),
+});
+
+export const updateUserSchema = z.object({
+  role: z.string().min(1).optional(),
+  title: z.string().max(100).nullable().optional(),
+  status: z.enum(["active", "invited", "disabled"]).optional(),
+});
+
 // --- Companies ---
 export const updateCompanySchema = z.object({
   name: z.string().min(1, "Name is required").max(100),

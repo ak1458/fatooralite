@@ -4,7 +4,7 @@ import { SearchButton } from "./SearchButton";
 import { LangToggle } from "./LangToggle";
 import { ThemeToggle } from "./ThemeToggle";
 import { ProfileMenu } from "./ProfileMenu";
-import { Icon } from "@/components/ui/Icon";
+import { NotificationBell } from "./NotificationBell";
 
 export function Topbar() {
   const { title, sub } = usePageMeta();
@@ -58,37 +58,7 @@ export function Topbar() {
       <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 9 }}>
         <LangToggle />
         <ThemeToggle />
-        <button
-          title="Notifications"
-          aria-label="Notifications"
-          style={{
-            position: "relative",
-            width: 38,
-            height: 38,
-            borderRadius: 10,
-            border: "1px solid var(--bd)",
-            background: "var(--s1)",
-            color: "var(--t2)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-          }}
-        >
-          <Icon name="notifications" size={18} sw={1.8} />
-          <span
-            style={{
-              position: "absolute",
-              top: 8,
-              insetInlineEnd: 9,
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: "var(--dang)",
-              border: "2px solid var(--s1)",
-            }}
-          />
-        </button>
+        <NotificationBell />
         <div style={{ width: 1, height: 26, background: "var(--bd)", margin: "0 2px" }} />
         <ProfileMenu />
       </div>
