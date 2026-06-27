@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useMemo } from "react";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Icon } from "@/components/ui/Icon";
 import { HealthRing } from "@/components/dashboard/HealthRing";
@@ -10,19 +11,42 @@ import { IntegrationStatus } from "@/components/dashboard/IntegrationStatus";
 import { LiveFeed } from "@/components/dashboard/LiveFeed";
 import { VolumeChart } from "@/components/dashboard/VolumeChart";
 import { AsyncBoundary } from "@/components/common/AsyncBoundary";
-import { useCompany } from "@/lib/useCompany";
+import { useCompany, useAuth } from "@/lib/useCompany";
 import { useAsyncData } from "@/lib/async/useAsyncData";
-import type { Kpi, FeedEvent, VolumeBar } from "@/types";
+import type { Kpi, FeedEvent, VolumeBar, HealthBar, Service } from "@/types";
+import type { TrustBadge } from "@/components/dashboard/TrustBadges";
 
 interface DashboardData {
-  kpis: { counters: Record<string, number>; kpis: Kpi[] };
+  kpis: { counters: Record<string, number>; healthBars: HealthBar[]; kpis: Kpi[] };
   feed: FeedEvent[];
   volume: VolumeBar[];
+  integration: { services: Service[]; badges: TrustBadge[]; hasCert: boolean; isLocal: boolean };
+}
+
+/** Time-of-day greeting in both languages. */
+function greetingText(name: string, lang: "en" | "ar"): string {
+  const h = new Date().getHours();
+  if (lang === "ar") {
+    const period = h < 12 ? "صباح الخير" : h < 18 ? "مساء الخير" : "مساء الخير";
+    return `${period}، ${name}`;
+  }
+  const period = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  return `${period}, ${name}`;
+}
+
+/** Real formatted date string. */
+function todayString(lang: "en" | "ar"): string {
+  const now = new Date();
+  if (lang === "ar") {
+    return now.toLocaleDateString("ar-SA", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  }
+  return now.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
 export default function DashboardPage() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { company } = useCompany();
+  const { user } = useAuth();
   const { state, retry } = useAsyncData<DashboardData>(
     async (signal) => {
       const res = await fetch(`/api/dashboard?companyId=${company!.id}`, { signal });
@@ -37,6 +61,9 @@ export default function DashboardPage() {
   const dashboardCounters = data?.kpis?.counters ?? { score: 0, vat: 0, inv: 0, succ: 0 };
   const dashboardFeed = data?.feed ?? [];
   const dashboardVolume = data?.volume ?? [];
+
+  const greeting = useMemo(() => greetingText(user?.name ?? "there", lang), [user?.name, lang]);
+  const dateStr = useMemo(() => todayString(lang), [lang]);
 
   return (
     <div style={{ maxWidth: 1480, margin: "0 auto" }}>
@@ -80,7 +107,7 @@ export default function DashboardPage() {
               </span>
               {t.live}
             </span>
-            <span style={{ fontSize: 12, color: "var(--t3)" }}>{t.date}</span>
+            <span style={{ fontSize: 12, color: "var(--t3)" }}>{dateStr}</span>
           </div>
           <h1
             style={{
@@ -91,7 +118,7 @@ export default function DashboardPage() {
               fontFamily: "var(--fdisp)",
             }}
           >
-            {t.greeting}
+            {greeting}
           </h1>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -139,7 +166,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <TrustBadges />
+      <TrustBadges badges={data?.integration?.badges} />
 
       {/* hero: health ring + 2x2 KPIs */}
       <div
@@ -150,7 +177,10 @@ export default function DashboardPage() {
           marginBottom: 18,
         }}
       >
-        <HealthRing score={dashboardCounters.score} />
+        <HealthRing
+          score={dashboardCounters.score}
+          healthBars={data?.kpis?.healthBars}
+        />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <AsyncBoundary
             state={state}
@@ -179,7 +209,7 @@ export default function DashboardPage() {
         }}
       >
         <ApiSparkline />
-        <IntegrationStatus />
+        <IntegrationStatus services={data?.integration?.services} />
       </div>
 
       {/* row 3: live feed + volume */}
@@ -190,3 +220,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

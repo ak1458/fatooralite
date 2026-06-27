@@ -1,9 +1,11 @@
+"use client";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { Topbar } from "@/components/shell/Topbar";
 import { GlowBackground } from "@/components/common/GlowBackground";
 import { OnboardingGuard } from "@/components/common/OnboardingGuard";
 import { AssistantDock } from "@/components/ai/AssistantDock";
 import { CompanyProvider } from "@/lib/useCompany";
+import { FadeIn } from "@/components/common/Motion";
 
 export default function AppLayout({
   children,
@@ -33,7 +35,9 @@ export default function AppLayout({
           >
             <Topbar />
             <main style={{ flex: 1, overflowY: "auto", padding: "26px 28px 60px" }}>
-              <OnboardingGuard>{children}</OnboardingGuard>
+              <OnboardingGuard>
+                <FadeIn>{children}</FadeIn>
+              </OnboardingGuard>
             </main>
           </div>
         </div>

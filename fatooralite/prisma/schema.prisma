@@ -146,8 +146,9 @@ model User {
   role         String   @default("employee") // owner|accountant|manager|auditor|employee
   title        String?  // job designation, e.g. "Chief Accountant"
   status       String   @default("active") // active|invited|disabled
-  passwordHash String?
-  createdAt    DateTime @default(now())
+  passwordHash       String?
+  passwordResetNonce String?
+  createdAt          DateTime @default(now())
 
   company Company? @relation(fields: [companyId], references: [id])
 }

@@ -1,4 +1,8 @@
 import { PrismaClient } from "@prisma/client";
+import { validateEnv } from "@/lib/env";
+
+// Validate environment variables at boot — fail fast on misconfig.
+validateEnv();
 
 // Reuse a single PrismaClient across hot-reloads in dev (avoids exhausting
 // connections). In production a single instance is created per process.

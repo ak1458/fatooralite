@@ -41,7 +41,7 @@ export function ProfileMenu() {
         }}
       >
         <div style={{
-          width: 32, height: 32, borderRadius: 9, background: "linear-gradient(150deg,#2dd4bf,var(--ac))",
+          width: 32, height: 32, borderRadius: 9, background: "linear-gradient(150deg,var(--acb),var(--ac))",
           color: "#04130d", display: "flex", alignItems: "center", justifyContent: "center",
           fontWeight: 700, fontSize: 13, fontFamily: "var(--fdisp)",
         }}>

@@ -107,7 +107,12 @@ export default function LoginPage() {
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
           </label>
           <label style={{ display: "block", marginBottom: 14 }}>
-            <span style={{ display: "block", fontSize: 12, color: "var(--t3)", marginBottom: 5 }}>{t("password")}</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+              <span style={{ fontSize: 12, color: "var(--t3)" }}>{t("password")}</span>
+              <a href="/forgot" style={{ fontSize: 11.5, color: "var(--ac)", textDecoration: "none", fontWeight: 500 }}>
+                {lang === "ar" ? "نسيت كلمة المرور؟" : "Forgot password?"}
+              </a>
+            </div>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
           </label>
 

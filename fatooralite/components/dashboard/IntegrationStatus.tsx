@@ -2,10 +2,22 @@
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Card } from "@/components/ui/Card";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { services } from "@/data/services";
+import type { Service } from "@/types";
 
-export function IntegrationStatus() {
+const defaultServices: Service[] = [
+  { name: { en: "CSID Issuance", ar: "إصدار CSID" }, ok: false },
+  { name: { en: "Cryptographic Stamp", ar: "الختم التشفيري" }, ok: false },
+  { name: { en: "XML Validation", ar: "التحقق من XML" }, ok: false },
+  { name: { en: "QR Generation", ar: "توليد QR" }, ok: false },
+  { name: { en: "Clearance API", ar: "واجهة الإجازة" }, ok: false },
+  { name: { en: "Reporting API", ar: "واجهة الإبلاغ" }, ok: false },
+  { name: { en: "Sandbox Env", ar: "بيئة الاختبار" }, ok: false },
+  { name: { en: "Production Env", ar: "بيئة الإنتاج" }, ok: false },
+];
+
+export function IntegrationStatus({ services: svcProp }: { services?: Service[] }) {
   const { t, lang } = useLang();
+  const services = svcProp ?? defaultServices;
   return (
     <Card>
       <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
@@ -14,8 +26,8 @@ export function IntegrationStatus() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9 }}>
         {services.map((s) => {
           const ok = s.ok === true;
-          const color = ok ? "var(--ac)" : "var(--warn)";
-          const glow = ok ? "var(--acs)" : "var(--warns)";
+          const color = ok ? "var(--ac)" : s.ok === "degraded" ? "var(--warn)" : "var(--t3)";
+          const glow = ok ? "var(--acs)" : s.ok === "degraded" ? "var(--warns)" : "transparent";
           return (
             <div
               key={s.name.en}
@@ -48,3 +60,4 @@ export function IntegrationStatus() {
     </Card>
   );
 }
+

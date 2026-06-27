@@ -4,6 +4,7 @@ import {
   InvoiceNotFoundError,
   InvoiceNotSignedError,
   NoCredentialsError,
+  LocalCertificateSubmitError,
 } from "@/lib/services/clearance-service";
 import { requirePermission } from "@/lib/auth/server";
 
@@ -23,7 +24,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (err instanceof InvoiceNotFoundError) {
       return NextResponse.json({ error: err.message }, { status: 404 });
     }
-    if (err instanceof InvoiceNotSignedError || err instanceof NoCredentialsError) {
+    if (
+      err instanceof InvoiceNotSignedError ||
+      err instanceof NoCredentialsError ||
+      err instanceof LocalCertificateSubmitError
+    ) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }
     const message = err instanceof Error ? err.message : "Unknown error";

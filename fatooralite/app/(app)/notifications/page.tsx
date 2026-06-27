@@ -1,39 +1,35 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { usePageMeta } from "@/lib/usePageMeta";
 import { useCompany } from "@/lib/useCompany";
-import { Icon } from "@/components/ui/Icon";
+import { useAsyncData } from "@/lib/async/useAsyncData";
+import { AsyncBoundary } from "@/components/common/AsyncBoundary";
+import { NoCompanyState } from "@/components/common/NoCompanyState";
 import type { Notification } from "@prisma/client";
 
 export default function Page() {
   const { title } = usePageMeta();
   const { company } = useCompany();
   const companyId = company?.id;
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [localUpdates, setLocalUpdates] = useState<Record<string, boolean>>({});
 
-  const load = useCallback(() => {
-    if (!companyId) return Promise.resolve();
-    return fetch(`/api/notifications?companyId=${companyId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.notifications) setNotifications(data.notifications);
-      });
-  }, [companyId]);
-
-  useEffect(() => {
-    if (!companyId) return;
-    setLoading(true);
-    load().finally(() => setLoading(false));
-  }, [companyId, load]);
+  const { state, retry } = useAsyncData<{ notifications: Notification[] }>(
+    async (signal) => {
+      const res = await fetch(`/api/notifications?companyId=${companyId}`, { signal });
+      if (!res.ok) throw new Error(`Failed to load notifications (${res.status})`);
+      return (await res.json()) as { notifications: Notification[] };
+    },
+    [companyId],
+    { enabled: !!companyId },
+  );
 
   const scan = async () => {
     if (!companyId) return;
     setScanning(true);
     try {
       await fetch(`/api/notifications?companyId=${companyId}`, { method: "POST" });
-      await load();
+      retry();
     } finally {
       setScanning(false);
     }
@@ -45,10 +41,10 @@ export default function Page() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, read: true }),
     });
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    setLocalUpdates((prev) => ({ ...prev, [id]: true }));
   };
 
-  if (loading) return <div style={{ padding: 40 }}>Loading...</div>;
+  if (!company) return <NoCompanyState />;
 
   return (
     <div style={{ padding: 40 }}>
@@ -61,7 +57,7 @@ export default function Page() {
             padding: "9px 16px",
             borderRadius: 8,
             background: "var(--ac)",
-            color: "#000",
+            color: "#04130d",
             fontWeight: 600,
             border: "none",
             cursor: scanning ? "wait" : "pointer",
@@ -71,46 +67,55 @@ export default function Page() {
           {scanning ? "Scanning…" : "Check for new alerts"}
         </button>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {notifications.length === 0 ? (
-          <div style={{ color: "var(--t3)" }}>No notifications.</div>
-        ) : (
-          notifications.map((n) => (
-            <div
-              key={n.id}
-              style={{
-                padding: 16,
-                borderRadius: 12,
-                background: "var(--s1)",
-                border: "1px solid var(--bd)",
-                opacity: n.read ? 0.6 : 1,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>{n.title}</div>
-                <div style={{ fontSize: 13, color: "var(--t2)" }}>{n.message}</div>
-              </div>
-              {!n.read && (
-                <button
-                  onClick={() => markRead(n.id)}
+      <AsyncBoundary
+        state={state}
+        isEmpty={(d) => !d.notifications?.length}
+        empty={<div style={{ color: "var(--t3)", padding: 20 }}>No notifications.</div>}
+        onRetry={retry}
+      >
+        {(data) => (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {data.notifications.map((n) => {
+              const isRead = localUpdates[n.id] ?? n.read;
+              return (
+                <div
+                  key={n.id}
                   style={{
-                    background: "none",
-                    border: "none",
-                    color: "var(--ac)",
-                    cursor: "pointer",
-                    fontSize: 13,
+                    padding: 16,
+                    borderRadius: 12,
+                    background: "var(--s1)",
+                    border: "1px solid var(--bd)",
+                    opacity: isRead ? 0.6 : 1,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
                   }}
                 >
-                  Mark as read
-                </button>
-              )}
-            </div>
-          ))
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{n.title}</div>
+                    <div style={{ fontSize: 13, color: "var(--t2)" }}>{n.message}</div>
+                  </div>
+                  {!isRead && (
+                    <button
+                      onClick={() => markRead(n.id)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "var(--ac)",
+                        cursor: "pointer",
+                        fontSize: 13,
+                      }}
+                    >
+                      Mark as read
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
-      </div>
+      </AsyncBoundary>
     </div>
   );
 }
+

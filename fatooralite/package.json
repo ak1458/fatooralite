@@ -25,6 +25,7 @@
     "@huggingface/transformers": "^4.2.0",
     "@prisma/client": "^6.19.3",
     "@types/qrcode": "^1.5.6",
+    "framer-motion": "^12.42.0",
     "jose": "^6.2.3",
     "next": "16.2.9",
     "node-forge": "^1.4.0",

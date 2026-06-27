@@ -23,6 +23,12 @@ export class NoCredentialsError extends Error {
     this.name = "NoCredentialsError";
   }
 }
+export class LocalCertificateSubmitError extends Error {
+  constructor() {
+    super("Invoices signed with local development certificates cannot be cleared on ZATCA. Connect real ZATCA in Integration settings first.");
+    this.name = "LocalCertificateSubmitError";
+  }
+}
 
 export interface SubmitResult {
   invoiceId: string;
@@ -54,6 +60,9 @@ export async function submitInvoice(
   if (!client) {
     const cert = await getActiveCertificate(invoice.companyId, db);
     if (!cert?.token || !cert.secret) throw new NoCredentialsError();
+    if (cert.secret === "LOCAL-DEV-SECRET") {
+      throw new LocalCertificateSubmitError();
+    }
     client = new ZatcaClient({ token: cert.token, secret: cert.secret });
   }
 

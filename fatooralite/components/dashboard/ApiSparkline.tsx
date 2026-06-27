@@ -2,8 +2,15 @@
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Card } from "@/components/ui/Card";
 
-export function ApiSparkline() {
+interface ApiSparklineProps {
+  latencyMs?: number;
+  uptime?: string;
+}
+
+export function ApiSparkline({ latencyMs, uptime }: ApiSparklineProps) {
   const { t } = useLang();
+  const displayLatency = latencyMs != null ? latencyMs : "—";
+  const displayUptime = uptime ?? "N/A";
   return (
     <Card>
       <div
@@ -17,12 +24,14 @@ export function ApiSparkline() {
         <div style={{ fontSize: 14, fontWeight: 600 }}>{t.apiHealthTitle}</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
           <span style={{ fontSize: 20, fontWeight: 700, fontFamily: "var(--fdisp)" }}>
-            42
+            {displayLatency}
             <span style={{ fontSize: 12, color: "var(--t3)", fontWeight: 500 }}>ms</span>
           </span>
         </div>
       </div>
-      <div style={{ fontSize: 12, color: "var(--t3)", marginBottom: 8 }}>{t.apiSub}</div>
+      <div style={{ fontSize: 12, color: "var(--t3)", marginBottom: 8 }}>
+        avg latency · {displayUptime} uptime
+      </div>
       <svg
         viewBox="0 0 600 130"
         preserveAspectRatio="none"
@@ -51,3 +60,4 @@ export function ApiSparkline() {
     </Card>
   );
 }
+

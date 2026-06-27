@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Card } from "@/components/ui/Card";
-import { healthBars, healthValues } from "@/data/kpis";
+import type { HealthBar } from "@/types";
 
 export const RING_RADIUS = 130;
 export const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS; // ≈816.81
@@ -12,7 +12,22 @@ export function ringOffset(score: number): number {
   return RING_CIRCUMFERENCE * (1 - score / 100);
 }
 
-export function HealthRing({ score }: { score: number }) {
+interface HealthRingProps {
+  score: number;
+  healthBars?: HealthBar[];
+  healthValues?: string[];
+}
+
+const defaultBars: HealthBar[] = [
+  { label: { en: "Clearance API", ar: "واجهة الإجازة" }, pct: 0 },
+  { label: { en: "Reporting API", ar: "واجهة الإبلاغ" }, pct: 0 },
+  { label: { en: "Certificates", ar: "الشهادات" }, pct: 0 },
+  { label: { en: "XML Validation", ar: "التحقق من XML" }, pct: 0 },
+];
+
+export function HealthRing({ score, healthBars: bars, healthValues: values }: HealthRingProps) {
+  const healthBars = bars ?? defaultBars;
+  const healthValues = values ?? healthBars.map(b => `${b.pct}%`);
   const { t, lang } = useLang();
   const [val, setVal] = useState(0);
 
@@ -92,8 +107,8 @@ export function HealthRing({ score }: { score: number }) {
             />
             <defs>
               <linearGradient id="ringg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor="#34d399" />
-                <stop offset="1" stopColor="#059669" />
+                <stop offset="0" stopColor="var(--acb)" />
+                <stop offset="1" stopColor="var(--ac)" />
               </linearGradient>
             </defs>
           </svg>

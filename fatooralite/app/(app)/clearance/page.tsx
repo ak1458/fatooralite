@@ -17,6 +17,7 @@ interface FeedRow {
 interface ClearanceData {
   stats: ClearanceStats;
   feed: FeedRow[];
+  isLocal: boolean;
 }
 
 const STATUS_TONE: Record<string, { fg: string; bg: string }> = {
@@ -49,8 +50,26 @@ export default function ClearancePage() {
       </p>
 
       <AsyncBoundary state={state} onRetry={retry}>
-        {({ stats, feed }) => (
+        {({ stats, feed, isLocal }) => (
           <>
+            {isLocal && (
+              <div
+                style={{
+                  display: "flex", gap: 10, alignItems: "center", padding: "12px 16px", borderRadius: 12,
+                  background: "var(--infos)",
+                  border: "1px solid var(--bd)",
+                  marginBottom: 18, fontSize: 13.5,
+                }}
+              >
+                <span style={{ fontWeight: 700, color: "var(--info)" }}>
+                  Local Certificate Active
+                </span>
+                <span style={{ color: "var(--t2)" }}>
+                  Invoices are signed locally but cannot be cleared on ZATCA. Connect a real ZATCA certificate to clear/report.
+                </span>
+              </div>
+            )}
+
             {(stats.overdue > 0 || stats.nearDeadline > 0) && (
               <div
                 style={{

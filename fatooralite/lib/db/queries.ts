@@ -125,25 +125,46 @@ export async function getDashboardVolume(companyId: string, db: PrismaClient = d
     bars.forEach(b => {
       b.pct = Math.round((b.pct / maxCount) * 100);
     });
-  } else {
-    // Return dummy data if no invoices exist yet
-    return [
-      { day: { en: "Mon", ar: "إثن" }, pct: 40 },
-      { day: { en: "Tue", ar: "ثلا" }, pct: 55 },
-      { day: { en: "Wed", ar: "أرب" }, pct: 48 },
-      { day: { en: "Thu", ar: "خمي" }, pct: 70 },
-      { day: { en: "Fri", ar: "جمع" }, pct: 62 },
-      { day: { en: "Sat", ar: "سبت" }, pct: 80 },
-      { day: { en: "Sun", ar: "أحد" }, pct: 58 },
-      { day: { en: "Mon", ar: "إثن" }, pct: 72 },
-      { day: { en: "Tue", ar: "ثلا" }, pct: 66 },
-      { day: { en: "Wed", ar: "أرب" }, pct: 88 },
-      { day: { en: "Thu", ar: "خمي" }, pct: 78 },
-      { day: { en: "Fri", ar: "جمع" }, pct: 92, highlight: true },
-    ];
   }
 
+  // Return real data — empty if no invoices (no dummy fallback)
   return bars;
+}
+
+/**
+ * Returns integration service health based on real certificate/company state.
+ */
+export async function getDashboardIntegration(companyId: string, db: PrismaClient = defaultDb) {
+  const cert = await db.certificate.findFirst({
+    where: { companyId, kind: "production", status: "active" },
+  });
+
+  const localCert = await db.certificate.findFirst({
+    where: { companyId, kind: "local", status: "active" },
+  });
+
+  const hasCert = !!cert;
+  const hasAnyCert = hasCert || !!localCert;
+
+  const services = [
+    { name: { en: "CSID Issuance", ar: "إصدار CSID" }, ok: hasCert as boolean | "degraded" },
+    { name: { en: "Cryptographic Stamp", ar: "الختم التشفيري" }, ok: hasAnyCert as boolean | "degraded" },
+    { name: { en: "XML Validation", ar: "التحقق من XML" }, ok: true as boolean | "degraded" },
+    { name: { en: "QR Generation", ar: "توليد QR" }, ok: true as boolean | "degraded" },
+    { name: { en: "Clearance API", ar: "واجهة الإجازة" }, ok: (hasCert ? true : hasAnyCert ? "degraded" : false) as boolean | "degraded" },
+    { name: { en: "Reporting API", ar: "واجهة الإبلاغ" }, ok: (hasCert ? true : hasAnyCert ? "degraded" : false) as boolean | "degraded" },
+    { name: { en: "Sandbox Env", ar: "بيئة الاختبار" }, ok: true as boolean | "degraded" },
+    { name: { en: "Production Env", ar: "بيئة الإنتاج" }, ok: hasCert as boolean | "degraded" },
+  ];
+
+  const badges = [
+    { key: "trustReady", icon: "check", active: hasAnyCert },
+    { key: "trustPhase2", icon: "compliance", active: hasCert },
+    { key: "trustProd", icon: "bolt", active: hasCert },
+    { key: "trustEnc", icon: "lock", active: true }, // encryption module is always available
+  ];
+
+  return { services, badges, hasCert, hasAnyCert, isLocal: !hasCert && hasAnyCert };
 }
 
 /**
@@ -213,12 +234,32 @@ export async function getAnalyticsData(companyId: string, db: PrismaClient = def
   // Calculate unique customers
   const customers = new Set(invs.map(i => i.buyerName).filter(Boolean));
 
+  // Compute avg clearance time from clearance records (if available)
+  let avgClearanceLabel = "—";
+  try {
+    const records = await db.clearanceRecord.findMany({
+      where: { invoice: { companyId }, status: "accepted" },
+      select: { createdAt: true, invoice: { select: { createdAt: true } } },
+      take: 100,
+      orderBy: { createdAt: "desc" },
+    });
+    if (records.length > 0) {
+      const totalMs = records.reduce((sum, r) => {
+        return sum + (r.createdAt.getTime() - r.invoice.createdAt.getTime());
+      }, 0);
+      const avgMs = totalMs / records.length;
+      avgClearanceLabel = avgMs < 1000 ? `${Math.round(avgMs)}ms` : `${(avgMs / 1000).toFixed(1)}s`;
+    }
+  } catch {
+    // ClearanceRecord may not exist yet — fine
+  }
+
   const kpis: AnalyticsKpi[] = [
     { label: { en: "Total invoices", ar: "إجمالي الفواتير" }, value: totalInvoices.toString(), delta: "+0%" },
     { label: { en: "VAT collected", ar: "الضريبة المُحصّلة" }, value: "", delta: "+0%", amount: vatCollected },
     { label: { en: "Clearance success", ar: "نسبة الإجازة" }, value: clearanceSuccess, delta: "+0%" },
     { label: { en: "Rejection rate", ar: "نسبة الرفض" }, value: rejectionRate, delta: "-0%" },
-    { label: { en: "Avg clearance", ar: "متوسط زمن الإجازة" }, value: "1.2s", delta: "-0.1s" }, // Mock
+    { label: { en: "Avg clearance", ar: "متوسط زمن الإجازة" }, value: avgClearanceLabel, delta: "" },
     { label: { en: "Active customers", ar: "العملاء النشطون" }, value: customers.size.toString(), delta: "+0" },
   ];
 
@@ -244,10 +285,27 @@ export async function getAnalyticsData(companyId: string, db: PrismaClient = def
     { name: { en: "No Data", ar: "لا توجد بيانات" }, value: "0", pct: 0 }
   ];
 
+  // Compute real daily invoice bars (last 12 days, same logic as dashboard volume)
+  const now = new Date();
+  const dailyBars: number[] = [];
+  let maxDay = 0;
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+    const dayStr = d.toISOString().split("T")[0];
+    const count = invs.filter(inv => inv.createdAt.toISOString().split("T")[0] === dayStr).length;
+    dailyBars.push(count);
+    if (count > maxDay) maxDay = count;
+  }
+  // Normalize to 0–100
+  const normalizedBars = maxDay > 0
+    ? dailyBars.map(c => Math.round((c / maxDay) * 100))
+    : dailyBars;
+
   return {
     kpis,
-    dailyBars: [40, 55, 48, 70, 62, 80, 58, 72, 66, 88, 78, 92], // Dummy for now, can implement same as volume
+    dailyBars: normalizedBars,
     revenueByCustomer: revenueByCustomer.length > 0 ? revenueByCustomer : defaultRevByCust,
     vatCollected
   };
 }
+

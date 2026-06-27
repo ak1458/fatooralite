@@ -71,7 +71,7 @@ function DefaultError({ message, onRetry }: { message: string; onRetry?: () => v
         textAlign: "center",
       }}
     >
-      <div style={{ color: "var(--dang, #ef4444)", fontSize: 14, fontWeight: 600 }}>
+      <div style={{ color: "var(--dang)", fontSize: 14, fontWeight: 600 }}>
         Something went wrong
       </div>
       <div style={{ color: "var(--t3)", fontSize: 13, maxWidth: 360 }}>{message}</div>

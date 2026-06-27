@@ -26,6 +26,13 @@ export async function GET(req: Request) {
 
   const stats = computeClearanceStats(invoices);
 
+  const cert = await prisma.certificate.findFirst({
+    where: { companyId, kind: "production", status: "active" },
+    orderBy: { createdAt: "desc" },
+    select: { serial: true, secret: true },
+  });
+  const isLocal = cert?.serial === "LOCAL-DEV" || cert?.secret === "LOCAL-DEV-SECRET";
+
   const feed = invoices.slice(0, 12).map((inv) => ({
     invoiceNumber: inv.invoiceNumber,
     buyer: inv.buyerName ?? "—",
@@ -36,5 +43,5 @@ export async function GET(req: Request) {
     time: inv.createdAt.toISOString(),
   }));
 
-  return NextResponse.json({ stats, feed });
+  return NextResponse.json({ stats, feed, isLocal });
 }
