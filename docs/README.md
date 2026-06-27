@@ -16,6 +16,7 @@ Read in this order:
 | 05 | [Feature Docs](./05-features.md) | What each module is, why it exists, how it works |
 | 06 | [Gap Analysis](./06-gap-analysis.md) | Honest current-vs-target state; full mock inventory |
 | 07 | [Roadmap](./07-roadmap.md) | Phased build plan with acceptance criteria |
+| 08 | [Remaining Work](./08-remaining-work.md) | Precise technical to-do for everything left: what/why/how/paths |
 
 **Domain:** Saudi Arabia ZATCA "Fatoora" Phase 2 (Integration Phase) e-invoicing
 compliance for SMEs. The product is intended to become a commercial SaaS.
