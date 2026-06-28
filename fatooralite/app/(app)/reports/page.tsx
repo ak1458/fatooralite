@@ -1,4 +1,5 @@
 "use client";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { usePageMeta } from "@/lib/usePageMeta";
 import { useCompany } from "@/lib/useCompany";
@@ -13,7 +14,7 @@ interface ReportData {
   totalInvoices: number;
 }
 
-export default function Page() {
+function ReportsContent() {
   const { title } = usePageMeta();
   const { company } = useCompany();
   const companyId = company?.id;
@@ -77,6 +78,14 @@ export default function Page() {
         )}
       </AsyncBoundary>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={null}>
+      <ReportsContent />
+    </Suspense>
   );
 }
 

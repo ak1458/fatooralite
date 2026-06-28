@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLang } from "@/lib/i18n/LangProvider";
 
@@ -15,7 +15,7 @@ const L = {
   errorNoToken: { en: "Missing or invalid token.", ar: "رابط إعادة التعيين مفقود أو غير صالح." },
 };
 
-export default function ResetPage() {
+function ResetForm() {
   const { lang } = useLang();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -177,5 +177,13 @@ export default function ResetPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ResetPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResetForm />
+    </Suspense>
   );
 }
