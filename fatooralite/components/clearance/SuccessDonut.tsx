@@ -1,7 +1,6 @@
 "use client";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Card } from "@/components/ui/Card";
-import { donut } from "@/data/clearance";
 import { num } from "@/lib/format";
 
 interface SuccessDonutProps {
@@ -16,11 +15,11 @@ interface SuccessDonutProps {
 /** Donut chart of clearance success with a cleared/pending/rejected legend. */
 export function SuccessDonut({
   showLegend = true,
-  pct = donut.pct,
-  cleared = donut.cleared,
-  pending = donut.pending,
-  rejected = donut.rejected,
-  totalLabel = donut.totalLabel,
+  pct = "0%",
+  cleared = 0,
+  pending = 0,
+  rejected = 0,
+  totalLabel = "Total",
 }: SuccessDonutProps) {
   const { t, lang } = useLang();
   
