@@ -3,7 +3,7 @@ import { AnKpiGrid } from "@/components/analytics/AnKpiGrid";
 import { DailyBars } from "@/components/analytics/DailyBars";
 import { RevenueByCustomer } from "@/components/analytics/RevenueByCustomer";
 import { VatTrend } from "@/components/analytics/VatTrend";
-import { SuccessDonut } from "@/components/clearance/SuccessDonut";
+import { SuccessDonut } from "@/components/analytics/SuccessDonut";
 import { AsyncBoundary } from "@/components/common/AsyncBoundary";
 import { NoCompanyState } from "@/components/common/NoCompanyState";
 import { useCompany } from "@/lib/useCompany";
@@ -15,6 +15,7 @@ interface AnalyticsData {
   dailyBars: number[];
   revenueByCustomer: RevenueRow[];
   vatCollected: number;
+  clearance: { cleared: number; rejected: number; pending: number; pct: string };
 }
 
 export default function AnalyticsPage() {
@@ -47,7 +48,12 @@ export default function AnalyticsPage() {
               }}
             >
               <DailyBars data={data.dailyBars} />
-              <SuccessDonut showLegend={false} />
+              <SuccessDonut
+                pct={data.clearance.pct}
+                cleared={data.clearance.cleared}
+                pending={data.clearance.pending}
+                rejected={data.clearance.rejected}
+              />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: 18 }}>
               <RevenueByCustomer data={data.revenueByCustomer} />

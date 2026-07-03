@@ -327,7 +327,14 @@ export async function getAnalyticsData(companyId: string, db: PrismaClient = def
     // Empty when there is no cleared revenue yet — the UI renders an empty
     // state, never placeholder rows.
     revenueByCustomer,
-    vatCollected
+    vatCollected,
+    // Real status split for the success donut.
+    clearance: {
+      cleared: clearedCount,
+      rejected: rejectedCount,
+      pending: Math.max(0, totalInvoices - clearedCount - rejectedCount),
+      pct: clearanceSuccess,
+    },
   };
 }
 
