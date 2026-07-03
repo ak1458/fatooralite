@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { computeInsights } from "@/lib/ai/insights";
-import { chatText, isConfigured } from "@/lib/ai/openrouter";
+import { chatText, isConfigured } from "@/lib/ai/provider";
 import { requirePermission } from "@/lib/auth/server";
 
 export const runtime = "nodejs";

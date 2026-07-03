@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZATCA_SYSTEM_PROMPT } from "@/lib/ai/zatca-prompt";
-import { chatStream, isConfigured, type ChatMessage } from "@/lib/ai/openrouter";
+import { chatStream, isConfigured, type ChatMessage } from "@/lib/ai/provider";
 import { retrieve } from "@/lib/ai/vector-store";
 import { requirePermission } from "@/lib/auth/server";
 

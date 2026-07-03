@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { chatWithTools, isConfigured } from "@/lib/ai/openrouter";
+import { chatWithTools, isConfigured, type ChatMessage } from "@/lib/ai/provider";
 import { toolSchemas, executeTool } from "@/lib/ai/tools";
 import { retrieve } from "@/lib/ai/vector-store";
 import { ZATCA_SYSTEM_PROMPT } from "@/lib/ai/zatca-prompt";
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
   if (!isConfigured()) {
     return NextResponse.json({
-      message: "I'm in mock mode — add OPENROUTER_API_KEY to enable live actions.",
+      message: "I'm in mock mode — configure an AI provider key (e.g. OPENROUTER_API_KEY) to enable live actions.",
       navigate: null,
     });
   }
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
   };
 
   const ctx = { companyId, userRole: user?.role ?? "owner" };
-  const messages: unknown[] = [system, ...history];
+  const messages: ChatMessage[] = [system, ...history];
   let navigate: string | null = null;
 
   // Force a tool call on the first round when the message is clearly a command,
