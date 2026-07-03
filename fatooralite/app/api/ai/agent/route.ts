@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { chatWithTools, isConfigured, type ChatMessage } from "@/lib/ai/provider";
-import { toolSchemas, executeTool } from "@/lib/ai/tools";
+import { toolSchemas, executeTool, confirmSummary } from "@/lib/ai/tools";
 import { retrieve } from "@/lib/ai/vector-store";
 import { ZATCA_SYSTEM_PROMPT } from "@/lib/ai/zatca-prompt";
 import { requirePermission, getUserFromRequest } from "@/lib/auth/server";
@@ -27,7 +27,14 @@ export async function POST(req: Request) {
   if (deny) return deny;
 
   const user = await getUserFromRequest(req);
-  let body: { messages?: InboundMessage[]; message?: string; companyId?: string; model?: string };
+  let body: {
+    messages?: InboundMessage[];
+    message?: string;
+    companyId?: string;
+    model?: string;
+    /** Confirm round-trip: the user approved a pending write action. */
+    confirmedAction?: { name: string; arguments: string };
+  };
   try {
     body = await req.json();
   } catch {
@@ -36,6 +43,19 @@ export async function POST(req: Request) {
 
   const companyId = body.companyId ?? user?.companyId;
   if (!companyId) return NextResponse.json({ message: "No active company.", navigate: null });
+
+  // Confirmed action: execute directly (zod + RBAC still enforced inside).
+  if (body.confirmedAction) {
+    const { name, arguments: argsJson } = body.confirmedAction;
+    if (typeof name !== "string" || typeof argsJson !== "string") {
+      return NextResponse.json({ error: "Invalid confirmed action" }, { status: 400 });
+    }
+    const outcome = await executeTool(name, argsJson, {
+      companyId,
+      userRole: user?.role ?? "employee",
+    });
+    return NextResponse.json({ message: outcome.content, navigate: outcome.navigate ?? null });
+  }
 
   const history = (body.messages ?? (body.message ? [{ role: "user" as const, text: body.message }] : []))
     .map((m) => ({
@@ -93,6 +113,25 @@ export async function POST(req: Request) {
       const assistant = await chatWithTools(messages, toolSchemas(), body.model, 1024, toolChoice);
 
       if (assistant.tool_calls && assistant.tool_calls.length > 0) {
+        // Financial/irreversible writes pause for explicit user confirmation:
+        // return a pending action instead of executing anything this round.
+        for (const call of assistant.tool_calls) {
+          const summary = confirmSummary(call.function.name, call.function.arguments);
+          if (summary) {
+            return NextResponse.json({
+              message:
+                (assistant.content?.trim() ? assistant.content.trim() + "\n\n" : "") +
+                "I need your confirmation before doing this.",
+              navigate,
+              pendingAction: {
+                name: call.function.name,
+                arguments: call.function.arguments,
+                summary,
+              },
+            });
+          }
+        }
+
         messages.push({ role: "assistant", content: assistant.content ?? "", tool_calls: assistant.tool_calls });
         for (const call of assistant.tool_calls) {
           const outcome = await executeTool(call.function.name, call.function.arguments, ctx);

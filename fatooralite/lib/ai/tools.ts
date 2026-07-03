@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { num } from "@/lib/db/decimal";
+import { scheduleCompanyIngest } from "@/lib/ai/tenant-ingest";
 import { can, type Permission } from "@/lib/auth/rbac";
 import { issueInvoice } from "@/lib/services/invoice-service";
 import { submitInvoice } from "@/lib/services/clearance-service";
@@ -24,6 +25,10 @@ interface ToolDef {
   parameters: Record<string, unknown>; // JSON schema for the model
   schema: z.ZodTypeAny; // server-side validation
   permission: Permission;
+  /** Financial/irreversible writes: the user must confirm in the UI before
+   *  the tool runs. The agent route returns a pending action instead of
+   *  executing, and executes only on the explicit confirm round-trip. */
+  confirm?: (args: unknown) => string;
   handler: (args: unknown, ctx: ToolContext) => Promise<ToolOutcome>;
 }
 
@@ -153,6 +158,7 @@ const TOOLS: Record<string, ToolDef> = {
     async handler(args, ctx) {
       const a = args as { name: string; vatNumber?: string; city?: string; email?: string };
       await prisma.customer.create({ data: { companyId: ctx.companyId, name: a.name, vatNumber: a.vatNumber ?? null, city: a.city ?? null, email: a.email ?? null } });
+      scheduleCompanyIngest(ctx.companyId);
       return { content: `Created customer "${a.name}".`, navigate: "/customers" };
     },
   },
@@ -173,6 +179,7 @@ const TOOLS: Record<string, ToolDef> = {
     async handler(args, ctx) {
       const a = args as { name: string; unitPrice: number; vatCategory?: "S" | "Z" | "E" | "O"; sku?: string };
       await prisma.product.create({ data: { companyId: ctx.companyId, name: a.name, unitPrice: a.unitPrice, vatCategory: a.vatCategory ?? "S", sku: a.sku ?? null } });
+      scheduleCompanyIngest(ctx.companyId);
       return { content: `Created product "${a.name}".`, navigate: "/products" };
     },
   },
@@ -195,6 +202,11 @@ const TOOLS: Record<string, ToolDef> = {
       lines: z.array(lineSchema).min(1),
     }),
     permission: "invoice:create",
+    confirm(args) {
+      const a = args as { kind?: string; buyerName?: string; lines?: { description: string; quantity: number; unitPrice: number }[] };
+      const total = (a.lines ?? []).reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+      return `Issue & sign a ${a.kind ?? "standard"} invoice${a.buyerName ? ` for ${a.buyerName}` : ""} — ${a.lines?.length ?? 0} line(s), ≈ SAR ${(total * 1.15).toFixed(2)} incl. VAT.`;
+    },
     async handler(args, ctx) {
       const a = args as { kind: "standard" | "simplified"; buyerName?: string; buyerVat?: string; lines: z.infer<typeof lineSchema>[] };
       const company = await prisma.company.findUnique({ where: { id: ctx.companyId } });
@@ -214,6 +226,7 @@ const TOOLS: Record<string, ToolDef> = {
       };
       try {
         const result = await issueInvoice(ctx.companyId, input);
+        scheduleCompanyIngest(ctx.companyId);
         return { content: `Issued & signed invoice ${result.signed.invoiceNumber} (total SAR ${result.signed.totals.grandTotal.toFixed(2)}).`, navigate: "/invoices" };
       } catch (e) {
         return { content: `Could not issue invoice: ${e instanceof Error ? e.message : "error"}. The company may need a signing certificate (complete onboarding).` };
@@ -225,12 +238,17 @@ const TOOLS: Record<string, ToolDef> = {
     parameters: { type: "object", properties: { invoiceNumber: { type: "string" } }, required: ["invoiceNumber"] },
     schema: z.object({ invoiceNumber: z.string().min(1) }),
     permission: "invoice:clear",
+    confirm(args) {
+      const a = args as { invoiceNumber?: string };
+      return `Submit invoice ${a.invoiceNumber ?? ""} to ZATCA (clearance/reporting). This files the invoice with the tax authority.`;
+    },
     async handler(args, ctx) {
       const a = args as { invoiceNumber: string };
       const inv = await prisma.invoice.findFirst({ where: { companyId: ctx.companyId, invoiceNumber: a.invoiceNumber } });
       if (!inv) return { content: `No invoice ${a.invoiceNumber} found.` };
       try {
         const res = await submitInvoice(inv.id);
+        scheduleCompanyIngest(ctx.companyId);
         return { content: `Submitted ${a.invoiceNumber} to ZATCA: ${res.status}.`, navigate: "/clearance" };
       } catch (e) {
         return { content: `Submission failed: ${e instanceof Error ? e.message : "error"}. Connect real ZATCA (Integration) to clear/report.` };
@@ -248,6 +266,22 @@ const TOOLS: Record<string, ToolDef> = {
     },
   },
 };
+
+/**
+ * If the tool requires user confirmation, return a human-readable summary of
+ * the pending action; otherwise null.
+ */
+export function confirmSummary(name: string, argsJson: string): string | null {
+  const def = TOOLS[name];
+  if (!def?.confirm) return null;
+  let parsed: unknown = {};
+  try {
+    parsed = argsJson ? JSON.parse(argsJson) : {};
+  } catch {
+    /* summary works on best-effort args */
+  }
+  return def.confirm(parsed);
+}
 
 /** OpenAI-style tool schemas to send to the model. */
 export function toolSchemas() {

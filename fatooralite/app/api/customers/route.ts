@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { createCustomerSchema } from "@/lib/validation/schemas";
 import { requirePermission } from "@/lib/auth/server";
+import { scheduleCompanyIngest } from "@/lib/ai/tenant-ingest";
 
 export const runtime = "nodejs";
 
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
         ...data,
       },
     });
+    scheduleCompanyIngest(companyId);
     return NextResponse.json(customer, { status: 201 });
   } catch (error: any) {
     if (error.name === "ZodError") {

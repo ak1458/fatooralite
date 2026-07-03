@@ -3,6 +3,7 @@ import { issueInvoice, NoCertificateError } from "@/lib/services/invoice-service
 import { getInvoiceList } from "@/lib/db/queries";
 import { createInvoiceSchema } from "@/lib/validation/schemas";
 import { requirePermission } from "@/lib/auth/server";
+import { scheduleCompanyIngest } from "@/lib/ai/tenant-ingest";
 import type { InvoiceInput } from "@/lib/zatca/types";
 
 export const runtime = "nodejs";
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
     } as InvoiceInput;
     
     const result = await issueInvoice(companyId, typedInput);
+    scheduleCompanyIngest(companyId);
     return NextResponse.json(result, { status: 201 });
   } catch (err: any) {
     if (err.name === "ZodError") {

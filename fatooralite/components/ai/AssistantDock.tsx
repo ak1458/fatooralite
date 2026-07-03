@@ -7,6 +7,7 @@ import { Icon } from "@/components/ui/Icon";
 
 interface Msg { role: "user" | "assistant"; text: string }
 interface ModelOpt { id: string; label: string }
+interface PendingAction { name: string; arguments: string; summary: string }
 
 export function AssistantDock() {
   const { company } = useCompany();
@@ -18,6 +19,7 @@ export function AssistantDock() {
   const [busy, setBusy] = useState(false);
   const [models, setModels] = useState<ModelOpt[]>([]);
   const [model, setModel] = useState("");
+  const [pending, setPending] = useState<PendingAction | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,6 +53,35 @@ export function AssistantDock() {
       });
       const data = await res.json().catch(() => ({}));
       setMessages((m) => [...m, { role: "assistant", text: data.message || data.error || "No response. Try again." }]);
+      if (data.pendingAction) setPending(data.pendingAction);
+      if (data.navigate) setTimeout(() => router.push(data.navigate), 600);
+    } catch {
+      setMessages((m) => [...m, { role: "assistant", text: "Connection error." }]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resolvePending(confirmed: boolean) {
+    if (!pending || busy) return;
+    const action = pending;
+    setPending(null);
+    if (!confirmed) {
+      setMessages((m) => [...m, { role: "assistant", text: "Okay, cancelled — nothing was changed." }]);
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/ai/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirmedAction: { name: action.name, arguments: action.arguments },
+          companyId: company?.id,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setMessages((m) => [...m, { role: "assistant", text: data.message || data.error || "Action failed." }]);
       if (data.navigate) setTimeout(() => router.push(data.navigate), 600);
     } catch {
       setMessages((m) => [...m, { role: "assistant", text: "Connection error." }]);
@@ -120,6 +151,28 @@ export function AssistantDock() {
                     {m.text}
                   </div>
                 ))
+              )}
+              {pending && (
+                <div style={{
+                  alignSelf: "stretch", padding: "12px 14px", borderRadius: 12,
+                  background: "var(--acs)", border: "1px solid var(--ac)",
+                  display: "flex", flexDirection: "column", gap: 10,
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ac)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <Icon name="lock" size={13} sw={2} /> Confirm action
+                  </div>
+                  <div style={{ fontSize: 12.5, lineHeight: 1.55 }}>{pending.summary}</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => resolvePending(true)} disabled={busy}
+                      style={{ flex: 1, padding: "8px 0", borderRadius: 9, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d", fontWeight: 700, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>
+                      Confirm
+                    </button>
+                    <button onClick={() => resolvePending(false)} disabled={busy}
+                      style={{ flex: 1, padding: "8px 0", borderRadius: 9, border: "1px solid var(--bd)", background: "var(--s2)", color: "var(--t2)", fontWeight: 600, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
               {busy && <div style={{ alignSelf: "flex-start", color: "var(--t3)", fontSize: 12.5 }}>…</div>}
             </div>
