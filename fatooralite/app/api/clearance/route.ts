@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
+import { num } from "@/lib/db/decimal";
 import { requirePermission } from "@/lib/auth/server";
 import { computeClearanceStats } from "@/lib/services/clearance-stats";
 
@@ -24,7 +25,9 @@ export async function GET(req: Request) {
     orderBy: { createdAt: "desc" },
   });
 
-  const stats = computeClearanceStats(invoices);
+  const stats = computeClearanceStats(
+    invoices.map((i) => ({ ...i, vatAmount: num(i.vatAmount), grandTotal: num(i.grandTotal) })),
+  );
 
   const cert = await prisma.certificate.findFirst({
     where: { companyId, kind: "production", status: "active" },
@@ -39,7 +42,7 @@ export async function GET(req: Request) {
     status: inv.status,
     kind: inv.kind,
     resultCode: inv.resultCode ?? null,
-    amount: inv.grandTotal,
+    amount: num(inv.grandTotal),
     time: inv.createdAt.toISOString(),
   }));
 

@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultDb } from "./client";
+import { num } from "./decimal";
 import type { AnalyticsKpi, FeedEvent, HealthBar, Invoice, Kpi, RevenueRow, VolumeBar } from "@/types";
 
 /**
@@ -14,39 +15,47 @@ export async function getDashboardKpis(companyId: string, db: PrismaClient = def
     where: { companyId, status: "cleared" },
     _sum: { vatAmount: true },
   });
-  const totalVat = vatResult._sum.vatAmount ?? 0;
+  const totalVat = num(vatResult._sum.vatAmount);
 
   const clearanceRate = totalInvoices > 0 ? (clearedInvoices / totalInvoices) * 100 : 100;
-  
+
   // ZATCA specific checks
   const cert = await db.certificate.findFirst({
     where: { companyId, kind: "production", status: "active" },
   });
-  
-  const isReady = cert ? 100 : 0;
+
+  const isReady = !!cert;
   let daysLeft = 0;
   if (cert?.expiresAt) {
     daysLeft = Math.max(0, Math.floor((cert.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
   }
 
-  // Health bars - mock health until we have a real service monitoring
+  // Health bars derived from real state only: certificate presence gates the
+  // gateway APIs; XML validation/signing is a local module that ships with the
+  // app. No synthetic uptime percentages.
   const healthBars: HealthBar[] = [
-    { label: { en: "Clearance API", ar: "واجهة الإجازة" }, pct: isReady ? 99 : 0 },
-    { label: { en: "Reporting API", ar: "واجهة الإبلاغ" }, pct: isReady ? 98 : 0 },
+    { label: { en: "Clearance API", ar: "واجهة الإجازة" }, pct: isReady ? 100 : 0 },
+    { label: { en: "Reporting API", ar: "واجهة الإبلاغ" }, pct: isReady ? 100 : 0 },
     { label: { en: "Certificates", ar: "الشهادات" }, pct: cert ? 100 : 0 },
-    { label: { en: "XML Validation", ar: "التحقق من XML" }, pct: 97 },
+    { label: { en: "XML Validation", ar: "التحقق من XML" }, pct: 100 },
   ];
 
+  // Readiness score: an active production CSID is the gate (60%), the rest is
+  // the live clearance success rate (40%). A fresh tenant with no cert is 0.
+  const score = Math.round(
+    (isReady ? 60 : 0) + (totalInvoices > 0 ? (clearanceRate / 100) * 40 : isReady ? 40 : 0),
+  );
+
   const kpis: Kpi[] = [
-    { label: { en: "ZATCA Readiness", ar: "جاهزية الهيئة" }, value: isReady ? "100%" : "0%", tag: isReady ? "Ready" : "Pending Setup", tone: isReady ? "ac" : "warn", icon: "compliance" },
+    { label: { en: "ZATCA Readiness", ar: "جاهزية الهيئة" }, value: `${score}%`, tag: isReady ? "Ready" : "Pending Setup", tone: isReady ? "ac" : "warn", icon: "compliance" },
     { label: { en: "Production CSID", ar: "شهادة الإنتاج CSID" }, value: cert ? "Active" : "None", tag: cert ? "Active" : "Action Required", tone: cert ? "ac" : "warn", icon: "cert" },
-    { label: { en: "Certificate Expiry", ar: "انتهاء الشهادة" }, value: cert ? String(daysLeft) : "N/A", tag: "days left", tone: daysLeft > 30 ? "ac" : "warn", icon: "clock" },
-    { label: { en: "API Health", ar: "صحة الواجهة" }, value: isReady ? "Operational" : "Offline", tag: isReady ? "99.9%" : "N/A", tone: isReady ? "info" : "warn", icon: "bolt" },
+    { label: { en: "Certificate Expiry", ar: "انتهاء الشهادة" }, value: cert ? String(daysLeft) : "N/A", tag: cert ? "days left" : "—", tone: !cert || daysLeft > 30 ? "ac" : "warn", icon: "clock" },
+    { label: { en: "Gateway", ar: "البوابة" }, value: isReady ? "Connected" : "Not connected", tag: isReady ? "CSID active" : "Connect ZATCA", tone: isReady ? "info" : "warn", icon: "bolt" },
   ];
 
   return {
     counters: {
-      score: isReady ? 99 : 20,
+      score,
       vat: totalVat,
       inv: totalInvoices,
       succ: clearanceRate,
@@ -175,23 +184,39 @@ export async function getInvoiceList(
   filter?: { status?: string },
   db: PrismaClient = defaultDb
 ): Promise<{ invoices: Invoice[], tabs: { id: string, count: string }[] }> {
-  // Aggregate counts for tabs
-  const allCount = await db.invoice.count({ where: { companyId } });
-  const clearedCount = await db.invoice.count({ where: { companyId, status: "cleared" } });
-  const pendingCount = await db.invoice.count({ where: { companyId, status: "pending" } });
-  const rejectedCount = await db.invoice.count({ where: { companyId, status: "rejected" } });
-  const draftCount = await db.invoice.count({ where: { companyId, status: "draft" } });
-  
+  // Aggregate counts for tabs (grouped in one query; statuses match the
+  // invoice lifecycle: draft|signed|submitted|cleared|reported|rejected).
+  const grouped = await db.invoice.groupBy({
+    by: ["status"],
+    where: { companyId },
+    _count: { _all: true },
+  });
+  const countOf = (...statuses: string[]) =>
+    grouped.filter((g) => statuses.includes(g.status)).reduce((s, g) => s + g._count._all, 0);
+  const allCount = grouped.reduce((s, g) => s + g._count._all, 0);
+
   const tabs = [
     { id: "all", count: allCount.toString() },
-    { id: "cleared", count: clearedCount.toString() },
-    { id: "pending", count: pendingCount.toString() },
-    { id: "rejected", count: rejectedCount.toString() },
-    { id: "draft", count: draftCount.toString() },
+    { id: "cleared", count: countOf("cleared", "reported").toString() },
+    { id: "pending", count: countOf("signed", "submitted").toString() },
+    { id: "rejected", count: countOf("rejected").toString() },
+    { id: "draft", count: countOf("draft").toString() },
   ];
 
+  // Map UI tab ids onto lifecycle status sets so filtering matches the counts.
+  const statusSets: Record<string, string[]> = {
+    cleared: ["cleared", "reported"],
+    pending: ["signed", "submitted"],
+    rejected: ["rejected"],
+    draft: ["draft"],
+  };
   const rawInvoices = await db.invoice.findMany({
-    where: { companyId, ...(filter?.status && filter.status !== 'all' ? { status: filter.status } : {}) },
+    where: {
+      companyId,
+      ...(filter?.status && filter.status !== "all"
+        ? { status: { in: statusSets[filter.status] ?? [filter.status] } }
+        : {}),
+    },
     orderBy: { createdAt: "desc" },
     take: 50, // limit for UI
   });
@@ -199,7 +224,7 @@ export async function getInvoiceList(
   const formatted: Invoice[] = rawInvoices.map(inv => ({
     num: inv.invoiceNumber,
     customer: { en: inv.buyerName || "Unknown", ar: inv.buyerName || "غير معروف" },
-    amount: inv.taxableAmount,
+    amount: num(inv.taxableAmount),
     type: inv.kind as Invoice["type"],
     status: inv.status as Invoice["status"],
     uuid: inv.uuid.substring(0, 8) + "…",
@@ -207,7 +232,7 @@ export async function getInvoiceList(
     // Raw fields consumed by forms (e.g. the credit/debit note reference picker).
     id: inv.id,
     invoiceNumber: inv.invoiceNumber,
-    grandTotal: inv.grandTotal,
+    grandTotal: num(inv.grandTotal),
     documentType: inv.documentType,
   }));
 
@@ -226,7 +251,7 @@ export async function getAnalyticsData(companyId: string, db: PrismaClient = def
   const totalInvoices = invs.length;
   const clearedCount = invs.filter(i => i.status === "cleared").length;
   const rejectedCount = invs.filter(i => i.status === "rejected").length;
-  const vatCollected = invs.filter(i => i.status === "cleared").reduce((sum, i) => sum + i.vatAmount, 0);
+  const vatCollected = invs.filter(i => i.status === "cleared").reduce((sum, i) => sum + num(i.vatAmount), 0);
   
   const clearanceSuccess = totalInvoices > 0 ? ((clearedCount / totalInvoices) * 100).toFixed(1) + "%" : "0%";
   const rejectionRate = totalInvoices > 0 ? ((rejectedCount / totalInvoices) * 100).toFixed(1) + "%" : "0%";
@@ -267,7 +292,7 @@ export async function getAnalyticsData(companyId: string, db: PrismaClient = def
   const revByCust = new Map<string, number>();
   invs.forEach(inv => {
     if (inv.buyerName && inv.status === "cleared") {
-      revByCust.set(inv.buyerName, (revByCust.get(inv.buyerName) || 0) + inv.taxableAmount);
+      revByCust.set(inv.buyerName, (revByCust.get(inv.buyerName) || 0) + num(inv.taxableAmount));
     }
   });
 
@@ -279,11 +304,6 @@ export async function getAnalyticsData(companyId: string, db: PrismaClient = def
     value: (c[1] > 1000000 ? (c[1]/1000000).toFixed(2) + "M" : (c[1]/1000).toFixed(1) + "K"),
     pct: Math.round((c[1] / maxRev) * 100)
   }));
-
-  // Create dummy fallback if empty
-  const defaultRevByCust: RevenueRow[] = [
-    { name: { en: "No Data", ar: "لا توجد بيانات" }, value: "0", pct: 0 }
-  ];
 
   // Compute real daily invoice bars (last 12 days, same logic as dashboard volume)
   const now = new Date();
@@ -304,7 +324,9 @@ export async function getAnalyticsData(companyId: string, db: PrismaClient = def
   return {
     kpis,
     dailyBars: normalizedBars,
-    revenueByCustomer: revenueByCustomer.length > 0 ? revenueByCustomer : defaultRevByCust,
+    // Empty when there is no cleared revenue yet — the UI renders an empty
+    // state, never placeholder rows.
+    revenueByCustomer,
     vatCollected
   };
 }

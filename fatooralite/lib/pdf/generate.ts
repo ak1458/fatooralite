@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import QRCode from "qrcode";
 import type { Invoice, InvoiceLine } from "@prisma/client";
+import { num } from "@/lib/db/decimal";
 
 export interface PdfSeller {
   name: string;
@@ -109,8 +110,8 @@ export async function generatePdf(invoice: Invoice, options: PdfOptions = {}): P
   y -= 22;
 
   const rows = lines.length
-    ? lines
-    : ([{ description: "—", quantity: 0, unitPrice: 0, netAmount: invoice.taxableAmount, vatAmount: invoice.vatAmount }] as InvoiceLine[]);
+    ? lines.map((l) => ({ description: l.description, quantity: l.quantity, unitPrice: num(l.unitPrice), netAmount: num(l.netAmount) }))
+    : [{ description: "—", quantity: 0, unitPrice: 0, netAmount: num(invoice.taxableAmount) }];
   for (const l of rows) {
     text(l.description.slice(0, 60), cols.desc + 6, y, { size: 9 });
     rightText(String(l.quantity), cols.qty, y, { size: 9 });

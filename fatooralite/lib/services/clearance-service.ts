@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultDb } from "@/lib/db/client";
 import { addClearanceRecord, addAuditEntry, setInvoiceStatus, getActiveCertificate } from "@/lib/db/repo";
+import { num } from "@/lib/db/decimal";
 import { ZatcaClient } from "@/lib/zatca/client";
 import type { ZatcaResponse, ZatcaSubmitter } from "@/lib/zatca/client";
 import type { InvoiceInput } from "@/lib/zatca/types";
@@ -78,7 +79,7 @@ export async function submitInvoice(
     lines: invoice.lines.map((l) => ({
       description: l.description,
       quantity: l.quantity,
-      unitPrice: l.unitPrice,
+      unitPrice: num(l.unitPrice),
       vatRate: l.vatRate,
     })),
   };

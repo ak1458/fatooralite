@@ -5,7 +5,7 @@ import { sar } from "@/lib/format";
 import { invoiceTotals } from "@/lib/zatca/money";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
-import type { Invoice } from "@prisma/client";
+import type { Invoice } from "@/types";
 
 interface Company {
   id: string;
@@ -360,7 +360,7 @@ export function NewNoteForm({ type }: { type: "credit" | "debit" }) {
             >
               <option value="">-- Select Original Invoice --</option>
               {invoices.filter(i => i.documentType === "invoice").map((inv) => (
-                <option key={inv.id} value={inv.invoiceNumber}>{inv.invoiceNumber} ({sar(inv.grandTotal, lang)})</option>
+                <option key={inv.id ?? inv.num} value={inv.invoiceNumber}>{inv.invoiceNumber} ({sar(inv.grandTotal ?? 0, lang)})</option>
               ))}
             </select>
           </Field>

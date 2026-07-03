@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
+import { num } from "@/lib/db/decimal";
 import { can, type Permission } from "@/lib/auth/rbac";
 import { issueInvoice } from "@/lib/services/invoice-service";
 import { submitInvoice } from "@/lib/services/clearance-service";
@@ -95,7 +96,7 @@ const TOOLS: Record<string, ToolDef> = {
         where: { companyId: ctx.companyId },
         select: { kind: true, status: true, vatAmount: true, issueDate: true, issueTime: true, resultCode: true },
       });
-      return { content: JSON.stringify(computeClearanceStats(invoices)) };
+      return { content: JSON.stringify(computeClearanceStats(invoices.map((i) => ({ ...i, vatAmount: num(i.vatAmount) })))) };
     },
   },
   findInvoice: {
@@ -125,8 +126,8 @@ const TOOLS: Record<string, ToolDef> = {
         where: { companyId: ctx.companyId, status: { in: ["cleared", "reported"] }, createdAt: { gte: start } },
         select: { taxableAmount: true, vatAmount: true },
       });
-      const totalTaxable = invoices.reduce((s, i) => s + i.taxableAmount, 0);
-      const totalVat = invoices.reduce((s, i) => s + i.vatAmount, 0);
+      const totalTaxable = invoices.reduce((s, i) => s + num(i.taxableAmount), 0);
+      const totalVat = invoices.reduce((s, i) => s + num(i.vatAmount), 0);
       return {
         content: JSON.stringify({ period: `Last ${days} days`, totalInvoices: invoices.length, totalTaxable, totalVat }),
         navigate: `/reports?rangeDays=${days}`,
@@ -201,7 +202,9 @@ const TOOLS: Record<string, ToolDef> = {
       if (a.kind === "standard" && !a.buyerName) return { content: "A standard invoice needs a buyer name. Ask the user for the buyer." };
       const { date, time } = todayParts();
       const input: InvoiceInput = {
-        invoiceNumber: `INV-${date.slice(0, 4)}-${Math.floor(10000 + Math.random() * 89999)}`,
+        // Server assigns the next sequential INV-YYYY-NNNNN from the company
+        // counter — never a random number.
+        invoiceNumber: "",
         kind: a.kind,
         issueDate: date,
         issueTime: time,
@@ -211,7 +214,7 @@ const TOOLS: Record<string, ToolDef> = {
       };
       try {
         const result = await issueInvoice(ctx.companyId, input);
-        return { content: `Issued & signed invoice ${input.invoiceNumber} (total SAR ${result.signed.totals.grandTotal.toFixed(2)}).`, navigate: "/invoices" };
+        return { content: `Issued & signed invoice ${result.signed.invoiceNumber} (total SAR ${result.signed.totals.grandTotal.toFixed(2)}).`, navigate: "/invoices" };
       } catch (e) {
         return { content: `Could not issue invoice: ${e instanceof Error ? e.message : "error"}. The company may need a signing certificate (complete onboarding).` };
       }

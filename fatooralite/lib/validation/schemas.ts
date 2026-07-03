@@ -58,7 +58,9 @@ export const createProductSchema = z.object({
 
 // --- Invoices ---
 export const createInvoiceSchema = z.object({
-  invoiceNumber: z.string().min(1),
+  // Optional: when omitted the server assigns the next sequential number
+  // (INV-YYYY-NNNNN) from the per-company counter.
+  invoiceNumber: z.string().min(1).max(60).optional(),
   kind: z.enum(["standard", "simplified"]),
   documentType: z.enum(["invoice", "credit", "debit"]).optional().default("invoice"),
   issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

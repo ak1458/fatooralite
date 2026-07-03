@@ -1,11 +1,12 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultDb } from "@/lib/db/client";
+import { num } from "@/lib/db/decimal";
 import {
   createInvoice,
   attachSignature,
   getActiveCertificate,
   getLastInvoiceHash,
-  getNextIcv,
+  nextInvoiceCounter,
   addAuditEntry,
 } from "@/lib/db/repo";
 import {
@@ -48,11 +49,17 @@ export async function issueInvoice(
 
   const uuid = newUuid();
   const previousHash = (await getLastInvoiceHash(companyId, db)) ?? genesisHash();
-  const icv = await getNextIcv(companyId, db);
+  const icv = await nextInvoiceCounter(companyId, db);
+
+  // Server-assigned sequential number when the caller didn't provide one.
+  const invoiceNumber =
+    input.invoiceNumber?.trim() ||
+    `INV-${input.issueDate.slice(0, 4)}-${String(icv).padStart(5, "0")}`;
 
   // Enrich input with chain data
   const enrichedInput: InvoiceInput = {
     ...input,
+    invoiceNumber,
     previousHash,
     icv,
   };
@@ -101,16 +108,16 @@ export async function issueInvoice(
     status: "signed",
     signed: {
       uuid,
-      invoiceNumber: input.invoiceNumber,
+      invoiceNumber,
       xml,
       hash,
       signature,
       publicKeyPem: cert.publicKey,
       qr,
       totals: {
-        taxableAmount: draft.taxableAmount,
-        vatAmount: draft.vatAmount,
-        grandTotal: draft.grandTotal,
+        taxableAmount: num(draft.taxableAmount),
+        vatAmount: num(draft.vatAmount),
+        grandTotal: num(draft.grandTotal),
         allowanceTotalAmount: 0,
         chargeTotalAmount: 0,
         taxSubtotals: [],

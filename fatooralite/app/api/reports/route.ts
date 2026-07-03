@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
+import { num } from "@/lib/db/decimal";
 import { requirePermission } from "@/lib/auth/server";
 
 export const runtime = "nodejs";
@@ -60,8 +61,8 @@ export async function GET(req: Request) {
     orderBy: { createdAt: "asc" },
   });
 
-  const totalTaxable = invoices.reduce((sum, inv) => sum + inv.taxableAmount, 0);
-  const totalVat = invoices.reduce((sum, inv) => sum + inv.vatAmount, 0);
+  const totalTaxable = invoices.reduce((sum, inv) => sum + num(inv.taxableAmount), 0);
+  const totalVat = invoices.reduce((sum, inv) => sum + num(inv.vatAmount), 0);
 
   if (format === "csv") {
     const header = ["Invoice Number", "Issue Date", "Buyer", "Buyer VAT", "Taxable", "VAT", "Grand Total", "Status"];

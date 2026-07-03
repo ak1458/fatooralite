@@ -175,14 +175,30 @@ export async function getLastInvoiceHash(
   return last?.hash ?? null;
 }
 
-export async function getNextIcv(
+/**
+ * Atomically advance the per-company invoice counter and return the new value.
+ * Serves as both the ZATCA ICV (invoice counter value — must be unique and
+ * monotonic per EGS) and the basis for sequential invoice numbers. Unlike the
+ * old count()+1 approach, deleted invoices can never cause a value to repeat.
+ * Seeds itself from the existing invoice count on first use.
+ */
+export async function nextInvoiceCounter(
   companyId: string,
   db: PrismaClient = defaultDb,
 ): Promise<number> {
-  const count = await db.invoice.count({
-    where: { companyId },
+  return db.$transaction(async (tx) => {
+    const existing = await tx.invoiceCounter.findUnique({ where: { companyId } });
+    if (!existing) {
+      const count = await tx.invoice.count({ where: { companyId } });
+      await tx.invoiceCounter.create({ data: { companyId, next: count + 2 } });
+      return count + 1;
+    }
+    const updated = await tx.invoiceCounter.update({
+      where: { companyId },
+      data: { next: { increment: 1 } },
+    });
+    return updated.next - 1;
   });
-  return count + 1;
 }
 
 export async function addClearanceRecord(

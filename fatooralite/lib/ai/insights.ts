@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultDb } from "@/lib/db/client";
+import { num } from "@/lib/db/decimal";
 
 export type InsightTone = "warn" | "info" | "ac";
 
@@ -89,15 +90,15 @@ export async function computeInsights(
   const monthInv = invoices.filter(
     (i) => i.createdAt >= monthStart && REPORTED.has(i.status) && i.status !== "rejected",
   );
-  const monthVat = monthInv.reduce((s, i) => s + i.vatAmount, 0);
+  const monthVat = monthInv.reduce((s, i) => s + num(i.vatAmount), 0);
 
   // Amount anomaly: largest invoice vs the 30-day average.
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
   const recent = invoices.filter((i) => i.createdAt >= thirtyDaysAgo);
   const avg = recent.length
-    ? recent.reduce((s, i) => s + i.grandTotal, 0) / recent.length
+    ? recent.reduce((s, i) => s + num(i.grandTotal), 0) / recent.length
     : 0;
-  const maxAmt = recent.reduce((m, i) => Math.max(m, i.grandTotal), 0);
+  const maxAmt = recent.reduce((m, i) => Math.max(m, num(i.grandTotal)), 0);
   const anomalyMultiple = avg > 0 ? maxAmt / avg : null;
 
   const certDaysLeft = cert?.expiresAt
