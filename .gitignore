@@ -22,8 +22,6 @@ creds.md
 **/playwright-report/
 **/test-results/
 
-# internal artifacts — NOT deployed to GitHub
-/doc/
 
 # os / editor
 .DS_Store
