@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PRD · FatooraLite Docs</title>
+<style>
+:root{
+  --bg:#0b1210;--s1:#101a17;--s2:#16211d;--bd:#223129;--tx:#e8f0ec;--t2:#b7c6bf;
+  --t3:#7d8f86;--ac:#34d399;--acs:rgba(52,211,153,.12);--code:#0d1614;
+  --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{--bg:#f6f8f7;--s1:#ffffff;--s2:#eef2f0;--bd:#d9e2dd;--tx:#15211c;--t2:#3d4d46;
+  --t3:#6b7c74;--ac:#0d9668;--acs:rgba(13,150,104,.1);--code:#f0f4f2;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.65 var(--sans)}
+.layout{display:flex;min-height:100vh}
+nav{width:260px;flex:none;background:var(--s1);border-inline-end:1px solid var(--bd);
+  padding:22px 16px;position:sticky;top:0;height:100vh;overflow-y:auto}
+nav .brand{font-weight:800;font-size:16px;margin-bottom:4px}
+nav .brand span{color:var(--ac)}
+nav .sub{font-size:11.5px;color:var(--t3);margin-bottom:18px}
+nav .group{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--t3);margin:16px 8px 6px}
+nav a{display:block;padding:7px 10px;border-radius:8px;color:var(--t2);text-decoration:none;
+  font-size:13px;font-weight:500}
+nav a:hover{background:var(--s2);color:var(--tx)}
+nav a.active{background:var(--acs);color:var(--ac);font-weight:700}
+main{flex:1;min-width:0;padding:40px 48px 80px;max-width:960px}
+main h1{font-size:28px;line-height:1.25;margin:0 0 4px;letter-spacing:-.02em}
+main h2{font-size:20px;margin:34px 0 10px;padding-top:14px;border-top:1px solid var(--bd)}
+main h3{font-size:16px;margin:24px 0 8px}
+main a{color:var(--ac)}
+main p, main li{color:var(--t2)}
+main strong{color:var(--tx)}
+main code{font-family:var(--mono);font-size:12.5px;background:var(--code);
+  border:1px solid var(--bd);border-radius:5px;padding:1px 5px}
+main pre{background:var(--code);border:1px solid var(--bd);border-radius:10px;
+  padding:14px 16px;overflow-x:auto}
+main pre code{border:none;background:transparent;padding:0;font-size:12.5px;line-height:1.6}
+main table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+main th,main td{border:1px solid var(--bd);padding:8px 12px;text-align:left;vertical-align:top}
+main th{background:var(--s2);font-weight:700}
+main blockquote{margin:14px 0;padding:10px 16px;border-inline-start:3px solid var(--ac);
+  background:var(--acs);border-radius:0 10px 10px 0}
+main blockquote p{margin:4px 0}
+main hr{border:none;border-top:1px solid var(--bd);margin:28px 0}
+main input[type=checkbox]{accent-color:var(--ac)}
+.footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--bd);
+  font-size:12px;color:var(--t3)}
+@media(max-width:860px){.layout{flex-direction:column}nav{width:auto;height:auto;position:static}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
+<div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html" class="active">PRD</a><a href="02-architecture.html">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html">Deployment Guide</a><a href="10-ai-architecture.html">AI Architecture</a></nav>
+<main>
+<h1>FatooraLite — Product Requirements Document (PRD)</h1>
+<p><strong>Version:</strong> 1.0 (foundational) · <strong>Owner:</strong> Product · <strong>Status:</strong> For approval</p>
+<hr>
+<h2>1. Vision</h2>
+<p>FatooraLite is the simplest way for a Saudi SME to be <strong>ZATCA Phase 2 compliant</strong>. A
+business should be able to sign up, connect to ZATCA in minutes, and issue legally valid
+e-invoices forever after — with the cryptography, clearance, reporting, and audit trail
+handled for them. The long-term goal is a <strong>commercial multi-tenant SaaS</strong> product.</p>
+<h2>2. Goals &amp; Non-Goals</h2>
+<h3>Goals</h3>
+<ul>
+<li>G1. Self-serve <strong>company registration</strong> and guided <strong>ZATCA onboarding</strong> (no pre-seeded tenants).</li>
+<li>G2. <strong>Real, working</strong> invoicing: standard + simplified, credit/debit notes, all signed and submitted.</li>
+<li>G3. A <strong>Compliance Center</strong> that reflects true clearance/reporting state from live data.</li>
+<li>G4. <strong>Multi-tenant</strong> isolation with <strong>RBAC</strong>: users, roles, permissions, branches.</li>
+<li>G5. An <strong>AI Assistant</strong> that (a) answers ZATCA questions via real retrieval (RAG over a vector DB) and (b) performs real in-app actions via a safe action registry.</li>
+<li>G6. <strong>Production quality</strong>: no mock data, validated inputs, consistent loading/empty/error states, polished theming and animation, secure secrets.</li>
+</ul>
+<h3>Non-Goals (v1)</h3>
+<ul>
+<li>NG1. Full accounting / general ledger (we are invoicing + compliance, not an ERP).</li>
+<li>NG2. Payments / payment gateway integration.</li>
+<li>NG3. Native mobile apps (PWA only).</li>
+<li>NG4. Languages beyond Arabic + English.</li>
+<li>NG5. ZATCA phases beyond Phase 2 Integration.</li>
+</ul>
+<h2>3. Domain context (ZATCA Phase 2 &quot;Fatoora&quot;)</h2>
+<p>Authoritative rules the product must honor:</p>
+<ul>
+<li><strong>Invoice types</strong><ul>
+<li><em>Standard (B2B/B2G, type 0100000)</em> → must be <strong>cleared</strong> by ZATCA <strong>before</strong> sharing with the buyer. Requires full buyer identity (name, address, VAT number).</li>
+<li><em>Simplified (B2C, type 0200000)</em> → must be <strong>reported</strong> to ZATCA <strong>within 24 hours</strong> of issuance. Buyer details optional.</li>
+</ul>
+</li>
+<li><strong>Documents</strong>: invoice, credit note, debit note (notes reference the original invoice + reason).</li>
+<li><strong>VAT categories</strong>: S (standard 15%), Z (zero-rated), E (exempt, needs reason+code), O (out of scope).</li>
+<li><strong>Cryptography</strong>: ECDSA-SHA256 (secp256k1), XAdES-EPES enveloped signature, C14N exclusive canonicalization.</li>
+<li><strong>Hash chain (PIH)</strong>: each invoice carries the Previous Invoice Hash; the first uses a genesis base64 hash. <strong>ICV</strong> (Invoice Counter Value) increments sequentially.</li>
+<li><strong>QR</strong>: TLV (tag-length-value), base64; tags 1–5 (Phase 1) + 6–9 (Phase 2: hash, signature, public key, stamp).</li>
+<li><strong>Onboarding (CSID)</strong>: generate keypair + CSR → request <strong>Compliance CSID</strong> → run compliance checks (sample invoices) → request <strong>Production CSID</strong> → use it to clear/report.</li>
+<li><strong>Environments</strong>: ZATCA <strong>sandbox/simulation</strong> vs <strong>production</strong> gateways.</li>
+</ul>
+<blockquote>
+<p>The cryptographic engine for the above already exists in <code>lib/zatca/*</code> and is exercised by tests. The product work is the surrounding application, not re-inventing the crypto.</p>
+</blockquote>
+<h2>4. Personas &amp; permissions</h2>
+<table>
+<thead>
+<tr>
+<th>Persona</th>
+<th>Needs</th>
+<th>Default role</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Owner</td>
+<td>Everything; billing; manage the ZATCA connection</td>
+<td><code>owner</code></td>
+</tr>
+<tr>
+<td>Admin</td>
+<td>Manage users/roles/branches/settings</td>
+<td><code>admin</code></td>
+</tr>
+<tr>
+<td>Accountant</td>
+<td>Create/issue invoices, notes, customers, products; file reports</td>
+<td><code>accountant</code></td>
+</tr>
+<tr>
+<td>Auditor</td>
+<td>Read-only access to invoices, audit vault, compliance</td>
+<td><code>auditor</code></td>
+</tr>
+<tr>
+<td>Viewer</td>
+<td>Read-only dashboards</td>
+<td><code>viewer</code></td>
+</tr>
+</tbody></table>
+<p>RBAC is <strong>permission-based</strong> (roles map to permission sets). Admins can create <strong>custom roles</strong>
+by composing permissions. See §8.4.</p>
+<h2>5. Scope — modules (v1)</h2>
+<ol>
+<li><strong>Auth</strong> — login, sign up, logout, session, password reset (basic).</li>
+<li><strong>Onboarding wizard</strong> — company → ZATCA connection → branches → finish. <em>Primary first-run experience.</em></li>
+<li><strong>Dashboard</strong> — real KPIs, health, live feed, volume (the &quot;secondary&quot; screen, post-onboarding).</li>
+<li><strong>Invoices</strong> — list, create (standard/simplified), view, PDF, sign + submit.</li>
+<li><strong>Credit / Debit Notes</strong> — create against an existing invoice with reason.</li>
+<li><strong>Customers</strong> — CRUD, used as invoice buyers.</li>
+<li><strong>Products</strong> — CRUD, used as invoice line items (price, VAT category, unit).</li>
+<li><strong>ZATCA Integration</strong> — CSID lifecycle, environment, connection health (see Feature Docs §ZATCA Integration).</li>
+<li><strong>Compliance Center</strong> — real clearance/reporting monitor, rejections, deadlines, PIH integrity.</li>
+<li><strong>Audit Vault</strong> — immutable record of every artifact sent to/from ZATCA.</li>
+<li><strong>Analytics</strong> — real revenue/VAT/clearance metrics.</li>
+<li><strong>Reports</strong> — VAT return summary, exports (CSV), date-range reports.</li>
+<li><strong>AI Assistant</strong> — RAG chatbot + agentic actions + model selection.</li>
+<li><strong>Notifications</strong> — real, generated from compliance events; working bell + center.</li>
+<li><strong>Users &amp; Roles</strong> — user CRUD, role/permission management, designations.</li>
+<li><strong>Settings</strong> — company, branches, ZATCA, users, AI, appearance, billing, security.</li>
+</ol>
+<h2>6. Functional requirements (high level; details in 04-functional-spec)</h2>
+<ul>
+<li>FR1. A new visitor can <strong>register a company</strong> and become its owner. No tenant exists until someone creates it.</li>
+<li>FR2. First login with no completed onboarding routes to the <strong>Onboarding wizard</strong>, not the dashboard.</li>
+<li>FR3. Every list view (invoices, customers, products, notes, users, notifications) loads from the tenant&#39;s real data and shows <strong>loading → data | empty | error</strong> states. No infinite spinners. No hardcoded counts/badges.</li>
+<li>FR4. Creating an invoice/note runs the real <code>issueInvoice</code> pipeline (totals → XML → sign → store), then optionally submits to ZATCA per type.</li>
+<li>FR5. The <strong>branch/location selector</strong> actually switches the active branch and scopes data.</li>
+<li>FR6. The <strong>AI Assistant</strong> retrieves from a vector store of ZATCA regulations + tenant data and can execute registered actions; it streams responses and supports model selection.</li>
+<li>FR7. Notifications reflect real events; the <strong>bell opens a working panel</strong>; badge counts equal unread count.</li>
+<li>FR8. RBAC is enforced on every API route and reflected in the UI (hidden/disabled actions).</li>
+<li>FR9. Theme (dark/light) and language (en/ar, RTL) are consistent across <strong>every</strong> screen with no flash or mismatch.</li>
+</ul>
+<h2>7. Non-functional requirements</h2>
+<ul>
+<li>NFR1. <strong>Security</strong>: secrets never in git/live bundles; private keys encrypted at rest; tenant isolation on every query; auth enforced by default in production; CSRF + rate limiting (already in <code>proxy.ts</code>).</li>
+<li>NFR2. <strong>Performance</strong>: dashboard/list TTFB reasonable; AI first-token &lt; ~6s on free models; no N+1 on hot paths.</li>
+<li>NFR3. <strong>Reliability</strong>: graceful degradation when ZATCA/AI unavailable (queued/mock-safe, clearly labeled).</li>
+<li>NFR4. <strong>Accessibility</strong>: keyboard navigable, focus states, ARIA on interactive controls, RTL correctness.</li>
+<li>NFR5. <strong>Quality</strong>: unit + integration tests for services and routes; e2e for critical flows (signup → invoice → clearance).</li>
+<li>NFR6. <strong>Observability</strong>: audit log of all ZATCA interactions; error logging.</li>
+</ul>
+<h2>8. Key product decisions (locked unless you object)</h2>
+<ul>
+<li>8.1 <strong>Onboarding-first</strong>: the dashboard is secondary; new tenants must complete onboarding.</li>
+<li>8.2 <strong>No seed tenants in production</strong>. A dev-only seed may exist behind a flag for local testing.</li>
+<li>8.3 <strong>AI agency = structured-intent action registry</strong> (model-agnostic, safe) with optional native tool-calling later.</li>
+<li>8.4 <strong>RBAC = permissions + composable roles</strong>; ship 5 system roles + custom roles.</li>
+<li>8.5 <strong>Vector DB</strong>: default to <strong>Neon <code>pgvector</code></strong> (reuse existing Postgres, free, no new vendor); abstract behind an interface so Upstash Vector/Qdrant can swap in. Embeddings via a free provider (configurable).</li>
+<li>8.6 <strong>Multi-tenant model</strong>: <code>Company</code> = tenant; <code>Branch</code> = location; users belong to a company.</li>
+</ul>
+<h2>9. Success metrics</h2>
+<ul>
+<li>Activation: % of signups that complete onboarding (target ≥ 70%).</li>
+<li>Time-to-first-cleared-invoice (target &lt; 30 min from signup in sandbox).</li>
+<li>Compliance: % invoices cleared/reported without manual fix (target ≥ 98%).</li>
+<li>AI usefulness: % assistant sessions that resolve without escalation.</li>
+<li>Reliability: invoice submission success rate; zero secret leaks.</li>
+</ul>
+<h2>10. Monetization (direction, not v1 billing build)</h2>
+<p>Per-company subscription, tiered by monthly invoice volume, branches, and seats. Free
+sandbox tier for evaluation. Add-ons: API access, extended archival, premium support.
+(Billing implementation is post-v1; Settings reserves a Billing section.)</p>
+<h2>11. Resolved decisions (locked)</h2>
+<ul>
+<li>OQ1 → <strong>Embeddings: Google <code>text-embedding-004</code></strong> (free tier), stored in Neon <code>pgvector</code>.</li>
+<li>OQ2 → <strong>Animation: Framer Motion</strong> (premium polish is a stated priority; ~50KB acceptable).</li>
+<li>OQ3 → <strong>Sign-up: open public registration</strong> (anyone can create a company).</li>
+</ul>
+
+<div class="footer">FatooraLite documentation · built 2026-07-04 · source: docs/01-prd.md</div>
+</main>
+</div>
+</body>
+</html>

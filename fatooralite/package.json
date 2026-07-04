@@ -16,6 +16,7 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "docs:build": "node scripts/build-docs.mjs",
     "postinstall": "prisma generate"
   },
   "prisma": {
@@ -53,6 +54,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "jsdom": "^29.1.1",
+    "marked": "^18.0.5",
     "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",

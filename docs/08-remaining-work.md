@@ -1,5 +1,15 @@
 # FatooraLite — Remaining Work (Technical Plan)
 
+> **STATUS: COMPLETED (2026-07-03).** Everything below has been implemented and
+> committed on `feature/production-readiness`, including the production DB
+> hardening (Decimal money, pgvector, indexes, cascades, InvoiceCounter),
+> the provider-agnostic AI layer, tenant RAG ingestion, confirm-before-write
+> agent actions, custom DB roles, the invoice detail view, and real ZATCA
+> compliance checks. Kept for historical context; see
+> [09-deployment.md](./09-deployment.md) and
+> [10-ai-architecture.md](./10-ai-architecture.md) for the current state.
+> One deliberate deferral: agent-dock token streaming (rationale in 10-ai-architecture §3).
+
 **Audience:** the engineer continuing this build. **Status:** Phases 0–5 done and committed on
 `feature/production-readiness`. This document is the precise to-do for everything left:
 *what* is required, *why*, *how*, *which files/paths*, and *acceptance criteria*.

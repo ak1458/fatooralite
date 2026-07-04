@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Architecture · FatooraLite Docs</title>
+<style>
+:root{
+  --bg:#0b1210;--s1:#101a17;--s2:#16211d;--bd:#223129;--tx:#e8f0ec;--t2:#b7c6bf;
+  --t3:#7d8f86;--ac:#34d399;--acs:rgba(52,211,153,.12);--code:#0d1614;
+  --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{--bg:#f6f8f7;--s1:#ffffff;--s2:#eef2f0;--bd:#d9e2dd;--tx:#15211c;--t2:#3d4d46;
+  --t3:#6b7c74;--ac:#0d9668;--acs:rgba(13,150,104,.1);--code:#f0f4f2;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.65 var(--sans)}
+.layout{display:flex;min-height:100vh}
+nav{width:260px;flex:none;background:var(--s1);border-inline-end:1px solid var(--bd);
+  padding:22px 16px;position:sticky;top:0;height:100vh;overflow-y:auto}
+nav .brand{font-weight:800;font-size:16px;margin-bottom:4px}
+nav .brand span{color:var(--ac)}
+nav .sub{font-size:11.5px;color:var(--t3);margin-bottom:18px}
+nav .group{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--t3);margin:16px 8px 6px}
+nav a{display:block;padding:7px 10px;border-radius:8px;color:var(--t2);text-decoration:none;
+  font-size:13px;font-weight:500}
+nav a:hover{background:var(--s2);color:var(--tx)}
+nav a.active{background:var(--acs);color:var(--ac);font-weight:700}
+main{flex:1;min-width:0;padding:40px 48px 80px;max-width:960px}
+main h1{font-size:28px;line-height:1.25;margin:0 0 4px;letter-spacing:-.02em}
+main h2{font-size:20px;margin:34px 0 10px;padding-top:14px;border-top:1px solid var(--bd)}
+main h3{font-size:16px;margin:24px 0 8px}
+main a{color:var(--ac)}
+main p, main li{color:var(--t2)}
+main strong{color:var(--tx)}
+main code{font-family:var(--mono);font-size:12.5px;background:var(--code);
+  border:1px solid var(--bd);border-radius:5px;padding:1px 5px}
+main pre{background:var(--code);border:1px solid var(--bd);border-radius:10px;
+  padding:14px 16px;overflow-x:auto}
+main pre code{border:none;background:transparent;padding:0;font-size:12.5px;line-height:1.6}
+main table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+main th,main td{border:1px solid var(--bd);padding:8px 12px;text-align:left;vertical-align:top}
+main th{background:var(--s2);font-weight:700}
+main blockquote{margin:14px 0;padding:10px 16px;border-inline-start:3px solid var(--ac);
+  background:var(--acs);border-radius:0 10px 10px 0}
+main blockquote p{margin:4px 0}
+main hr{border:none;border-top:1px solid var(--bd);margin:28px 0}
+main input[type=checkbox]{accent-color:var(--ac)}
+.footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--bd);
+  font-size:12px;color:var(--t3)}
+@media(max-width:860px){.layout{flex-direction:column}nav{width:auto;height:auto;position:static}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
+<div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html" class="active">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html">Deployment Guide</a><a href="10-ai-architecture.html">AI Architecture</a></nav>
+<main>
+<h1>FatooraLite — Architecture</h1>
+<p><strong>Status:</strong> For approval · Pairs with <a href="01-prd.html">PRD</a></p>
+<hr>
+<h2>1. Stack (current + planned)</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Technology</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Framework</td>
+<td><strong>Next.js 16</strong> (App Router, Turbopack), React 19, TypeScript</td>
+<td>Middleware is <code>proxy.ts</code> (renamed in 16). Route handlers stream via web <code>ReadableStream</code> (every <code>pull</code> must enqueue-or-close).</td>
+</tr>
+<tr>
+<td>DB</td>
+<td><strong>Neon Postgres</strong> (free tier) + <strong>Prisma</strong></td>
+<td>Pooled URL for runtime, direct URL for migrations.</td>
+</tr>
+<tr>
+<td>Vector store</td>
+<td><strong>Neon <code>pgvector</code></strong> (default) behind a <code>VectorStore</code> interface</td>
+<td>Swappable: Upstash Vector / Qdrant. Reuses existing DB.</td>
+</tr>
+<tr>
+<td>Auth</td>
+<td>Custom sessions with <strong>jose</strong> (JWT), cookie <code>SESSION_COOKIE</code></td>
+<td>Add signup, RBAC, enforced mode.</td>
+</tr>
+<tr>
+<td>AI (generation)</td>
+<td><strong>OpenRouter</strong> (OpenAI-compatible), free models <code>openai/gpt-oss-120b:free</code> (+ <code>:20b</code> fallback)</td>
+<td><code>reasoning: effort low</code>; mock mode when no key.</td>
+</tr>
+<tr>
+<td>AI (embeddings)</td>
+<td>Free embedding provider (configurable), default Google <code>text-embedding-004</code></td>
+<td>Stored as <code>vector</code> in pgvector.</td>
+</tr>
+<tr>
+<td>ZATCA crypto</td>
+<td><code>lib/zatca/*</code> (node-forge, xmlbuilder2)</td>
+<td>Keypair, CSR, ECDSA-SHA256, XAdES, C14N, PIH, TLV QR — already real.</td>
+</tr>
+<tr>
+<td>PDF</td>
+<td><code>pdf-lib</code> + <code>qrcode</code></td>
+<td>Tax invoice with embedded QR + XML attachment.</td>
+</tr>
+<tr>
+<td>Styling</td>
+<td>Inline styles + CSS custom properties + <code>globals.css</code></td>
+<td>Theme via <code>data-theme</code>; RTL via <code>dir</code>. Animation layer to be standardized.</td>
+</tr>
+<tr>
+<td>Validation</td>
+<td><strong>zod</strong> (<code>lib/validation/schemas.ts</code>)</td>
+<td>Applied to every mutating route.</td>
+</tr>
+<tr>
+<td>Tests</td>
+<td>Vitest + Testing Library; Playwright (e2e)</td>
+<td>TDD for services/routes.</td>
+</tr>
+</tbody></table>
+<h2>2. High-level structure</h2>
+<pre><code>Browser (PWA)
+  └─ Next.js App Router
+       ├─ proxy.ts ............ rate limit, CSRF, auth gate (AUTH_ENFORCE)
+       ├─ app/(auth) .......... /login, /register
+       ├─ app/(onboarding) .... /onboarding wizard (first-run)
+       ├─ app/(app) ........... authenticated modules (dashboard, invoices, ...)
+       │     └─ &lt;AssistantDock/&gt; mounted in layout → AI on every page
+       └─ app/api/* ........... route handlers (REST-ish, JSON)
+             ├─ auth/*  companies/*  branches/*  users/*  roles/*
+             ├─ invoices/*  notes/*  customers/*  products/*
+             ├─ clearance/*  audit/*  analytics/*  reports/*  notifications/*
+             └─ ai/{chat,agent,insights,ingest}
+Services (lib/services/*) ...... issueInvoice, submitInvoice (clearance), onboarding
+Domain (lib/zatca/*) ........... crypto + XML + QR (pure, tested)
+Repo (lib/db/*) ................ Prisma access, tenant-scoped
+External ....................... ZATCA gateway, OpenRouter, embedding API
+</code></pre>
+<h2>3. Data model (target)</h2>
+<p>Existing: <code>Company, Branch, Certificate, Invoice, InvoiceLine, ClearanceRecord, AuditEntry, User, Customer, Product, Notification</code>.</p>
+<p><strong>Add / change:</strong></p>
+<ul>
+<li><code>Company.onboardingStatus</code> (<code>pending|in_progress|complete</code>) + <code>onboardingStep</code>.</li>
+<li><code>Branch</code> becomes the real &quot;location&quot; used by the active-branch selector (already exists; wire it).</li>
+<li><code>Role</code> (id, companyId, name, isSystem) + <code>RolePermission</code> (role → permission string); <code>User.roleId</code> (in addition to/replacing the free-text <code>role</code>). Keep <code>User.title</code> (designation).</li>
+<li><code>User.status</code> (<code>active|invited|disabled</code>), <code>User.invitedAt</code>.</li>
+<li><code>KnowledgeChunk</code> (id, scope <code>global|company</code>, companyId?, source, text, <code>embedding vector</code>) for RAG.</li>
+<li><code>Setting</code> (companyId, key, value json) for tenant settings, or typed columns on <code>Company</code>.</li>
+<li><code>Notification</code> already present; ensure a generator writes real events.</li>
+</ul>
+<p>All tenant tables carry <code>companyId</code>; <strong>every query is filtered by the caller&#39;s company</strong> (enforced in repo + route).</p>
+<h2>4. AI architecture</h2>
+<h3>4.1 Chatbot (RAG)</h3>
+<ol>
+<li><strong>Ingestion</strong>: ZATCA regulation text (curated) + tenant data summaries (invoices, rejections, customers) are chunked, embedded, and stored in <code>KnowledgeChunk</code> (scope <code>global</code> for regs, <code>company</code> for tenant data).</li>
+<li><strong>Query</strong>: user message → embed → <code>pgvector</code> similarity search (top-k, filtered by <code>scope in (global, this company)</code>) → build context → OpenRouter chat (streaming) grounded on retrieved chunks → cite sources.</li>
+<li><strong>Model selection</strong>: UI lets the user pick among configured free models; default gpt-oss-120b.</li>
+</ol>
+<h3>4.2 Agentic actions (structured-intent registry)</h3>
+<ul>
+<li>System prompt instructs the model to reply with prose <strong>or</strong> a JSON block <code>{ &quot;action&quot;: string, &quot;params&quot;: {...} }</code>.</li>
+<li><code>/api/ai/agent</code> parses the block, looks up the action in a <strong>server-side registry</strong>:<pre><code>ActionDef = { name, description, zodSchema, requiredPermission, handler }
+</code></pre>
+</li>
+<li>Server validates <code>params</code> with zod, checks RBAC, executes a <strong>real</strong> service/repo call, returns a structured result. Unknown/disallowed → safe refusal. No arbitrary code path.</li>
+<li>Client applies the result (navigate, refresh data, toast). Example: <code>&quot;make a 7-day report&quot;</code> →
+<code>{action:&quot;generateReport&quot;,params:{rangeDays:7}}</code> → handler aggregates → client routes to <code>/reports</code>.</li>
+<li>The same registry powers per-tab assistants (the dock passes the current route as context to bias suggested actions).</li>
+</ul>
+<h3>4.3 Why structured-intent (not raw tool-calling)</h3>
+<p>Free models&#39; native function-calling is unreliable; structured-intent works on any model,
+is trivially auditable, and keeps execution behind zod + RBAC. Native tool-calling can be
+layered in later without changing the registry.</p>
+<h2>5. Security</h2>
+<ul>
+<li>Secrets only in <code>.env</code> (gitignored) / platform env vars / local <code>archive/</code> (gitignored). Never committed, never shipped to the client bundle. ZATCA private keys encrypted at rest (<code>lib/crypto/encrypt.ts</code>).</li>
+<li><code>proxy.ts</code>: per-IP rate limit, CSRF origin check on mutations, auth redirect when <code>AUTH_ENFORCE=true</code> (default-on in production).</li>
+<li>Every API route: authenticate → authorize (permission) → tenant-scope. No <code>companyId</code> is trusted from the client without ownership check.</li>
+<li>Passwords hashed (<code>lib/auth/password.ts</code>). Sessions are signed JWTs with expiry.</li>
+</ul>
+<h2>6. Theming &amp; animation (to standardize)</h2>
+<ul>
+<li><strong>Theme</strong>: single source via <code>data-theme</code> on <code>&lt;html&gt;</code>; all colors from CSS vars in <code>globals.css</code>; <code>ThemeProvider</code> toggles + persists; anti-flash inline script already present. Fix: audit every component for hardcoded colors; ensure light mode parity; <code>&lt;body&gt;</code> needs <code>suppressHydrationWarning</code> (browser extensions inject attributes).</li>
+<li><strong>Animation</strong>: <strong>Framer Motion</strong> (decision locked) layered on shared motion tokens (durations, easing) in CSS vars. Reusable transitions for page/route, list enter, modal/slide-over, toast. Respect <code>prefers-reduced-motion</code>.</li>
+</ul>
+<h2>7. Deployment</h2>
+<ul>
+<li>Target: Vercel (or Node host) + Neon. Env vars set on the platform (never the <code>archive/</code> files).</li>
+<li><code>AUTH_ENFORCE=true</code>, real <code>ZATCA_MODE</code>, <code>OPENROUTER_API_KEY</code>, embedding key, <code>DATABASE_URL/DIRECT_URL</code>.</li>
+<li>Migrations via <code>prisma migrate deploy</code> against <code>DIRECT_URL</code>. pgvector extension enabled on Neon.</li>
+<li>No seed in production; optional dev seed behind <code>SEED_DEMO=true</code>.</li>
+</ul>
+<h2>8. Module boundaries (for testability)</h2>
+<p>Each module = page(s) + API route(s) + a service/repo function with one clear job. UI never
+talks to Prisma directly; it calls API routes; routes call services/repo; services call the
+domain (<code>lib/zatca</code>). This keeps units small and independently testable.</p>
+
+<div class="footer">FatooraLite documentation · built 2026-07-04 · source: docs/02-architecture.md</div>
+</main>
+</div>
+</body>
+</html>

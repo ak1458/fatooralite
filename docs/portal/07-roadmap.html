@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Roadmap · FatooraLite Docs</title>
+<style>
+:root{
+  --bg:#0b1210;--s1:#101a17;--s2:#16211d;--bd:#223129;--tx:#e8f0ec;--t2:#b7c6bf;
+  --t3:#7d8f86;--ac:#34d399;--acs:rgba(52,211,153,.12);--code:#0d1614;
+  --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{--bg:#f6f8f7;--s1:#ffffff;--s2:#eef2f0;--bd:#d9e2dd;--tx:#15211c;--t2:#3d4d46;
+  --t3:#6b7c74;--ac:#0d9668;--acs:rgba(13,150,104,.1);--code:#f0f4f2;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.65 var(--sans)}
+.layout{display:flex;min-height:100vh}
+nav{width:260px;flex:none;background:var(--s1);border-inline-end:1px solid var(--bd);
+  padding:22px 16px;position:sticky;top:0;height:100vh;overflow-y:auto}
+nav .brand{font-weight:800;font-size:16px;margin-bottom:4px}
+nav .brand span{color:var(--ac)}
+nav .sub{font-size:11.5px;color:var(--t3);margin-bottom:18px}
+nav .group{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--t3);margin:16px 8px 6px}
+nav a{display:block;padding:7px 10px;border-radius:8px;color:var(--t2);text-decoration:none;
+  font-size:13px;font-weight:500}
+nav a:hover{background:var(--s2);color:var(--tx)}
+nav a.active{background:var(--acs);color:var(--ac);font-weight:700}
+main{flex:1;min-width:0;padding:40px 48px 80px;max-width:960px}
+main h1{font-size:28px;line-height:1.25;margin:0 0 4px;letter-spacing:-.02em}
+main h2{font-size:20px;margin:34px 0 10px;padding-top:14px;border-top:1px solid var(--bd)}
+main h3{font-size:16px;margin:24px 0 8px}
+main a{color:var(--ac)}
+main p, main li{color:var(--t2)}
+main strong{color:var(--tx)}
+main code{font-family:var(--mono);font-size:12.5px;background:var(--code);
+  border:1px solid var(--bd);border-radius:5px;padding:1px 5px}
+main pre{background:var(--code);border:1px solid var(--bd);border-radius:10px;
+  padding:14px 16px;overflow-x:auto}
+main pre code{border:none;background:transparent;padding:0;font-size:12.5px;line-height:1.6}
+main table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+main th,main td{border:1px solid var(--bd);padding:8px 12px;text-align:left;vertical-align:top}
+main th{background:var(--s2);font-weight:700}
+main blockquote{margin:14px 0;padding:10px 16px;border-inline-start:3px solid var(--ac);
+  background:var(--acs);border-radius:0 10px 10px 0}
+main blockquote p{margin:4px 0}
+main hr{border:none;border-top:1px solid var(--bd);margin:28px 0}
+main input[type=checkbox]{accent-color:var(--ac)}
+.footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--bd);
+  font-size:12px;color:var(--t3)}
+@media(max-width:860px){.layout{flex-direction:column}nav{width:auto;height:auto;position:static}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
+<div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html" class="active">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html">Deployment Guide</a><a href="10-ai-architecture.html">AI Architecture</a></nav>
+<main>
+<h1>FatooraLite — Implementation Roadmap</h1>
+<p>Phased plan to take the product from &quot;mock UI on a real engine&quot; to production-ready. Each
+phase: built with TDD where it has logic, ends with working software + tests + a checkpoint.
+Order is dependency-driven. Hydration fix + obvious quick wins fold into Phase 0.</p>
+<hr>
+<h2>Phase 0 — Foundations &amp; truth (no more mock defaults)</h2>
+<p><strong>Goal:</strong> stop lying to the user; make the shell honest.</p>
+<ul>
+<li>Add <code>suppressHydrationWarning</code> to <code>&lt;body&gt;</code>.</li>
+<li>Remove hardcoded nav badges (&quot;12&quot;, &quot;4&quot;); compute or drop.</li>
+<li>Remove production seed (gate behind <code>SEED_DEMO=true</code>); ensure empty tenants render empty states.</li>
+<li>Standardize list states: a shared <code>&lt;AsyncList&gt;</code> pattern (loading skeleton + timeout + empty + error + retry). No infinite spinners.</li>
+<li>Fix <code>/api/dashboard</code> response shape ↔ dashboard page.
+<strong>Done when:</strong> a fresh empty tenant shows real zeros/empty states everywhere; no hardcoded counts.</li>
+</ul>
+<h2>Phase 1 — Auth &amp; onboarding (the real entry point)</h2>
+<p><strong>Goal:</strong> self-serve tenant creation, ZATCA onboarding-first.</p>
+<ul>
+<li><code>/register</code> page + <code>POST /api/auth/register</code> (company + owner).</li>
+<li>Professional <code>/login</code> + <code>/register</code> UI (polished, bilingual).</li>
+<li>Onboarding wizard <code>/onboarding</code> (company → ZATCA CSID → branches → finish) + guard + resume.</li>
+<li>Active-branch context + working topbar dropdown; profile menu (profile/settings/logout).</li>
+<li>Enforce auth by default (<code>AUTH_ENFORCE</code>), redirect rules.
+<strong>Done when:</strong> a new visitor registers, onboards, lands on a real dashboard for <em>their</em> company.</li>
+</ul>
+<h2>Phase 2 — Core operations real (invoicing end-to-end)</h2>
+<p><strong>Goal:</strong> the money-making path works for real.</p>
+<ul>
+<li>Invoices list (fix loading; real counts/tabs/search) + create + issue (sign + clear/report) + PDF.</li>
+<li>Credit/Debit notes create flow (<code>POST /api/notes</code>) wired and functional.</li>
+<li>Customers CRUD + Products CRUD (fix infinite loading; empty/error states); wired into invoice pickers.
+<strong>Done when:</strong> create customer → product → standard invoice → clear → PDF, and a credit note against it, all persisted.</li>
+</ul>
+<h2>Phase 3 — Compliance &amp; integration real</h2>
+<p><strong>Goal:</strong> trustworthy compliance surfaces.</p>
+<ul>
+<li><code>/api/clearance</code> + wire Compliance Center to real aggregates + deadline tracker + PIH integrity.</li>
+<li>ZATCA Integration page: real CSID lifecycle, environment switch, sandbox compliance test; explained controls.</li>
+<li>Audit Vault wired to real artifacts; Analytics dummies removed; Reports date-range + AI target.
+<strong>Done when:</strong> compliance numbers equal DB reality; integration reflects real certificates; audit retrievable.</li>
+</ul>
+<h2>Phase 4 — AI stack (RAG + agentic + everywhere)</h2>
+<p><strong>Goal:</strong> a real AI product, not a box.</p>
+<ul>
+<li>Vector store (<code>pgvector</code>) + <code>VectorStore</code> interface; ingestion <code>POST /api/ai/ingest</code> (ZATCA regs + tenant data); embeddings provider.</li>
+<li><code>POST /api/ai/chat</code> = retrieve → grounded streamed answer + citations; model selector <code>GET /api/ai/models</code>.</li>
+<li><code>POST /api/ai/agent</code> = structured-intent action registry (zod + RBAC), starting actions: createInvoice, generateReport, addCustomer, addProduct, inviteUser, submitClearance.</li>
+<li><code>AssistantDock</code> mounted globally (every tab), route-aware.
+<strong>Done when:</strong> assistant answers with citations, switches models, and &quot;make a 7-day report&quot; runs and navigates; available on all pages.</li>
+</ul>
+<h2>Phase 5 — Admin: users, roles, settings, notifications</h2>
+<p><strong>Goal:</strong> run a real organization.</p>
+<ul>
+<li>Users &amp; Roles module: user CRUD/invite, 5 system roles + custom roles from permissions; gate API + UI.</li>
+<li>Notifications: event generator + working bell panel + real badge.</li>
+<li>Settings: full sectioned admin (Company, ZATCA, Users, AI, Appearance, Notifications, Security, Billing-placeholder).
+<strong>Done when:</strong> admin can invite a user, define a custom role, and configure the app; bell works; badges real.</li>
+</ul>
+<h2>Phase 6 — Polish &amp; production hardening</h2>
+<p><strong>Goal:</strong> premium, secure, shippable.</p>
+<ul>
+<li>Theme audit (dark/light parity, no hardcoded colors); motion tokens + smooth transitions everywhere.</li>
+<li>zod on every mutating route; consistent error/empty/loading; accessibility/RTL pass.</li>
+<li>Security: enforce auth, encrypted keys verified, tenant-isolation audit, env validation at boot.</li>
+<li>Performance pass; remove dead <code>@/data</code> mock modules no longer used.
+<strong>Done when:</strong> no mock data anywhere; consistent theme + animation; security review clean.</li>
+</ul>
+<h2>Phase 7 — Test &amp; verify (TDD throughout + sweep)</h2>
+<p><strong>Goal:</strong> confidence to sell.</p>
+<ul>
+<li>Unit/integration tests accompany each phase (TDD). Final sweep with <code>/gsd-add-tests</code>.</li>
+<li>e2e (Playwright) for critical flows: register → onboard → invoice → clear → report → AI action.
+<strong>Done when:</strong> green suite covering services, routes, RBAC, and the critical user journeys.</li>
+</ul>
+<hr>
+<h2>Sequencing notes</h2>
+<ul>
+<li>Phases are ordered by dependency; within a phase, modules can parallelize.</li>
+<li>Each phase gets its own brainstorm→spec→plan only if it introduces new ambiguity; otherwise it executes against this roadmap + the functional spec.</li>
+<li>Checkpoint with you at the end of each phase before moving on.</li>
+</ul>
+<h2>Decisions (locked — PRD §11)</h2>
+<ul>
+<li>Embeddings: Google <code>text-embedding-004</code> (free). Animation: Framer Motion. Signup: open public.</li>
+</ul>
+
+<div class="footer">FatooraLite documentation · built 2026-07-04 · source: docs/07-roadmap.md</div>
+</main>
+</div>
+</body>
+</html>
