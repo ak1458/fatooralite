@@ -23,7 +23,7 @@ export async function GET(req: Request) {
 
   // No session: only expose companies when auth enforcement is off (local demo).
   if (process.env.AUTH_ENFORCE === "true") {
-    return NextResponse.json({ companies: [] });
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
   const companies = await prisma.company.findMany({
     select: { id: true, name: true, nameAr: true, vatNumber: true },
