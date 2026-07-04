@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAnalyticsData } from "@/lib/db/queries";
+import { requirePermission } from "@/lib/auth/server";
 
 export const runtime = "nodejs";
 
@@ -10,6 +11,9 @@ export async function GET(req: Request) {
   if (!companyId) {
     return NextResponse.json({ error: "companyId is required" }, { status: 400 });
   }
+
+  const { deny } = await requirePermission(req, "audit:view", companyId);
+  if (deny) return deny;
 
   try {
     const data = await getAnalyticsData(companyId);

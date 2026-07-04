@@ -53,6 +53,23 @@ export function validateEnv(): Env {
     );
   }
 
+  // Production must not run with the demo-friendly defaults. These are
+  // runtime requirements — `next build` also runs with NODE_ENV=production
+  // while collecting page data, and a build machine may legitimately lack
+  // runtime secrets, so skip during the build phase.
+  if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build") {
+    if (!result.data.ENCRYPTION_KEY) {
+      throw new Error(
+        "⛔  ENCRYPTION_KEY is required in production (ZATCA private keys must be encrypted at rest).",
+      );
+    }
+    if (result.data.AUTH_ENFORCE !== "true") {
+      throw new Error(
+        "⛔  AUTH_ENFORCE=true is required in production (login + RBAC enforcement).",
+      );
+    }
+  }
+
   _validated = true;
   return result.data;
 }

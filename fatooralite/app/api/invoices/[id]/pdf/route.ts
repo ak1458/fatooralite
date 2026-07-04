@@ -13,8 +13,13 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   const invoice = await getInvoice(params.id);
   if (!invoice) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Tenant isolation
-  if (user?.companyId && user.companyId !== invoice.companyId) {
+  // Tenant isolation: with auth enforced, the caller must belong to the
+  // invoice's company (a session without a company gets nothing).
+  if (process.env.AUTH_ENFORCE === "true") {
+    if (!user?.companyId || user.companyId !== invoice.companyId) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+  } else if (user?.companyId && user.companyId !== invoice.companyId) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 
