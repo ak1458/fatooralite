@@ -1,8 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { LangProvider } from "@/lib/i18n/LangProvider";
 import { InvoiceTable } from "./InvoiceTable";
 import type { Invoice } from "@/types";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 // Local fixtures — the component is presentational; real rows come from /api/invoices.
 const rows: Invoice[] = [

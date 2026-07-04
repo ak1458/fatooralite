@@ -41,16 +41,33 @@ export async function inviteUser(args: InviteUserArgs, db: PrismaClient = defaul
 
 export interface UpdateUserArgs {
   role?: string;
+  /** Custom DB role id; null clears it (back to the system role only). */
+  roleId?: string | null;
   title?: string | null;
   status?: "active" | "invited" | "disabled";
 }
 
 export async function updateUser(id: string, args: UpdateUserArgs, db: PrismaClient = defaultDb) {
   if (args.role && !isRole(args.role)) throw new UserError(`Unknown role: ${args.role}`);
+
+  // Assigning a custom role: it must exist in the same company as the user.
+  if (args.roleId) {
+    const [target, role] = await Promise.all([
+      db.user.findUnique({ where: { id }, select: { companyId: true } }),
+      db.role.findUnique({ where: { id: args.roleId }, select: { companyId: true } }),
+    ]);
+    if (!role || !target || role.companyId !== target.companyId) {
+      throw new UserError("Unknown role for this company");
+    }
+  }
+
   return db.user.update({
     where: { id },
     data: {
-      ...(args.role ? { role: args.role } : {}),
+      // Choosing a system role clears any custom role, and vice versa the
+      // custom role keeps the existing system slug as its permission base.
+      ...(args.role ? { role: args.role, roleId: null } : {}),
+      ...(args.roleId !== undefined && !args.role ? { roleId: args.roleId } : {}),
       ...(args.title !== undefined ? { title: args.title } : {}),
       ...(args.status ? { status: args.status } : {}),
     },

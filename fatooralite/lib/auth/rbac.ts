@@ -53,3 +53,25 @@ export function can(role: string, permission: Permission): boolean {
 export function roleMatrix(): { role: Role; permissions: Permission[] }[] {
   return ROLES.map((role) => ({ role, permissions: MATRIX[role] }));
 }
+
+/** All permissions of a system role ([] for unknown/custom slugs). */
+export function MATRIX_LOOKUP(role: string): Permission[] {
+  return isRole(role) ? MATRIX[role] : [];
+}
+
+/** Every permission the platform defines (custom-role builder options). */
+export const ALL_PERMISSIONS: Permission[] = [
+  "invoice:create",
+  "invoice:edit",
+  "invoice:delete",
+  "invoice:clear",
+  "invoice:export",
+  "invoice:approve",
+  "audit:view",
+  "settings:manage",
+  "users:manage",
+];
+
+export function isPermission(value: string): value is Permission {
+  return (ALL_PERMISSIONS as string[]).includes(value);
+}

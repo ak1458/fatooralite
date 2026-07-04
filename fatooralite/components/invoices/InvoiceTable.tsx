@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { sar, vatOf } from "@/lib/format";
 import { statusMeta } from "@/lib/status";
@@ -15,6 +16,7 @@ const COLS = {
 
 export function InvoiceTable({ rows }: { rows: Invoice[] }) {
   const { lang, t } = useLang();
+  const router = useRouter();
   return (
     <div
       style={{
@@ -59,6 +61,7 @@ export function InvoiceTable({ rows }: { rows: Invoice[] }) {
         return (
           <div
             key={r.num}
+            onClick={() => r.id && router.push(`/invoices/${r.id}`)}
             style={{
               display: "grid",
               gridTemplateColumns: GRID,
@@ -66,7 +69,7 @@ export function InvoiceTable({ rows }: { rows: Invoice[] }) {
               padding: "14px 20px",
               borderBottom: "1px solid var(--bd)",
               alignItems: "center",
-              cursor: "pointer",
+              cursor: r.id ? "pointer" : "default",
             }}
           >
             <div

@@ -18,9 +18,15 @@ export async function GET(req: Request) {
   const users = await prisma.user.findMany({
     where: { companyId },
     orderBy: { createdAt: "asc" },
-    select: { id: true, name: true, email: true, role: true, title: true, status: true, createdAt: true },
+    select: {
+      id: true, name: true, email: true, role: true, roleId: true,
+      customRole: { select: { name: true } },
+      title: true, status: true, createdAt: true,
+    },
   });
-  return NextResponse.json({ users });
+  return NextResponse.json({
+    users: users.map((u) => ({ ...u, customRoleName: u.customRole?.name ?? null, customRole: undefined })),
+  });
 }
 
 /** POST /api/users — invite/create a team member. */

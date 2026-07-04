@@ -23,6 +23,7 @@ export const inviteUserSchema = z.object({
 
 export const updateUserSchema = z.object({
   role: z.string().min(1).optional(),
+  roleId: z.string().min(1).nullable().optional(),
   title: z.string().max(100).nullable().optional(),
   status: z.enum(["active", "invited", "disabled"]).optional(),
 });

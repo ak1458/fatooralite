@@ -4,6 +4,7 @@ import { SESSION_COOKIE, verifySessionToken } from "./session";
 import type { SessionPayload } from "./session";
 import { can } from "./rbac";
 import type { Permission } from "./rbac";
+import { prisma } from "@/lib/db/client";
 
 /** Read the current session in a Server Component / Route Handler (cookie store). */
 export async function getCurrentUser(): Promise<SessionPayload | null> {
@@ -19,6 +20,42 @@ export async function getUserFromRequest(req: Request): Promise<SessionPayload |
   const match = header.match(new RegExp(`(?:^|; )${SESSION_COOKIE}=([^;]+)`));
   if (!match) return null;
   return verifySessionToken(decodeURIComponent(match[1]));
+}
+
+/**
+ * Whether the user holds a permission — via their system role (code matrix)
+ * or, failing that, a DB-backed custom role (User.roleId -> RolePermission).
+ */
+export async function hasPermission(user: SessionPayload, permission: Permission): Promise<boolean> {
+  if (can(user.role, permission)) return true;
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.userId },
+    select: { roleId: true },
+  });
+  if (!dbUser?.roleId) return false;
+  const grant = await prisma.rolePermission.findUnique({
+    where: { roleId_permission: { roleId: dbUser.roleId, permission } },
+  });
+  return !!grant;
+}
+
+/** All permissions a user effectively holds (system matrix + custom role). */
+export async function effectivePermissions(user: SessionPayload): Promise<Set<string>> {
+  const perms = new Set<string>();
+  const { MATRIX_LOOKUP } = await import("./rbac");
+  for (const p of MATRIX_LOOKUP(user.role)) perms.add(p);
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.userId },
+    select: { roleId: true },
+  });
+  if (dbUser?.roleId) {
+    const grants = await prisma.rolePermission.findMany({
+      where: { roleId: dbUser.roleId },
+      select: { permission: true },
+    });
+    for (const g of grants) perms.add(g.permission);
+  }
+  return perms;
 }
 
 /**
@@ -38,7 +75,7 @@ export async function requirePermission(
   if (!user) {
     return { user: null, deny: NextResponse.json({ error: "Authentication required" }, { status: 401 }) };
   }
-  if (!can(user.role, permission)) {
+  if (!(await hasPermission(user, permission))) {
     return { user, deny: NextResponse.json({ error: "Insufficient permissions" }, { status: 403 }) };
   }
   if (targetCompanyId && user.companyId && user.companyId !== targetCompanyId) {

@@ -3,7 +3,7 @@ import { chatWithTools, isConfigured, type ChatMessage } from "@/lib/ai/provider
 import { toolSchemas, executeTool, confirmSummary } from "@/lib/ai/tools";
 import { retrieve } from "@/lib/ai/vector-store";
 import { ZATCA_SYSTEM_PROMPT } from "@/lib/ai/zatca-prompt";
-import { requirePermission, getUserFromRequest } from "@/lib/auth/server";
+import { requirePermission, getUserFromRequest, effectivePermissions } from "@/lib/auth/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -44,6 +44,9 @@ export async function POST(req: Request) {
   const companyId = body.companyId ?? user?.companyId;
   if (!companyId) return NextResponse.json({ message: "No active company.", navigate: null });
 
+  // Effective permission set (system role + custom DB role) for tool RBAC.
+  const permissions = user ? await effectivePermissions(user) : undefined;
+
   // Confirmed action: execute directly (zod + RBAC still enforced inside).
   if (body.confirmedAction) {
     const { name, arguments: argsJson } = body.confirmedAction;
@@ -53,6 +56,7 @@ export async function POST(req: Request) {
     const outcome = await executeTool(name, argsJson, {
       companyId,
       userRole: user?.role ?? "employee",
+      permissions,
     });
     return NextResponse.json({ message: outcome.content, navigate: outcome.navigate ?? null });
   }
@@ -97,7 +101,7 @@ export async function POST(req: Request) {
       grounding,
   };
 
-  const ctx = { companyId, userRole: user?.role ?? "owner" };
+  const ctx = { companyId, userRole: user?.role ?? "owner", permissions };
   const messages: ChatMessage[] = [system, ...history];
   let navigate: string | null = null;
 

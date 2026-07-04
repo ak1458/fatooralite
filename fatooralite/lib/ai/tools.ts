@@ -11,6 +11,8 @@ import type { InvoiceInput } from "@/lib/zatca/types";
 export interface ToolContext {
   companyId: string;
   userRole: string;
+  /** Effective permissions (system role + custom DB role), when precomputed. */
+  permissions?: Set<string>;
 }
 
 export interface ToolOutcome {
@@ -295,7 +297,10 @@ export function toolSchemas() {
 export async function executeTool(name: string, argsJson: string, ctx: ToolContext): Promise<ToolOutcome> {
   const def = TOOLS[name];
   if (!def) return { content: `Unknown tool: ${name}.` };
-  if (!can(ctx.userRole, def.permission)) return { content: "You don't have permission to do that." };
+  const allowed = ctx.permissions
+    ? ctx.permissions.has(def.permission)
+    : can(ctx.userRole, def.permission);
+  if (!allowed) return { content: "You don't have permission to do that." };
 
   let parsedArgs: unknown;
   try {

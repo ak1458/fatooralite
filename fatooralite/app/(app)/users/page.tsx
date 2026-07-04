@@ -7,8 +7,14 @@ import { NoCompanyState } from "@/components/common/NoCompanyState";
 import { Modal, modalInput, modalLabel, modalPrimary } from "@/components/common/Modal";
 import { Icon } from "@/components/ui/Icon";
 
-interface TeamUser { id: string; name: string; email: string; role: string; title: string | null; status: string }
+interface TeamUser {
+  id: string; name: string; email: string; role: string;
+  roleId: string | null; customRoleName: string | null;
+  title: string | null; status: string;
+}
 interface RoleRow { role: string; permissions: string[] }
+interface CustomRole { id: string; name: string; description: string | null; permissions: string[]; userCount: number }
+interface RolesResponse { roles: RoleRow[]; customRoles: CustomRole[]; allPermissions: string[] }
 const ROLES = ["owner", "manager", "accountant", "auditor", "employee"];
 
 const STATUS_TONE: Record<string, string> = { active: "var(--ac)", invited: "var(--warn,#f59e0b)", disabled: "var(--t3)" };
@@ -17,6 +23,7 @@ export default function UsersPage() {
   const { company, isLoading: companyLoading } = useCompany();
   const [tab, setTab] = useState<"users" | "roles">("users");
   const [open, setOpen] = useState(false);
+  const [roleModal, setRoleModal] = useState<CustomRole | "new" | null>(null);
 
   const usersQ = useAsyncData<TeamUser[]>(
     async (signal) => {
@@ -29,15 +36,17 @@ export default function UsersPage() {
     { enabled: !!company?.id && tab === "users" },
   );
 
-  const rolesQ = useAsyncData<RoleRow[]>(
+  const rolesQ = useAsyncData<RolesResponse>(
     async (signal) => {
       const r = await fetch(`/api/roles`, { signal });
       if (!r.ok) throw new Error(`Failed to load roles (${r.status})`);
-      return (await r.json()).roles ?? [];
+      const data = await r.json();
+      return { roles: data.roles ?? [], customRoles: data.customRoles ?? [], allPermissions: data.allPermissions ?? [] };
     },
     [tab],
-    { enabled: tab === "roles" },
+    { enabled: tab === "roles" || tab === "users" },
   );
+  const customRoles = rolesQ.state.status === "success" ? rolesQ.state.data.customRoles : [];
 
   async function patchUser(id: string, data: Record<string, unknown>) {
     await fetch(`/api/users/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
@@ -47,6 +56,10 @@ export default function UsersPage() {
     await fetch(`/api/users/${id}`, { method: "DELETE" });
     usersQ.retry();
   }
+  async function deleteRole(id: string) {
+    await fetch(`/api/roles/${id}`, { method: "DELETE" });
+    rolesQ.retry();
+  }
 
   if (!company?.id && !companyLoading) return <NoCompanyState />;
 
@@ -54,10 +67,15 @@ export default function UsersPage() {
     <div style={{ maxWidth: 1480, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Users &amp; Roles</h1>
-        {tab === "users" && (
+        {tab === "users" ? (
           <button onClick={() => setOpen(true)} disabled={!company?.id}
             style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 11, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
             <Icon name="plus" size={15} sw={2.4} /> Invite user
+          </button>
+        ) : (
+          <button onClick={() => setRoleModal("new")}
+            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 11, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            <Icon name="plus" size={15} sw={2.4} /> New role
           </button>
         )}
       </div>
@@ -74,6 +92,17 @@ export default function UsersPage() {
 
       <Modal open={open} onClose={() => setOpen(false)} title="Invite a team member">
         <InviteForm companyId={company?.id ?? ""} onDone={() => { setOpen(false); usersQ.retry(); }} />
+      </Modal>
+
+      <Modal open={roleModal !== null} onClose={() => setRoleModal(null)}
+        title={roleModal === "new" ? "Create a custom role" : "Edit role"}>
+        {roleModal !== null && (
+          <RoleForm
+            role={roleModal === "new" ? null : roleModal}
+            allPermissions={rolesQ.state.status === "success" ? rolesQ.state.data.allPermissions : []}
+            onDone={() => { setRoleModal(null); rolesQ.retry(); }}
+          />
+        )}
       </Modal>
 
       {tab === "users" ? (
@@ -99,9 +128,22 @@ export default function UsersPage() {
                       </td>
                       <td style={{ padding: "14px 18px", color: "var(--t2)" }}>{u.title || "—"}</td>
                       <td style={{ padding: "14px 18px" }}>
-                        <select value={u.role} onChange={(e) => patchUser(u.id, { role: e.target.value })}
+                        <select
+                          value={u.roleId ? `custom:${u.roleId}` : u.role}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v.startsWith("custom:")) patchUser(u.id, { roleId: v.slice(7) });
+                            else patchUser(u.id, { role: v });
+                          }}
                           style={{ ...modalInput, padding: "6px 8px", width: "auto", textTransform: "capitalize" }}>
-                          {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                          <optgroup label="System roles">
+                            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                          </optgroup>
+                          {customRoles.length > 0 && (
+                            <optgroup label="Custom roles">
+                              {customRoles.map((r) => <option key={r.id} value={`custom:${r.id}`}>{r.name}</option>)}
+                            </optgroup>
+                          )}
                         </select>
                       </td>
                       <td style={{ padding: "14px 18px" }}>
@@ -121,20 +163,48 @@ export default function UsersPage() {
         </AsyncBoundary>
       ) : (
         <AsyncBoundary state={rolesQ.state} onRetry={rolesQ.retry}>
-          {(roles) => (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 14 }}>
-              {roles.map((r) => (
-                <div key={r.role} style={{ padding: 18, borderRadius: 14, background: "var(--s1)", border: "1px solid var(--bd)" }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, textTransform: "capitalize", marginBottom: 10 }}>{r.role}</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {r.permissions.length === 0 ? <span style={{ color: "var(--t3)", fontSize: 12 }}>No permissions</span> :
-                      r.permissions.map((p) => (
-                        <span key={p} style={{ fontSize: 11, fontFamily: "var(--fmono)", padding: "3px 8px", borderRadius: 6, background: "var(--s2)", color: "var(--t2)" }}>{p}</span>
-                      ))}
+          {(data) => (
+            <>
+              {data.customRoles.length > 0 && (
+                <>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".05em", margin: "4px 0 12px" }}>Custom roles</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 14, marginBottom: 24 }}>
+                    {data.customRoles.map((r) => (
+                      <div key={r.id} style={{ padding: 18, borderRadius: 14, background: "var(--s1)", border: "1px solid var(--ac)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>{r.name}</div>
+                          <span style={{ fontSize: 11.5, color: "var(--t3)" }}>{r.userCount} user{r.userCount === 1 ? "" : "s"}</span>
+                        </div>
+                        {r.description && <div style={{ fontSize: 12, color: "var(--t3)", marginBottom: 10 }}>{r.description}</div>}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                          {r.permissions.map((p) => (
+                            <span key={p} style={{ fontSize: 11, fontFamily: "var(--fmono)", padding: "3px 8px", borderRadius: 6, background: "var(--acs)", color: "var(--ac)" }}>{p}</span>
+                          ))}
+                        </div>
+                        <div>
+                          <button onClick={() => setRoleModal(r)} style={{ ...linkBtn, marginInlineStart: 0 }}>Edit</button>
+                          <button onClick={() => deleteRole(r.id)} style={{ ...linkBtn, color: "var(--dang)" }}>Delete</button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
-            </div>
+                </>
+              )}
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--t3)", textTransform: "uppercase", letterSpacing: ".05em", margin: "4px 0 12px" }}>System roles</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 14 }}>
+                {data.roles.map((r) => (
+                  <div key={r.role} style={{ padding: 18, borderRadius: 14, background: "var(--s1)", border: "1px solid var(--bd)" }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, textTransform: "capitalize", marginBottom: 10 }}>{r.role}</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {r.permissions.length === 0 ? <span style={{ color: "var(--t3)", fontSize: 12 }}>No permissions</span> :
+                        r.permissions.map((p) => (
+                          <span key={p} style={{ fontSize: 11, fontFamily: "var(--fmono)", padding: "3px 8px", borderRadius: 6, background: "var(--s2)", color: "var(--t2)" }}>{p}</span>
+                        ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </AsyncBoundary>
       )}
@@ -143,6 +213,73 @@ export default function UsersPage() {
 }
 
 const linkBtn: React.CSSProperties = { background: "transparent", border: "none", color: "var(--ac)", cursor: "pointer", fontSize: 12.5, fontWeight: 600, marginInlineStart: 12, fontFamily: "inherit" };
+
+function RoleForm({ role, allPermissions, onDone }: { role: CustomRole | null; allPermissions: string[]; onDone: () => void }) {
+  const [name, setName] = useState(role?.name ?? "");
+  const [description, setDescription] = useState(role?.description ?? "");
+  const [perms, setPerms] = useState<Set<string>>(new Set(role?.permissions ?? []));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  function toggle(p: string) {
+    setPerms((s) => {
+      const next = new Set(s);
+      if (next.has(p)) next.delete(p);
+      else next.add(p);
+      return next;
+    });
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (perms.size === 0) {
+      setError("Select at least one permission.");
+      return;
+    }
+    setBusy(true); setError("");
+    try {
+      const res = await fetch(role ? `/api/roles/${role.id}` : "/api/roles", {
+        method: role ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, description: description || null, permissions: [...perms] }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Could not save role");
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save role");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <div style={{ marginBottom: 12 }}>
+        <label style={modalLabel}>Role name</label>
+        <input style={modalInput} value={name} onChange={(e) => setName(e.target.value)} required maxLength={60} placeholder="e.g. Billing Clerk" />
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={modalLabel}>Description (optional)</label>
+        <input style={modalInput} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={300} placeholder="What this role is for" />
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <label style={modalLabel}>Permissions</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
+          {allPermissions.map((p) => (
+            <label key={p} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontFamily: "var(--fmono)", color: perms.has(p) ? "var(--ac)" : "var(--t2)", cursor: "pointer" }}>
+              <input type="checkbox" checked={perms.has(p)} onChange={() => toggle(p)} />
+              {p}
+            </label>
+          ))}
+        </div>
+      </div>
+      {error && <div style={{ color: "var(--dang)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button type="submit" disabled={busy} style={{ ...modalPrimary, opacity: busy ? 0.7 : 1 }}>
+          {busy ? "Saving…" : role ? "Save changes" : "Create role"}
+        </button>
+      </div>
+    </form>
+  );
+}
 
 function InviteForm({ companyId, onDone }: { companyId: string; onDone: () => void }) {
   const [form, setForm] = useState({ name: "", email: "", role: "accountant", title: "", password: "" });
