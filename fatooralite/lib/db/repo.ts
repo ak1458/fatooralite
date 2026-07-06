@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultDb } from "./client";
 import type { InvoiceInput } from "@/lib/zatca/types";
 import { invoiceTotals, lineNet, lineVat, STANDARD_VAT_RATE } from "@/lib/zatca/money";
+import { genesisHash } from "@/lib/zatca/hash";
 import { decryptPrivateKey } from "@/lib/crypto/encrypt";
 
 /**
@@ -88,8 +89,12 @@ export async function createInvoice(
   { companyId, branchId, input }: CreateInvoiceArgs,
   uuid: string,
   db: PrismaClient = defaultDb,
+  extra?: { reportingDeadline?: Date | null },
 ) {
   const totals = invoiceTotals(input.lines);
+  // Simplified (B2C) invoices enter the 24h reporting queue; standard invoices
+  // are cleared synchronously and never reported on a timer.
+  const reportingState = input.kind === "simplified" ? "pending" : "n/a";
   return db.invoice.create({
     data: {
       companyId,
@@ -106,6 +111,8 @@ export async function createInvoice(
       taxableAmount: totals.taxableAmount,
       vatAmount: totals.vatAmount,
       grandTotal: totals.grandTotal,
+      reportingState,
+      reportingDeadline: extra?.reportingDeadline ?? null,
       lines: {
         create: input.lines.map((l) => ({
           description: l.description,
@@ -175,30 +182,67 @@ export async function getLastInvoiceHash(
   return last?.hash ?? null;
 }
 
+export interface ChainSlot {
+  /** ZATCA ICV — monotonic per EGS; also the sequential invoice number basis. */
+  icv: number;
+  /** Previous invoice hash (PIH) to chain this invoice to. */
+  previousHash: string;
+}
+
 /**
- * Atomically advance the per-company invoice counter and return the new value.
- * Serves as both the ZATCA ICV (invoice counter value — must be unique and
- * monotonic per EGS) and the basis for sequential invoice numbers. Unlike the
- * old count()+1 approach, deleted invoices can never cause a value to repeat.
- * Seeds itself from the existing invoice count on first use.
+ * Reserve the next slot in a company's invoice chain, holding a Postgres row
+ * lock so concurrent serverless invocations queue instead of duplicating the
+ * PIH / ICV.
+ *
+ * MUST be called inside an interactive transaction — pass the `tx` client. The
+ * `FOR UPDATE` lock is held until that transaction commits, at which point the
+ * next waiter proceeds with the committed `lastHash`.
  */
-export async function nextInvoiceCounter(
+export async function nextChainSlot(
   companyId: string,
-  db: PrismaClient = defaultDb,
-): Promise<number> {
-  return db.$transaction(async (tx) => {
-    const existing = await tx.invoiceCounter.findUnique({ where: { companyId } });
-    if (!existing) {
-      const count = await tx.invoice.count({ where: { companyId } });
-      await tx.invoiceCounter.create({ data: { companyId, next: count + 2 } });
-      return count + 1;
-    }
-    const updated = await tx.invoiceCounter.update({
-      where: { companyId },
-      data: { next: { increment: 1 } },
-    });
-    return updated.next - 1;
-  });
+  tx: PrismaClient,
+): Promise<ChainSlot> {
+  // Lock the per-company counter row. Concurrent transactions block here.
+  const locked = await tx.$queryRaw<{ next: number; lastHash: string | null }[]>`
+    SELECT "next", "lastHash" FROM "InvoiceCounter"
+    WHERE "companyId" = ${companyId}
+    FOR UPDATE`;
+
+  if (locked.length === 0) {
+    // First invoice for this company: bootstrap the ledger row. The unique PK
+    // means a concurrent duplicate INSERT is ignored, so exactly one wins; we
+    // then re-lock so the rest of this transaction holds the row.
+    const seed = await tx.invoice.count({ where: { companyId } });
+    await tx.$executeRaw`
+      INSERT INTO "InvoiceCounter" ("companyId", "next", "lastHash")
+      VALUES (${companyId}, ${seed + 1}, NULL)
+      ON CONFLICT ("companyId") DO NOTHING`;
+    const row = await tx.$queryRaw<{ next: number; lastHash: string | null }[]>`
+      SELECT "next", "lastHash" FROM "InvoiceCounter"
+      WHERE "companyId" = ${companyId}
+      FOR UPDATE`;
+    return { icv: row[0].next, previousHash: row[0].lastHash ?? genesisHash() };
+  }
+
+  return { icv: locked[0].next, previousHash: locked[0].lastHash ?? genesisHash() };
+}
+
+/**
+ * Advance the chain: bump the counter and commit this invoice's hash as the
+ * next PIH. Call inside the SAME transaction as nextChainSlot, after the hash
+ * is known, so the lock covers read → sign → write and the next issuer reads a
+ * committed hash.
+ */
+export async function commitChainHash(
+  companyId: string,
+  icv: number,
+  hash: string,
+  tx: PrismaClient,
+): Promise<void> {
+  await tx.$executeRaw`
+    UPDATE "InvoiceCounter"
+    SET "next" = ${icv + 1}, "lastHash" = ${hash}
+    WHERE "companyId" = ${companyId}`;
 }
 
 export async function addClearanceRecord(

@@ -107,6 +107,10 @@ model Invoice {
   signature     String?
   qr            String?
   resultCode    String? // e.g. BR-KSA-83 on rejection
+  // B2C 24h reporting queue: simplified invoices are "pending" until the cron
+  // reports them; standard invoices are "n/a" (cleared synchronously).
+  reportingState    String    @default("n/a") // n/a | pending | reported | failed
+  reportingDeadline DateTime?                  // issueTime + 24h for simplified
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
 
@@ -120,6 +124,8 @@ model Invoice {
   @@unique([companyId, invoiceNumber])
   @@index([companyId, createdAt])
   @@index([companyId, status])
+  // Drives the reporting cron's due-query (oldest deadline first).
+  @@index([kind, reportingState, reportingDeadline])
 }
 
 model InvoiceLine {
@@ -137,11 +143,14 @@ model InvoiceLine {
   @@index([invoiceId])
 }
 
-/// Per-company sequential invoice numbering (INV-YYYY-NNNNN). Incremented in a
-/// transaction so concurrent issuers never collide (unlike random suffixes).
+/// Per-company invoice chain ledger. `next` is the sequential ICV / invoice
+/// number; `lastHash` is the last committed invoice hash (the PIH source of
+/// truth). Both are advanced under a FOR UPDATE row lock so concurrent
+/// serverless issuers serialize instead of forking the cryptographic chain.
 model InvoiceCounter {
-  companyId String @id
-  next      Int    @default(1)
+  companyId String  @id
+  next      Int     @default(1)
+  lastHash  String? // last committed invoice hash → next invoice's PIH
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }

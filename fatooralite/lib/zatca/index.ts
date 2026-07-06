@@ -5,7 +5,8 @@ import { invoiceHash } from "./hash";
 import { invoiceTotals } from "./money";
 import { signHash, publicKeyDerBase64 } from "./keys";
 import { buildQrBase64 } from "./qr";
-import { buildXadesSignature, injectSignature, injectQrCode } from "./xades";
+import { buildXadesSignature, injectSignature, injectQrCode, finalizeSignatureValue } from "./xades";
+import { tag9Base64, isRealCsid } from "./tag9";
 
 export * from "./types";
 export { newUuid } from "./uuid";
@@ -16,7 +17,7 @@ export { generateKeyPair, signHash, verifyHash, publicKeyDerBase64 } from "./key
 export { generateCsr } from "./csr";
 export { buildInvoiceXml } from "./xml";
 export { canonicalizeInvoice, getInvoiceBodyForHashing } from "./canonicalize";
-export { buildXadesSignature, injectSignature, injectQrCode } from "./xades";
+export { buildXadesSignature, injectSignature, injectQrCode, finalizeSignatureValue } from "./xades";
 
 /**
  * Full Phase-2 pipeline for one invoice:
@@ -56,13 +57,21 @@ export function generateSignedInvoice(
   });
   xml = injectSignature(xml, signatureXml);
 
+  // Step 2b: Sign the in-context SignedInfo and fill in SignatureValue.
+  xml = finalizeSignatureValue(xml, keyPair.privateKeyPem);
+
   // Step 3: Compute the canonical hash (excluding UBLExtensions)
   const hash = invoiceHash(xml);
 
   // Step 4: ECDSA sign the hash
   const signature = signHash(hash, keyPair.privateKeyPem);
 
-  // Step 5: Build QR with binary phase-2 tags
+  // Step 5: Build QR with binary phase-2 tags. Tag 9 (ZATCA CA stamp signature)
+  // is mandatory on simplified invoices and comes from the issued CSID cert.
+  const stampSignature =
+    input.kind === "simplified" && options?.certificateBase64 && isRealCsid(options.certificateBase64)
+      ? tag9Base64(options.certificateBase64)
+      : undefined;
   const qr = buildQrBase64({
     sellerName: input.seller.name,
     vatNumber: input.seller.vatNumber,
@@ -72,6 +81,7 @@ export function generateSignedInvoice(
     hash,
     signature,
     publicKey: publicKeyDerBase64(keyPair.publicKeyPem),
+    stampSignature,
   });
 
   // Step 6: Inject QR into the XML

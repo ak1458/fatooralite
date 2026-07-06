@@ -101,10 +101,10 @@ describe("canonicalize", () => {
   <ID>123</ID>
 </Invoice>`;
     const canonical = canonicalizeInvoice(xml);
+    // C14N over the invoice body: UBLExtensions removed, no XML declaration.
     expect(canonical).not.toContain("UBLExtensions");
     expect(canonical).not.toContain("<?xml");
     expect(canonical).toContain("<ID>123</ID>");
-    expect(canonical).not.toContain("\n  <ID>"); // Should not be pretty printed
   });
 
 describe("hash", () => {

@@ -112,5 +112,14 @@ export async function submitInvoice(
   }
   await setInvoiceStatus(invoiceId, newStatus, response.status === "rejected" ? response.code : null, db);
 
+  // Keep the B2C reporting queue in sync whether this ran from the cron or a
+  // manual submit: a reported simplified invoice leaves the pending queue.
+  if (response.action === "reporting") {
+    await db.invoice.update({
+      where: { id: invoiceId },
+      data: { reportingState: response.status === "accepted" ? "reported" : "failed" },
+    });
+  }
+
   return { invoiceId, status: newStatus, response };
 }
