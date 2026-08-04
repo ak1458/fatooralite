@@ -42,7 +42,7 @@ export async function provisionLocalCertificate(
   const csrPem = generateCsr(
     kp.privateKeyPem,
     kp.publicKeyPem,
-    { commonName: "FatooraLite-EGS", organizationName: company.name, organizationalUnit: "Main", serialNumber: company.vatNumber },
+    { commonName: "FatooraLite-Pro-EGS", organizationName: company.name, organizationalUnit: "Main", serialNumber: company.vatNumber },
     { egsSerialNumber: `EGS-${companyId}`, vatNumber: company.vatNumber, invoiceType: "1100", location: "Riyadh", industryBusinessCategory: "Supply" },
   );
 
@@ -122,6 +122,24 @@ export async function startOnboarding(
   });
 
   return { certificateId: cert.id, requestId: compliance.requestId };
+}
+
+/**
+ * Whether the company already has a usable compliance certificate (CCSID
+ * issued, not yet consumed into a production CSID). Used by the single-call
+ * /api/onboarding/activate orchestration to skip startOnboarding on retry —
+ * the portal OTP is single-use, so re-requesting a CCSID when one is already
+ * stored would needlessly burn a fresh OTP for no reason.
+ */
+export async function hasResumableComplianceCertificate(
+  companyId: string,
+  db: PrismaClient = defaultDb,
+): Promise<boolean> {
+  const compliance = await db.certificate.findFirst({
+    where: { companyId, kind: "compliance", status: "compliance" },
+    select: { id: true },
+  });
+  return !!compliance;
 }
 
 export interface ComplianceCheckOutcome {

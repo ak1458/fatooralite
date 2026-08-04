@@ -27,7 +27,7 @@ export function OnboardingPanel() {
   const [companyId, setCompanyId] = useState("");
   const [mode, setMode] = useState<"sandbox" | "production">("sandbox");
   const [otp, setOtp] = useState("");
-  const [cn, setCn] = useState("FatooraLite-EGS");
+  const [cn, setCn] = useState("FatooraLite-Pro-EGS");
   const [ou, setOu] = useState("Riyadh HQ");
   const [busy, setBusy] = useState(false);
   const [step1Done, setStep1Done] = useState(false);
