@@ -17,7 +17,7 @@ import { verify as cryptoVerify, createHash } from "node:crypto";
 import { DOMParser } from "@xmldom/xmldom";
 import forge from "node-forge";
 import { generateKeyPair, generateSignedInvoice } from "../lib/zatca/index";
-import { canonicalizeNode, getInvoiceBodyForHashing } from "../lib/zatca/canonicalize";
+import { canonicalizeNodeInContext, getInvoiceBodyForHashing } from "../lib/zatca/canonicalize";
 import { extractCaSignature } from "../lib/zatca/tag9";
 import type { InvoiceInput } from "../lib/zatca/types";
 
@@ -56,7 +56,7 @@ async function main() {
     kind: "simplified",
     issueDate: "2026-07-06",
     issueTime: "10:00:00",
-    seller: { name: "FatooraLite Test Seller", vatNumber: "311122334400003" },
+    seller: { name: "Fatoora Lite Pro Test Seller", vatNumber: "311122334400003" },
     lines: [{ description: "Compliance check item", quantity: 1, unitPrice: 100 }],
     icv: 1,
   };
@@ -69,7 +69,7 @@ async function main() {
   // 1. SignatureValue verifies over in-context canonical SignedInfo.
   const signedInfo = doc.getElementsByTagName("ds:SignedInfo")[0];
   const sigValueB64 = doc.getElementsByTagName("ds:SignatureValue")[0]?.textContent?.trim() ?? "";
-  const canonicalSignedInfo = canonicalizeNode(signedInfo as unknown as Node);
+  const canonicalSignedInfo = canonicalizeNodeInContext(signedInfo as unknown as Node);
   const sigVerified = !!sigValueB64 && cryptoVerify(
     "sha256",
     Buffer.from(canonicalSignedInfo, "utf8"),
@@ -78,6 +78,29 @@ async function main() {
   );
   allPass = ok("ds:SignatureValue verifies over in-context C14N-11 SignedInfo", sigVerified,
     `sig ${sigValueB64.length} b64 chars`) && allPass;
+
+  // 1b. NON-CIRCULAR check: an ECDSA round-trip through the same function
+  // that produced the signature would still pass even if that function had
+  // a canonicalization bug shared by both the sign and verify sides — it
+  // only proves internal self-consistency, not spec compliance. This checks
+  // the actual output bytes directly: inclusive (non-exclusive) C14N-11 must
+  // render every namespace in scope from ancestor elements onto the
+  // canonicalized apex, even ones the subtree doesn't use. SignedInfo itself
+  // only ever declares xmlns:ds — the other 4 (default, cac, cbc, ext) exist
+  // only on the Invoice root many levels up, so their presence here can only
+  // come from a real ancestor-namespace walk, not from an internal echo.
+  const requiredInherited = [
+    'xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"',
+    'xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"',
+    'xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"',
+    'xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"',
+  ];
+  const missingInherited = requiredInherited.filter((ns) => !canonicalSignedInfo.includes(ns));
+  allPass = ok(
+    "canonical SignedInfo carries all 4 inherited Invoice-root namespaces (not just xmlns:ds)",
+    missingInherited.length === 0,
+    missingInherited.length ? `missing: ${missingInherited.join(", ")}` : "all present",
+  ) && allPass;
 
   // 2. Invoice-body DigestValue matches a fresh recomputation.
   const refDigest = Array.from(doc.getElementsByTagName("ds:Reference"))

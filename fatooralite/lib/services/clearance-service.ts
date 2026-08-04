@@ -30,6 +30,12 @@ export class LocalCertificateSubmitError extends Error {
     this.name = "LocalCertificateSubmitError";
   }
 }
+export class AlreadySubmittedError extends Error {
+  constructor(public readonly status: string) {
+    super(`Invoice is already ${status} — submitting again would resend it to the live ZATCA gateway.`);
+    this.name = "AlreadySubmittedError";
+  }
+}
 
 export interface SubmitResult {
   invoiceId: string;
@@ -54,6 +60,15 @@ export async function submitInvoice(
   });
   if (!invoice) throw new InvoiceNotFoundError();
   if (!invoice.signedXml || !invoice.hash) throw new InvoiceNotSignedError();
+  // Guard against re-submitting an already-cleared/reported invoice — a
+  // double-click, a retried network request, or (previously) the IDOR fixed
+  // in lib/auth/server.ts could otherwise resubmit the same invoice to the
+  // live ZATCA gateway repeatedly, each time appending another
+  // clearanceRecord/audit row and risking a duplicate-submission flag on
+  // ZATCA's side.
+  if (invoice.status === "cleared" || invoice.status === "reported") {
+    throw new AlreadySubmittedError(invoice.status);
+  }
 
   // Build the real ZATCA client from the company's production credentials
   // unless a submitter was injected (tests).

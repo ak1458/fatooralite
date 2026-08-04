@@ -40,24 +40,34 @@ export function lineVat(line: InvoiceLine): number {
   return round2(lineNet(line) * rate);
 }
 
-/** Compute per-category tax subtotals from invoice lines. */
+/**
+ * Compute per-category tax subtotals from invoice lines.
+ *
+ * VAT is computed ONCE per category from the aggregated taxable amount
+ * (ZATCA/EN16931 BR-CO-17: category tax amount = ROUND(category taxable
+ * amount * rate)) — NOT by summing each line's independently-rounded VAT.
+ * Summing per-line rounded amounts can undercount: three lines each with a
+ * 0.03 SAR net amount at 15% each round to 0.00 SAR VAT individually (0.0045
+ * rounds down), summing to 0.00 — but the correct category VAT, computed
+ * once on the aggregated 0.09 SAR taxable base, is 0.01 SAR. That 1-halala
+ * gap is exactly the kind of mismatch ZATCA's BR-KSA validation — which
+ * independently recomputes VAT from the taxable base in the same XML —
+ * rejects invoices for.
+ */
 export function taxSubtotals(lines: InvoiceLine[]): TaxSubtotal[] {
-  const map = new Map<TaxCategoryCode, { taxable: number; tax: number; rate: number; reason?: string; reasonCode?: string }>();
+  const map = new Map<TaxCategoryCode, { taxable: number; rate: number; reason?: string; reasonCode?: string }>();
 
   for (const line of lines) {
     const cat: TaxCategoryCode = line.taxCategory ?? "S";
     const rate = effectiveRate(line);
     const net = lineNet(line);
-    const vat = lineVat(line);
 
     const existing = map.get(cat);
     if (existing) {
       existing.taxable = round2(existing.taxable + net);
-      existing.tax = round2(existing.tax + vat);
     } else {
       map.set(cat, {
         taxable: net,
-        tax: vat,
         rate: round2(rate * 100),
         reason: line.exemptionReason,
         reasonCode: line.exemptionReasonCode,
@@ -68,7 +78,7 @@ export function taxSubtotals(lines: InvoiceLine[]): TaxSubtotal[] {
   return Array.from(map.entries()).map(([cat, v]) => ({
     taxCategory: cat,
     taxableAmount: v.taxable,
-    taxAmount: v.tax,
+    taxAmount: round2(v.taxable * (v.rate / 100)),
     percent: v.rate,
     exemptionReason: v.reason,
     exemptionReasonCode: v.reasonCode,
@@ -85,19 +95,25 @@ function sumAllowances(allowances: AllowanceCharge[] | undefined, isCharge: bool
   );
 }
 
-/** Aggregate totals across all lines, with document-level allowances/charges. */
+/**
+ * Aggregate totals across all lines, with document-level allowances/charges.
+ * Derives taxableAmount/vatAmount by summing the SAME per-category
+ * taxSubtotals() this returns — never a separate per-line calculation — so
+ * the document totals and the TaxSubtotal breakdown in the XML can never
+ * disagree (UBL/EN16931 requires the invoice total VAT to equal the sum of
+ * its VAT breakdown rows).
+ */
 export function invoiceTotals(
   lines: InvoiceLine[],
   documentAllowances?: AllowanceCharge[],
 ): InvoiceTotals {
+  const subtotals = taxSubtotals(lines);
   let taxable = 0;
   let vat = 0;
-  for (const l of lines) {
-    taxable += lineNet(l);
-    vat += lineVat(l);
+  for (const s of subtotals) {
+    taxable = round2(taxable + s.taxableAmount);
+    vat = round2(vat + s.taxAmount);
   }
-  taxable = round2(taxable);
-  vat = round2(vat);
 
   const allowanceTotalAmount = sumAllowances(documentAllowances, false);
   const chargeTotalAmount = sumAllowances(documentAllowances, true);
@@ -111,6 +127,6 @@ export function invoiceTotals(
     grandTotal: round2(adjustedTaxable + vat),
     allowanceTotalAmount,
     chargeTotalAmount,
-    taxSubtotals: taxSubtotals(lines),
+    taxSubtotals: subtotals,
   };
 }

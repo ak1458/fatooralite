@@ -13,7 +13,7 @@ import { createHash, sign as cryptoSign } from "node:crypto";
 import { create } from "xmlbuilder2";
 import { DOMParser } from "@xmldom/xmldom";
 import { rawHash } from "./hash";
-import { getInvoiceBodyForHashing, canonicalizeNode } from "./canonicalize";
+import { getInvoiceBodyForHashing, canonicalizeNodeInContext, canonicalizeXml } from "./canonicalize";
 
 export interface XadesSigningInfo {
   /** The full invoice XML (before signature injection). */
@@ -44,14 +44,20 @@ export function buildXadesSignature(info: XadesSigningInfo): string {
   const invoiceBodyCanonical = getInvoiceBodyForHashing(info.invoiceXml);
   const invoiceBodyDigest = rawHash(invoiceBodyCanonical);
 
-  // 2. Build SignedProperties and compute its digest
+  // 2. Build SignedProperties and compute its digest over the CANONICALIZED
+  //    form, not the raw xmlbuilder2 serialization — SignedProperties
+  //    declares its own namespaces (self-contained, no ancestor-namespace
+  //    dependency), but different XML serializers can still disagree on
+  //    attribute order/quoting/whitespace for "the same" logical XML.
+  //    Canonicalizing removes that ambiguity and matches Reference 1's
+  //    treatment (see the c14n11 Transform added on Reference 2 below).
   const signedPropertiesXml = buildSignedProperties({
     signingTime: now,
     certDigest: computeCertDigest(certB64),
     certIssuer,
     certSerial,
   });
-  const signedPropertiesDigest = rawHash(signedPropertiesXml);
+  const signedPropertiesDigest = rawHash(canonicalizeXml(signedPropertiesXml));
 
   // 3. Build SignedInfo
   const signedInfoXml = buildSignedInfo(invoiceBodyDigest, signedPropertiesDigest);
@@ -183,11 +189,18 @@ function buildSignedInfo(invoiceDigest: string, propsDigest: string): string {
   ref1.ele("ds:DigestValue").txt(invoiceDigest).up();
   ref1.up();
 
-  // Reference 2: signed properties
+  // Reference 2: signed properties. Declares the same c14n11 Transform used
+  // to produce signedPropertiesDigest above, so a verifier applies the same
+  // canonicalization before comparing digests (an un-declared Transform is
+  // exactly the class of mismatch the SignedInfo ancestor-namespace fix
+  // above addresses for Reference 1 — don't reintroduce it here).
   const ref2 = si.ele("ds:Reference", {
     Type: "http://www.w3.org/2000/09/xmldsig#SignatureProperties",
     URI: "#xadesSignedProperties",
   });
+  ref2.ele("ds:Transforms")
+    .ele("ds:Transform", { Algorithm: "http://www.w3.org/2006/12/xml-c14n11" }).up()
+    .up();
   ref2.ele("ds:DigestMethod", { Algorithm: "http://www.w3.org/2001/04/xmlenc#sha256" }).up();
   ref2.ele("ds:DigestValue").txt(propsDigest).up();
   ref2.up();
@@ -217,7 +230,15 @@ export function finalizeSignatureValue(signedXml: string, privateKeyPem: string)
   const signedInfo = doc.getElementsByTagName("ds:SignedInfo")[0];
   if (!signedInfo) throw new Error("finalizeSignatureValue: no ds:SignedInfo in document");
 
-  const canonical = canonicalizeNode(signedInfo as unknown as Node);
+  // SignedInfo declares only xmlns:ds on itself — the Invoice root's 4
+  // namespaces (default, cac, cbc, ext) are inherited from many levels up.
+  // Inclusive C14N-11 (what SignedInfo's own CanonicalizationMethod
+  // declares) must render those inherited namespaces onto the canonicalized
+  // apex regardless — canonicalizeNode() alone doesn't do this (see its
+  // sibling canonicalizeNodeInContext for why), which silently produced
+  // signed bytes ZATCA's verifier would never reproduce from the same
+  // document. Use the context-aware canonicalizer here specifically.
+  const canonical = canonicalizeNodeInContext(signedInfo as unknown as Node);
   const signatureValue = cryptoSign("sha256", Buffer.from(canonical, "utf8"), privateKeyPem)
     .toString("base64");
 

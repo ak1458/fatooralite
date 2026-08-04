@@ -15,11 +15,64 @@
 import { DOMParser, XMLSerializer } from "@xmldom/xmldom";
 import { C14nCanonicalization } from "xml-crypto";
 
+interface NamespaceDecl {
+  prefix: string;
+  namespaceURI: string;
+}
+
+/**
+ * Walk real DOM ancestors above `node` collecting every `xmlns`/`xmlns:*`
+ * declaration in scope, closest ancestor first (so a shadowing redeclaration
+ * on a nearer ancestor wins over one further up — same precedence xml-crypto's
+ * own `findAncestorNs`/`collectAncestorNamespaces` uses for exactly this).
+ */
+function collectAncestorNamespaces(node: Node): NamespaceDecl[] {
+  const result: NamespaceDecl[] = [];
+  const seen = new Set<string>();
+  let parent = node.parentNode as (Element & Node) | null;
+  while (parent && parent.nodeType === 1 /* ELEMENT_NODE */) {
+    const attrs = (parent as unknown as Element).attributes;
+    if (attrs) {
+      for (let i = 0; i < attrs.length; i++) {
+        const attr = attrs[i];
+        if (attr.nodeName === "xmlns" || attr.nodeName.startsWith("xmlns:")) {
+          const prefix = attr.nodeName === "xmlns" ? "" : attr.nodeName.slice("xmlns:".length);
+          if (!seen.has(prefix)) {
+            seen.add(prefix);
+            result.push({ prefix, namespaceURI: attr.nodeValue ?? "" });
+          }
+        }
+      }
+    }
+    parent = parent.parentNode as (Element & Node) | null;
+  }
+  return result;
+}
+
 /** Canonicalize a DOM node (or full document root) with C14N (c14n11-equivalent). */
 export function canonicalizeNode(node: Node): string {
   // xml-crypto's process() renders in-scope namespaces at the apex element and
   // preserves textual whitespace — the ZATCA-required canonical form.
   return new C14nCanonicalization().process(node as never, {}) as string;
+}
+
+/**
+ * Canonicalize a DOM node that is still attached inside a larger document
+ * (e.g. a `ds:SignedInfo` nested many levels under an Invoice root), for
+ * INCLUSIVE (non-exclusive) C14N. Inclusive C14N must render every namespace
+ * declared on ancestor elements onto the canonicalized subtree's apex, even
+ * if the subtree never uses those prefixes — that's what distinguishes it
+ * from exclusive C14N. xml-crypto's `C14nCanonicalization.process()` does
+ * NOT walk the real DOM to discover these; it only renders whatever is
+ * passed via `options.ancestorNamespaces`. Passing `{}` (as plain
+ * `canonicalizeNode` does) silently drops every inherited namespace,
+ * producing bytes a spec-compliant verifier will not reproduce from the same
+ * document — the resulting signature fails verification. Use this instead
+ * of `canonicalizeNode` for any node that isn't the document root.
+ */
+export function canonicalizeNodeInContext(node: Node): string {
+  const ancestorNamespaces = collectAncestorNamespaces(node);
+  return new C14nCanonicalization().process(node as never, { ancestorNamespaces }) as string;
 }
 
 /**

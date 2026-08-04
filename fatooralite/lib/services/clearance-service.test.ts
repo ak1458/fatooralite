@@ -2,7 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { hasTestDb, pushTestSchema, testClient } from "@/lib/db/test-db";
 import { issueInvoice } from "./invoice-service";
-import { submitInvoice } from "./clearance-service";
+import { submitInvoice, AlreadySubmittedError } from "./clearance-service";
 import type { ZatcaSubmitter, SubmitArgs } from "@/lib/zatca/client";
 import { validateInvoice } from "@/lib/zatca/validate";
 import { generateKeyPair } from "@/lib/zatca/index";
@@ -89,5 +89,18 @@ describe.skipIf(!hasTestDb)("submitInvoice", () => {
     expect(res.response.code).toBe("BR-KSA-44");
     const row = await db.invoice.findUniqueOrThrow({ where: { id: issued.invoiceId } });
     expect(row.resultCode).toBe("BR-KSA-44");
+  });
+
+  it("refuses to resubmit an already-cleared invoice instead of hitting the gateway again", async () => {
+    const issued = await issueInvoice(companyId, { ...standard, invoiceNumber: "INV-C-4" }, db);
+    const first = await submitInvoice(issued.invoiceId, client, db);
+    expect(first.status).toBe("cleared");
+
+    await expect(submitInvoice(issued.invoiceId, client, db)).rejects.toThrow(AlreadySubmittedError);
+
+    // Exactly one clearanceRecord — the rejected resubmission must never
+    // reach client.submit() (that would create a second record).
+    const records = await db.clearanceRecord.findMany({ where: { invoiceId: issued.invoiceId } });
+    expect(records).toHaveLength(1);
   });
 });

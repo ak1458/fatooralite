@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import forge from "node-forge";
+import { DOMParser } from "@xmldom/xmldom";
+import { verify as cryptoVerify } from "node:crypto";
 import {
   newUuid,
   invoiceHash,
@@ -16,6 +18,7 @@ import {
   signHash,
   verifyHash,
 } from "./index";
+import { canonicalizeNodeInContext } from "./canonicalize";
 import type { InvoiceInput } from "./types";
 
 const sampleInput: InvoiceInput = {
@@ -72,6 +75,30 @@ describe("money", () => {
     expect(t.taxSubtotals.find(s => s.taxCategory === "S")?.taxableAmount).toBe(100);
     expect(t.taxSubtotals.find(s => s.taxCategory === "Z")?.taxableAmount).toBe(50);
   });
+  it("computes category VAT once on the aggregated taxable amount, not by summing per-line rounded VAT (BR-CO-17)", () => {
+    // Regression test for a same-day fix (see handoff.md): 3 lines in the
+    // same category, each with a 0.03 SAR net amount, each independently
+    // round to 0.00 SAR VAT (0.03*0.15=0.0045, rounds down) — summing those
+    // gives 0.00. The correct figure, computed once on the aggregated 0.09
+    // SAR taxable base, is round2(0.09*0.15) = 0.01. That 1-halala gap is
+    // exactly the mismatch ZATCA's BR-KSA validation rejects invoices for.
+    const lines: InvoiceInput["lines"] = [
+      { description: "Item A", quantity: 1, unitPrice: 0.03 },
+      { description: "Item B", quantity: 1, unitPrice: 0.03 },
+      { description: "Item C", quantity: 1, unitPrice: 0.03 },
+    ];
+    const t = invoiceTotals(lines);
+    expect(t.taxableAmount).toBe(0.09);
+    expect(t.vatAmount).toBe(0.01);
+    expect(t.taxSubtotals).toHaveLength(1);
+    expect(t.taxSubtotals[0].taxAmount).toBe(0.01);
+    // Document total must equal the sum of the breakdown rows it returns —
+    // the other half of the same fix (invoiceTotals no longer computes vat
+    // from a separate per-line loop that could drift from taxSubtotals).
+    const subtotalSum = t.taxSubtotals.reduce((s, x) => s + x.taxAmount, 0);
+    expect(t.vatAmount).toBe(subtotalSum);
+  });
+
   it("handles line-level allowances", () => {
     const lines = [
       { 
@@ -180,7 +207,7 @@ describe("csr", () => {
   it("produces a parseable PKCS#10 with subject + EC key", () => {
     const kp = generateKeyPair();
     const pem = generateCsr(kp.privateKeyPem, kp.publicKeyPem, {
-      commonName: "FatooraLite-EGS",
+      commonName: "FatooraLite-Pro-EGS",
       organizationName: "Almarai Company",
       organizationalUnit: "Riyadh HQ",
     });
@@ -191,7 +218,7 @@ describe("csr", () => {
     const csr = forge.asn1.fromDer(der);
     expect(csr.value).toHaveLength(3); // CRI, sigAlg, signature
     // Subject fields are carried in the DER.
-    expect(der).toContain("FatooraLite-EGS");
+    expect(der).toContain("FatooraLite-Pro-EGS");
     expect(der).toContain("Almarai Company");
     // secp256k1 OID (1.3.132.0.10) appears in the embedded public key.
     const secp256k1Oid = forge.asn1.oidToDer("1.3.132.0.10").getBytes();
@@ -200,7 +227,7 @@ describe("csr", () => {
   it("includes ZATCA extensions when provided", () => {
     const kp = generateKeyPair();
     const pem = generateCsr(kp.privateKeyPem, kp.publicKeyPem, {
-      commonName: "FatooraLite-EGS",
+      commonName: "FatooraLite-Pro-EGS",
       organizationName: "Almarai Company",
       organizationalUnit: "Riyadh HQ",
     }, {
@@ -227,5 +254,43 @@ describe("generateSignedInvoice", () => {
     expect(signed.totals.grandTotal).toBe(1771);
     expect(verifyHash(signed.hash, signed.signature, kp.publicKeyPem)).toBe(true);
     expect(Buffer.from(signed.qr, "base64")[0]).toBe(1);
+  });
+
+  it("embeds a ds:SignatureValue that a real XMLDSig verifier can reproduce and check", () => {
+    // Regression test for a same-day fix (see handoff.md): SignedInfo's
+    // declared CanonicalizationMethod is INCLUSIVE c14n11, which must render
+    // every namespace in scope from ancestor elements — the Invoice root's
+    // default/cac/cbc/ext namespaces — onto the canonicalized SignedInfo
+    // apex, even though SignedInfo itself only ever declares xmlns:ds. This
+    // deliberately does NOT reuse generateSignedInvoice's internal signing
+    // helper to recompute the check — it independently re-derives the
+    // canonical bytes and does its own node:crypto verify, so a
+    // canonicalization bug that's shared between the sign and verify paths
+    // (the exact failure mode that let this bug ship undetected) still gets
+    // caught here.
+    const kp = generateKeyPair();
+    const signed = generateSignedInvoice(sampleInput, kp);
+    const doc = new DOMParser().parseFromString(signed.xml, "text/xml");
+    const signedInfo = doc.getElementsByTagName("ds:SignedInfo")[0];
+    const sigValueB64 = doc.getElementsByTagName("ds:SignatureValue")[0]?.textContent?.trim() ?? "";
+    expect(sigValueB64.length).toBeGreaterThan(0);
+
+    const canonicalSignedInfo = canonicalizeNodeInContext(signedInfo as unknown as Node);
+
+    // The 4 Invoice-root namespaces can only appear here via a real
+    // ancestor-namespace walk — SignedInfo has no other way to know about
+    // them, so their presence is itself proof the walk happened.
+    expect(canonicalSignedInfo).toContain('xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"');
+    expect(canonicalSignedInfo).toContain('xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"');
+    expect(canonicalSignedInfo).toContain('xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"');
+    expect(canonicalSignedInfo).toContain('xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"');
+
+    const verified = cryptoVerify(
+      "sha256",
+      Buffer.from(canonicalSignedInfo, "utf8"),
+      kp.publicKeyPem,
+      Buffer.from(sigValueB64, "base64"),
+    );
+    expect(verified).toBe(true);
   });
 });

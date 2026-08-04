@@ -91,7 +91,11 @@ export async function createInvoice(
   db: PrismaClient = defaultDb,
   extra?: { reportingDeadline?: Date | null },
 ) {
-  const totals = invoiceTotals(input.lines);
+  // Must match xml.ts/index.ts's call exactly (both pass input.allowances) —
+  // this is the DB-persisted total the QR code and invoice-detail view read
+  // back later, and it has to agree with the signed XML's LegalMonetaryTotal
+  // or the stored record and the invoice ZATCA actually received diverge.
+  const totals = invoiceTotals(input.lines, input.allowances);
   // Simplified (B2C) invoices enter the 24h reporting queue; standard invoices
   // are cleared synchronously and never reported on a timer.
   const reportingState = input.kind === "simplified" ? "pending" : "n/a";

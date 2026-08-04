@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { issueInvoice, NoCertificateError } from "@/lib/services/invoice-service";
 import { getInvoiceList } from "@/lib/db/queries";
 import { createInvoiceSchema } from "@/lib/validation/schemas";
 import { requirePermission } from "@/lib/auth/server";
 import { scheduleCompanyIngest } from "@/lib/ai/tenant-ingest";
+import { checkInvoiceLimit } from "@/lib/billing/plan";
 import type { InvoiceInput } from "@/lib/zatca/types";
 
 export const runtime = "nodejs";
@@ -28,6 +30,14 @@ export async function POST(req: Request) {
   const { deny } = await requirePermission(req, "invoice:create", companyId);
   if (deny) return deny;
 
+  const { allowed, limit, used } = await checkInvoiceLimit(companyId);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "Monthly invoice limit reached on the free plan. Upgrade to continue.", limit, used },
+      { status: 402 },
+    );
+  }
+
   try {
     const validData = createInvoiceSchema.parse(input);
     const typedInput = {
@@ -49,6 +59,14 @@ export async function POST(req: Request) {
     }
     if (err instanceof NoCertificateError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
+    }
+    // schema.prisma's @@unique([companyId, invoiceNumber]) correctly blocks a
+    // true duplicate (e.g. a retried request with an explicit invoiceNumber)
+    // — but left uncaught this is a legitimate client-side conflict, not a
+    // server fault, and the generic branch below would leak the raw Prisma
+    // constraint-violation message in the response body.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return NextResponse.json({ error: "An invoice with this number already exists for this company." }, { status: 409 });
     }
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
