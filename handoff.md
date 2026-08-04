@@ -1021,3 +1021,112 @@ that point, per the "ship inert" design.
 above (once the owner has an account), the frontend 401-handling gap noted
 above, or any of the previously-deferred items from the readiness report
 (`docs/13-production-readiness-report.md` §3).
+
+### 2026-08-04 — Repo organization, release strategy, attribution guard, Groq provider
+
+Owner asked for a ten-workstream pre-launch push (codebase organization,
+product audit, security audit, parallel bug-fixing, trial/Pro licensing, AI
+tool calling, rename, market research, simplified deployment, multi-customer
+provisioning). That is several sessions of work, not one. This session did the
+highest-priority item (codebase and repository organization) in full, answered
+the AI-provider question with a shipped implementation, and wrote
+`docs/16-launch-plan.md` sequencing the remaining nine.
+
+**Four decisions the owner made when asked** (recorded so they are not
+re-litigated): git history is **not** being rewritten — the 51 existing
+`Co-Authored-By: Claude` trailers stay, the rule applies going forward only;
+the `fatooralite/` nesting **stays** (reorganize inside it, do not flatten —
+Vercel Root Directory depends on the path); licensing is **full compliance
+path, capped volume, reserved premium capability**; and the AI provider to add
+is **Groq (groq.com, LPU inference hosting)** for demo latency — explicitly
+*not* xAI's Grok — keeping Anthropic and OpenAI as options.
+
+- [x] **DONE — 136 uncommitted files turned into 15 semantic commits.** The
+  working tree had accumulated every session since the rename: schema
+  expansion, the wizard rebuild, five audit passes, billing, legal pages, the
+  XAdES and VAT fixes. All of it unstaged, on a shared tree that a subagent
+  had already stashed once. Verified `tsc` clean and 139/34 tests passing
+  *before* committing so the baseline was known-good, took a
+  `git bundle --all` backup to the scratchpad first, then reset the index and
+  grouped by subsystem: schema, company validation, auth security, onboarding,
+  ZATCA fixes, AI/RAG, billing, legal, ops, UI, docs, deps. The
+  `CONTRIBUTING.md`/`SECURITY.md` move into `.github/` is committed as a real
+  rename (R092/R091) — the first attempt split the delete from the add across
+  two commits and lost rename detection, so those two commits were redone.
+- [x] **DONE — `.claude/worktrees/` added to `.gitignore`.** It holds eight
+  full repo copies from previous parallel-agent runs and was untracked-but-
+  visible, one `git add -A` away from being committed.
+- [x] **DONE — release and branching strategy.** `.github/CONTRIBUTING.md`
+  rewritten: its repository-layout section described a `doc/` folder that does
+  not exist and a `data/` mock directory that was deleted during de-mocking.
+  Now documents the real layout, the layer-import rule, branch naming,
+  Conventional Commits, semver policy (including why pre-1.0 stays `-rc` until
+  the gateway round trip is verified), the release checklist and the milestone
+  convention. `CHANGELOG.md` gained `[Unreleased]` and a full `[0.4.0]` entry
+  with a **Known limitations** section. `fatooralite/package.json` was still
+  `0.1.0` while the changelog was at `0.3.0` — now `0.4.0`.
+- [x] **DONE — historical releases tagged.** No tags existed at all. Annotated
+  `v0.1.0` (`430eca8`), `v0.2.0` (`fb69530`), `v0.3.0` (`5078b50`), mapped by
+  matching each CHANGELOG entry's content to the commit that delivered it.
+  **Not pushed** — see the open items below.
+- [x] **DONE — AI attribution blocked going forward.** `.githooks/commit-msg`
+  rejects assistant `Co-Authored-By` trailers, "Generated with" footers and
+  robot sign-offs; tested against three messages (two rejected, one accepted)
+  before being relied on. Enabled in this clone via
+  `git config core.hooksPath .githooks`. The rule is also stated plainly in
+  `CLAUDE.md` so it is followed by intent rather than only caught by the hook.
+  Every commit this session omits the trailer.
+- [x] **DONE — Groq provider (`lib/ai/providers/groq.ts`).** Answering the
+  owner's question directly: Grok/xAI was **never** configured anywhere; the
+  provider is OpenRouter by default, with Anthropic and OpenAI adapters
+  present. Groq is OpenAI-compatible so it reuses `openai-compat.ts` with no
+  new dependency. Declares no fallback model on purpose — `useModelsArray` is
+  OpenRouter-specific routing and Groq takes a single `model`, so a second
+  entry would be silently dropped. Ships inert (mock mode without
+  `GROQ_API_KEY`), 4 new tests, 143/34 passing.
+- [x] **DONE, and worth knowing — found while adding Groq.** Both the
+  boot-time warning in `lib/env.ts` and the mock-mode message in
+  `/api/ai/route.ts` hardcoded `OPENROUTER_API_KEY`. Running with
+  `AI_PROVIDER=anthropic` or `openai` — supported for months — warned about a
+  key that was correctly absent and told the user to set the wrong variable.
+  Both now resolve the key name from `AI_PROVIDER`; `lib/env.ts` validates all
+  four key variables.
+- [x] **Assessed, minimal action needed — the code structure itself is fine.**
+  Measured every source file: the layering (`lib/zatca` to `lib/db` to
+  `lib/services` to `app/api` to UI) holds and sizes are reasonable. One real
+  outlier: `app/onboarding/page.tsx` at **787 lines** (next largest is 523),
+  holding six step components plus the wizard shell. Splitting it is Task 1.1
+  of the launch plan, deliberately paired with the long-outstanding
+  wizard-wide `label`/`htmlFor` a11y sweep because both touch every field in
+  every step and doing them separately means sweeping the same lines twice.
+
+**Open, needs the owner — three things:**
+
+1. **Nothing is pushed.** All 15 commits and 3 tags are local. `main` is stuck
+   at `acbd759` (2026-06-22), **30+ commits behind** — every piece of real
+   work since Phase 4 lives only on `feature/production-readiness`. Merging and
+   pushing may trigger a Vercel production deploy depending on whether the
+   project is git-connected (the existing production deploy was made with
+   `vercel deploy --prod` from the CLI, so this is unverified). Confirm before
+   pushing.
+2. **Eight stale `worktree-*` branches** plus their checked-out worktrees under
+   `.claude/worktrees/`. All eight point at the same orphan commit `05bb775`
+   ("Replace license with proprietary All-Rights-Reserved terms") whose content
+   is already superseded by the current `LICENSE` — verified by diffing, there
+   is nothing unique to lose. The cleanup was blocked by the permission
+   classifier as destructive and needs the owner to run it: remove each
+   worktree under `.claude/worktrees/` with `git worktree remove --force`, then
+   `git worktree prune`, then `git branch -D` each `worktree-*`. The
+   `audit-snapshot` branch (`c7ad9c7`) is also now redundant — it was the WIP
+   snapshot taken so worktree-isolated audits would not see stale code, and
+   everything in it is committed as of this session.
+3. **The `git bundle` backup** of all pre-session refs is in the session
+   scratchpad, which is temporary. If any of the above needs undoing, copy
+   `pre-reorg-backup.bundle` out of the session scratchpad directory under
+   `%LOCALAPPDATA%\Temp\claude\d--gravity-FatooraLite-ZATCA-\` before it is
+   cleaned.
+
+**Next session should start at:** `docs/16-launch-plan.md` Phase 1, Tasks 1.1
+and 1.2 together (split the onboarding page + the a11y sweep in one pass), then
+Phase 7 market research in the background since its output changes Phase 2's
+tier boundaries and pricing before licensing is built.
