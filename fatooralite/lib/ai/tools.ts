@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db/client";
 import { num } from "@/lib/db/decimal";
 import { scheduleCompanyIngest } from "@/lib/ai/tenant-ingest";
 import { can, type Permission } from "@/lib/auth/rbac";
+import { requireFeature } from "@/lib/billing/plan";
+import type { Feature } from "@/lib/billing/entitlements";
 import { issueInvoice } from "@/lib/services/invoice-service";
 import { submitInvoice } from "@/lib/services/clearance-service";
 import { computeClearanceStats } from "@/lib/services/clearance-stats";
@@ -31,6 +33,12 @@ interface ToolDef {
    *  the tool runs. The agent route returns a pending action instead of
    *  executing, and executes only on the explicit confirm round-trip. */
   confirm?: (args: unknown) => string;
+  /**
+   * Plan entitlement this tool needs, if any. Chat is not a side door around
+   * licensing: "create an invoice for X" through the assistant is the same
+   * action as the form, so it meets the same gate.
+   */
+  feature?: Feature;
   handler: (args: unknown, ctx: ToolContext) => Promise<ToolOutcome>;
 }
 
@@ -157,6 +165,7 @@ const TOOLS: Record<string, ToolDef> = {
       email: z.string().email().max(200).optional(),
     }),
     permission: "invoice:create",
+    feature: "aiWriteActions",
     confirm(args) {
       const a = args as { name?: string; vatNumber?: string; city?: string; email?: string };
       return `Create customer "${a.name ?? ""}"${a.city ? ` (${a.city})` : ""}${a.vatNumber ? `, VAT ${a.vatNumber}` : ""}.`;
@@ -182,6 +191,7 @@ const TOOLS: Record<string, ToolDef> = {
       sku: z.string().max(50).optional(),
     }),
     permission: "invoice:create",
+    feature: "aiWriteActions",
     confirm(args) {
       const a = args as { name?: string; unitPrice?: number; sku?: string };
       return `Create product "${a.name ?? ""}" — SAR ${(a.unitPrice ?? 0).toFixed(2)}${a.sku ? `, SKU ${a.sku}` : ""}.`;
@@ -212,6 +222,7 @@ const TOOLS: Record<string, ToolDef> = {
       lines: z.array(lineSchema).min(1),
     }),
     permission: "invoice:create",
+    feature: "aiWriteActions",
     confirm(args) {
       const a = args as { kind?: string; buyerName?: string; lines?: { description: string; quantity: number; unitPrice: number }[] };
       const total = (a.lines ?? []).reduce((s, l) => s + l.quantity * l.unitPrice, 0);
@@ -248,6 +259,10 @@ const TOOLS: Record<string, ToolDef> = {
     parameters: { type: "object", properties: { invoiceNumber: { type: "string" } }, required: ["invoiceNumber"] },
     schema: z.object({ invoiceNumber: z.string().min(1) }),
     permission: "invoice:clear",
+    // aiWriteActions rather than submitToZatca: a trial tenant may submit to
+    // ZATCA, just not by asking the assistant to. Doing it from chat is the
+    // Pro capability; the compliance action itself stays available in the app.
+    feature: "aiWriteActions",
     confirm(args) {
       const a = args as { invoiceNumber?: string };
       return `Submit invoice ${a.invoiceNumber ?? ""} to ZATCA (clearance/reporting). This files the invoice with the tax authority.`;
@@ -318,6 +333,15 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
   }
   const valid = def.schema.safeParse(parsedArgs);
   if (!valid.success) return { content: `Invalid arguments: ${valid.error.issues[0]?.message ?? "invalid"}.` };
+
+  // Entitlement is checked after permission and validation but before the
+  // handler, so a locked tool cannot write. Phrased for the model to relay:
+  // the user asked in plain language and should get a plain answer, not an
+  // error code.
+  if (def.feature) {
+    const denial = await requireFeature(ctx.companyId, def.feature);
+    if (denial) return { content: `${denial.message} You can upgrade in Settings > Billing.` };
+  }
 
   try {
     return await def.handler(valid.data, ctx);

@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { prisma as defaultDb } from "@/lib/db/client";
 import { hashPassword } from "@/lib/auth/password";
+import { startTrial } from "@/lib/billing/plan";
 import type { RegisterInput } from "@/lib/validation/schemas";
 
 export class RegisterError extends Error {
@@ -43,6 +44,12 @@ export async function registerCompany(input: RegisterInput, db: PrismaClient = d
           acceptedTermsAt: new Date(),
         },
       });
+      // Paid-only product: registration grants the 7-day trial explicitly.
+      // Inside the transaction so a company can never exist without a
+      // subscription row — lib/billing/entitlements.ts resolves a missing row
+      // to "expired", which for a brand-new tenant would mean signing up and
+      // immediately being unable to do anything.
+      await startTrial(company.id, tx);
       return { company, user };
     });
   } catch (err) {

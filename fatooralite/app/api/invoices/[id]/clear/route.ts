@@ -13,7 +13,17 @@ import { scheduleCompanyIngest } from "@/lib/ai/tenant-ingest";
 
 export const runtime = "nodejs";
 
-/** POST /api/invoices/:id/clear — submit a signed invoice to ZATCA. */
+/**
+ * POST /api/invoices/:id/clear — submit a signed invoice to ZATCA.
+ *
+ * Deliberately NOT plan-gated, unlike invoice creation. By the time an invoice
+ * reaches here it has already been issued and signed, and ZATCA requires a
+ * simplified invoice to be reported within 24 hours of issuance. Blocking
+ * submission on an expired trial would leave the tenant holding issued
+ * invoices it is legally required to file and cannot — turning a billing state
+ * into a regulatory violation. The gate belongs on issuing new invoices
+ * (POST /api/invoices), which is where it is.
+ */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { deny } = await requirePermission(req, "invoice:clear");
   if (deny) return deny;

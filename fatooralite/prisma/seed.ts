@@ -55,6 +55,12 @@ async function main() {
       iban: "SA0380000000608010167519",
       bankName: "Al Rajhi Bank",
       branches: { create: [{ name: "Riyadh HQ", nameAr: "المقر الرئيسي", city: "Riyadh" }] },
+      // The demo tenant is on Pro, not a trial: it seeds more invoices than
+      // the trial cap allows, and a demo that hits a paywall partway through
+      // demonstrates the wrong thing. A company with no Subscription row
+      // resolves to "expired" (lib/billing/entitlements.ts), so this is
+      // required, not decorative.
+      subscription: { create: { plan: "pro", status: "active" } },
     },
     include: { branches: true },
   });

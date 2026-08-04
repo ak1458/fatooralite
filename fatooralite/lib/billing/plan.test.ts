@@ -1,25 +1,22 @@
 import type { PrismaClient } from "@prisma/client";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { hasTestDb, pushTestSchema, testClient } from "@/lib/db/test-db";
-import { PLAN_LIMITS, getEffectivePlan, checkInvoiceLimit } from "./plan";
+import { PLAN_LIMITS, TRIAL_DAYS } from "./entitlements";
+import {
+  checkBranchLimit,
+  checkInvoiceLimit,
+  checkSeatLimit,
+  getEffectivePlan,
+  getTenantPlan,
+  requireFeature,
+  startTrial,
+} from "./plan";
 
-describe("PLAN_LIMITS", () => {
-  it("free plan has finite limits", () => {
-    expect(PLAN_LIMITS.free.invoicesPerMonth).toBe(20);
-    expect(PLAN_LIMITS.free.branches).toBe(1);
-    expect(PLAN_LIMITS.free.seats).toBe(2);
-  });
-
-  it("pro plan is unlimited (null) across the board", () => {
-    expect(PLAN_LIMITS.pro.invoicesPerMonth).toBeNull();
-    expect(PLAN_LIMITS.pro.branches).toBeNull();
-    expect(PLAN_LIMITS.pro.seats).toBeNull();
-  });
-});
-
-// DB-backed resolution logic (no-row / free / past_due / canceled / pro+active
-// fallback rules) needs a real Postgres — same convention as lib/db/repo.test.ts
-// and lib/services/invoice-service.test.ts. Skipped unless TEST_DATABASE_URL is set.
+// Plan-resolution rules themselves are pure and covered exhaustively in
+// entitlements.test.ts. What needs a real database is the reading and counting
+// around them: the trial upsert, usage counts against limits, and the feature
+// gate end to end. Same convention as lib/db/repo.test.ts — skipped unless
+// TEST_DATABASE_URL is set.
 let db: PrismaClient;
 
 beforeAll(async () => {
@@ -32,90 +29,193 @@ afterAll(async () => {
   if (db) await db.$disconnect();
 });
 
-describe.skipIf(!hasTestDb)("getEffectivePlan / checkInvoiceLimit (DB-backed)", () => {
+describe.skipIf(!hasTestDb)("plan (DB-backed)", () => {
+  let seq = 0;
+
   async function makeCompany() {
-    return db.company.create({ data: { name: "Acme", vatNumber: "300000000000003" } });
+    seq += 1;
+    return db.company.create({ data: { name: `Acme ${seq}`, vatNumber: "300000000000003" } });
   }
 
-  it("treats a company with no Subscription row as free", async () => {
+  async function makeTrialCompany() {
     const company = await makeCompany();
-    expect(await getEffectivePlan(company.id, db)).toBe("free");
-  });
+    await startTrial(company.id, db);
+    return company;
+  }
 
-  it("treats free/active as free", async () => {
-    const company = await makeCompany();
-    await db.subscription.create({ data: { companyId: company.id, plan: "free", status: "active" } });
-    expect(await getEffectivePlan(company.id, db)).toBe("free");
-  });
-
-  it("treats pro/active as pro", async () => {
-    const company = await makeCompany();
-    await db.subscription.create({ data: { companyId: company.id, plan: "pro", status: "active" } });
-    expect(await getEffectivePlan(company.id, db)).toBe("pro");
-  });
-
-  it("treats pro/past_due as free (lapsed payment must not keep pro limits)", async () => {
-    const company = await makeCompany();
-    await db.subscription.create({ data: { companyId: company.id, plan: "pro", status: "past_due" } });
-    expect(await getEffectivePlan(company.id, db)).toBe("free");
-  });
-
-  it("treats pro/canceled as free", async () => {
-    const company = await makeCompany();
-    await db.subscription.create({ data: { companyId: company.id, plan: "pro", status: "canceled" } });
-    expect(await getEffectivePlan(company.id, db)).toBe("free");
-  });
-
-  it("treats pro/active with a passed currentPeriodEnd as free (unrenewed Moyasar checkout must not keep pro limits)", async () => {
+  async function makeProCompany(currentPeriodEnd: Date | null = null) {
     const company = await makeCompany();
     await db.subscription.create({
-      data: { companyId: company.id, plan: "pro", status: "active", currentPeriodEnd: new Date(Date.now() - 86_400_000) },
+      data: { companyId: company.id, plan: "pro", status: "active", currentPeriodEnd },
     });
-    expect(await getEffectivePlan(company.id, db)).toBe("free");
-  });
+    return company;
+  }
 
-  it("treats pro/active with a future currentPeriodEnd as pro", async () => {
-    const company = await makeCompany();
-    await db.subscription.create({
-      data: { companyId: company.id, plan: "pro", status: "active", currentPeriodEnd: new Date(Date.now() + 86_400_000) },
-    });
-    expect(await getEffectivePlan(company.id, db)).toBe("pro");
-  });
-
-  it("treats pro/active with no currentPeriodEnd set as pro (no expiry to have passed)", async () => {
-    const company = await makeCompany();
-    await db.subscription.create({ data: { companyId: company.id, plan: "pro", status: "active" } });
-    expect(await getEffectivePlan(company.id, db)).toBe("pro");
-  });
-
-  it("blocks a free-plan company once it hits the monthly invoice limit", async () => {
-    const company = await makeCompany();
-    for (let i = 0; i < PLAN_LIMITS.free.invoicesPerMonth; i++) {
+  async function addInvoices(companyId: string, n: number) {
+    for (let i = 0; i < n; i++) {
       await db.invoice.create({
         data: {
-          companyId: company.id,
-          uuid: `uuid-${company.id}-${i}`,
+          companyId,
+          uuid: `uuid-${companyId}-${i}`,
           invoiceNumber: `INV-${i}`,
           kind: "standard",
           status: "draft",
-          issueDate: "2026-07-20",
+          issueDate: "2026-08-04",
           taxableAmount: 100,
           vatAmount: 15,
           grandTotal: 115,
         },
       });
     }
-    const check = await checkInvoiceLimit(company.id, db);
-    expect(check.used).toBe(PLAN_LIMITS.free.invoicesPerMonth);
-    expect(check.limit).toBe(PLAN_LIMITS.free.invoicesPerMonth);
-    expect(check.allowed).toBe(false);
+  }
+
+  describe("startTrial", () => {
+    it("grants a 7-day trial", async () => {
+      const company = await makeCompany();
+      await startTrial(company.id, db);
+      const { plan, trialDaysLeft } = await getTenantPlan(company.id, db);
+      expect(plan).toBe("trial");
+      expect(trialDaysLeft).toBe(TRIAL_DAYS);
+    });
+
+    it("does not restart an existing trial when called again", async () => {
+      const company = await makeCompany();
+      const past = new Date(Date.now() - 86_400_000);
+      await db.subscription.create({
+        data: { companyId: company.id, plan: "trial", status: "active", trialEndsAt: past },
+      });
+      await startTrial(company.id, db);
+      expect(await getEffectivePlan(company.id, db)).toBe("expired");
+    });
+
+    it("does not downgrade a paying customer", async () => {
+      const company = await makeProCompany(new Date(Date.now() + 30 * 86_400_000));
+      await startTrial(company.id, db);
+      expect(await getEffectivePlan(company.id, db)).toBe("pro");
+    });
   });
 
-  it("pro plan is always allowed regardless of usage", async () => {
-    const company = await makeCompany();
-    await db.subscription.create({ data: { companyId: company.id, plan: "pro", status: "active" } });
-    const check = await checkInvoiceLimit(company.id, db);
-    expect(check.limit).toBeNull();
-    expect(check.allowed).toBe(true);
+  describe("getEffectivePlan", () => {
+    // Under the previous free-tier model a missing row meant "free" and worked.
+    // It is now "expired" on purpose, which is why the trial migration had to
+    // backfill a row for every existing company.
+    it("treats a company with no Subscription row as expired, not trial", async () => {
+      const company = await makeCompany();
+      expect(await getEffectivePlan(company.id, db)).toBe("expired");
+    });
+
+    it("resolves an active trial", async () => {
+      const company = await makeTrialCompany();
+      expect(await getEffectivePlan(company.id, db)).toBe("trial");
+    });
+
+    it("resolves an elapsed trial to expired", async () => {
+      const company = await makeCompany();
+      await db.subscription.create({
+        data: {
+          companyId: company.id,
+          plan: "trial",
+          status: "active",
+          trialEndsAt: new Date(Date.now() - 86_400_000),
+        },
+      });
+      expect(await getEffectivePlan(company.id, db)).toBe("expired");
+    });
+
+    it("resolves pro/active to pro", async () => {
+      const company = await makeProCompany();
+      expect(await getEffectivePlan(company.id, db)).toBe("pro");
+    });
+
+    it("lapses an unrenewed pro subscription to expired", async () => {
+      const company = await makeProCompany(new Date(Date.now() - 86_400_000));
+      expect(await getEffectivePlan(company.id, db)).toBe("expired");
+    });
+  });
+
+  describe("checkInvoiceLimit", () => {
+    it("blocks a trial once it reaches the monthly cap", async () => {
+      const company = await makeTrialCompany();
+      await addInvoices(company.id, PLAN_LIMITS.trial.invoicesPerMonth!);
+      const check = await checkInvoiceLimit(company.id, db);
+      expect(check).toMatchObject({
+        plan: "trial",
+        limit: PLAN_LIMITS.trial.invoicesPerMonth,
+        used: PLAN_LIMITS.trial.invoicesPerMonth,
+        allowed: false,
+      });
+    });
+
+    it("allows a trial below the cap", async () => {
+      const company = await makeTrialCompany();
+      await addInvoices(company.id, 1);
+      expect(await checkInvoiceLimit(company.id, db)).toMatchObject({ allowed: true, used: 1 });
+    });
+
+    it("allows pro regardless of usage", async () => {
+      const company = await makeProCompany();
+      await addInvoices(company.id, PLAN_LIMITS.trial.invoicesPerMonth! + 5);
+      expect(await checkInvoiceLimit(company.id, db)).toMatchObject({ allowed: true, limit: null });
+    });
+
+    it("blocks an expired trial at zero", async () => {
+      const company = await makeCompany();
+      expect(await checkInvoiceLimit(company.id, db)).toMatchObject({ plan: "expired", limit: 0, allowed: false });
+    });
+  });
+
+  describe("checkBranchLimit / checkSeatLimit", () => {
+    it("allows a trial its first branch and refuses the second", async () => {
+      const company = await makeTrialCompany();
+      expect(await checkBranchLimit(company.id, db)).toMatchObject({ allowed: true, used: 0, limit: 1 });
+      await db.branch.create({ data: { companyId: company.id, name: "HQ" } });
+      expect(await checkBranchLimit(company.id, db)).toMatchObject({ allowed: false, used: 1 });
+    });
+
+    it("allows pro unlimited branches", async () => {
+      const company = await makeProCompany();
+      await db.branch.create({ data: { companyId: company.id, name: "HQ" } });
+      expect(await checkBranchLimit(company.id, db)).toMatchObject({ allowed: true, limit: null });
+    });
+
+    it("counts existing users against the trial seat cap", async () => {
+      const company = await makeTrialCompany();
+      await db.user.create({
+        data: { companyId: company.id, email: `a${seq}@x.test`, name: "A", role: "owner", passwordHash: "x" },
+      });
+      expect(await checkSeatLimit(company.id, db)).toMatchObject({ allowed: true, used: 1, limit: 2 });
+      await db.user.create({
+        data: { companyId: company.id, email: `b${seq}@x.test`, name: "B", role: "employee", passwordHash: "x" },
+      });
+      expect(await checkSeatLimit(company.id, db)).toMatchObject({ allowed: false, used: 2 });
+    });
+  });
+
+  describe("requireFeature", () => {
+    it("lets a trial through the whole compliance path", async () => {
+      const company = await makeTrialCompany();
+      expect(await requireFeature(company.id, "issueInvoice", db)).toBeNull();
+      expect(await requireFeature(company.id, "submitToZatca", db)).toBeNull();
+    });
+
+    it("denies a trial a Pro-only feature, with an explanation", async () => {
+      const company = await makeTrialCompany();
+      const denial = await requireFeature(company.id, "aiWriteActions", db);
+      expect(denial).toMatchObject({ feature: "aiWriteActions", plan: "trial" });
+      expect(denial?.message).toContain("Pro");
+    });
+
+    it("denies an expired tenant even the compliance path, naming the trial as ended", async () => {
+      const company = await makeCompany();
+      const denial = await requireFeature(company.id, "issueInvoice", db);
+      expect(denial?.plan).toBe("expired");
+      expect(denial?.message).toContain("trial has ended");
+    });
+
+    it("lets pro through everything", async () => {
+      const company = await makeProCompany();
+      expect(await requireFeature(company.id, "aiWriteActions", db)).toBeNull();
+      expect(await requireFeature(company.id, "apiKeys", db)).toBeNull();
+    });
   });
 });

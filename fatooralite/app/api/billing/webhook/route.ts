@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { verifyWebhookSecret, parseInvoiceWebhook } from "@/lib/billing/moyasar";
-import { PRO_PERIOD_DAYS } from "@/lib/billing/plan";
+import { proPeriodEndFrom } from "@/lib/billing/plan";
 
 export const runtime = "nodejs";
 
@@ -49,7 +49,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true, alreadyProcessed: true });
   }
 
-  const currentPeriodEnd = new Date(Date.now() + PRO_PERIOD_DAYS * 86_400_000);
+  // trialEndsAt is cleared on the way to pro: it is only meaningful on a trial
+  // row, and leaving a stale value behind would make an expired-trial date
+  // linger in the Settings display of a paying customer.
+  const currentPeriodEnd = proPeriodEndFrom();
   await prisma.subscription.upsert({
     where: { companyId: event.companyId },
     create: {
@@ -57,9 +60,16 @@ export async function POST(req: Request) {
       plan: "pro",
       status: "active",
       processorSubscriptionId: event.invoiceId,
+      trialEndsAt: null,
       currentPeriodEnd,
     },
-    update: { plan: "pro", status: "active", processorSubscriptionId: event.invoiceId, currentPeriodEnd },
+    update: {
+      plan: "pro",
+      status: "active",
+      processorSubscriptionId: event.invoiceId,
+      trialEndsAt: null,
+      currentPeriodEnd,
+    },
   });
 
   return NextResponse.json({ received: true });

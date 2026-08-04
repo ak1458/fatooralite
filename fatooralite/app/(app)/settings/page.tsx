@@ -5,19 +5,59 @@ import { useCompany } from "@/lib/useCompany";
 import { ThemeToggle } from "@/components/shell/ThemeToggle";
 import { LangToggle } from "@/components/shell/LangToggle";
 import { ProgressBar } from "@/components/ui/ProgressBar";
-import { ONBOARDING_STEPS, getStepKeys } from "@/lib/onboarding/steps";
+import { ONBOARDING_STEPS } from "@/lib/onboarding/steps";
+
+interface Usage {
+  used: number;
+  limit: number | null;
+}
 
 interface BillingInfo {
-  subscription: { plan: string; status: string; currentPeriodEnd?: string | null };
+  /** Resolved server-side — never inferred from the raw subscription row here,
+   *  so this display cannot disagree with what the gates actually enforce. */
+  plan: "trial" | "pro" | "expired";
+  trialDaysLeft: number | null;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
   planLimits: { invoicesPerMonth: number | null; branches: number | null; seats: number | null };
-  invoiceUsage: { used: number; limit: number | null };
+  invoiceUsage: Usage;
+  branchUsage: Usage;
+  seatUsage: Usage;
 }
+
+/** Reserved for Pro. Shown to trial and expired tenants, never hidden — a
+ *  capability nobody can see is a capability nobody upgrades for. */
+const PRO_FEATURES = [
+  "Unlimited invoices per month",
+  "Multiple branches and locations",
+  "Unlimited team members",
+  "AI assistant actions (create, issue and submit from chat)",
+  "Bulk import and export",
+  "API access",
+  "Custom invoice branding",
+  "Advanced reports",
+];
 
 const input: React.CSSProperties = {
   width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--bd)",
   background: "var(--s2)", color: "var(--tx)", fontSize: 14, fontFamily: "inherit", outline: "none",
 };
 const label: React.CSSProperties = { display: "block", fontSize: 12, color: "var(--t3)", marginBottom: 5 };
+
+function UsageMeter({ label: text, usage }: { label: string; usage: Usage }) {
+  const pct = usage.limit ? Math.min(100, Math.round((usage.used / usage.limit) * 100)) : 0;
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+        <span style={{ fontSize: 12.5, color: "var(--t3)" }}>{text}</span>
+        <span style={{ fontSize: 12.5, color: "var(--t2)", fontFamily: "var(--fmono)" }}>
+          {usage.used} / {usage.limit ?? "unlimited"}
+        </span>
+      </div>
+      <ProgressBar pct={pct} />
+    </div>
+  );
+}
 
 function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
@@ -43,7 +83,18 @@ export default function SettingsPage() {
   const loadCompany = useCallback((id: string) => {
     return fetch(`/api/companies/${id}`).then((r) => r.json()).then((d) => {
       setForm({ name: d.name || "", nameAr: d.nameAr || "", vatNumber: d.vatNumber || "", crNumber: d.crNumber || "", address: d.address || "" });
-      if (d.subscription) setBilling({ subscription: d.subscription, planLimits: d.planLimits, invoiceUsage: d.invoiceUsage });
+      if (d.plan) {
+        setBilling({
+          plan: d.plan,
+          trialDaysLeft: d.trialDaysLeft ?? null,
+          trialEndsAt: d.trialEndsAt ?? null,
+          currentPeriodEnd: d.currentPeriodEnd ?? null,
+          planLimits: d.planLimits,
+          invoiceUsage: d.invoiceUsage,
+          branchUsage: d.branchUsage,
+          seatUsage: d.seatUsage,
+        });
+      }
     }).catch(() => {});
   }, []);
 
@@ -105,10 +156,9 @@ export default function SettingsPage() {
     } finally { setIngesting(false); }
   }
 
-  const isPro = billing?.subscription.plan === "pro" && billing?.subscription.status === "active";
-  const invLimit = billing?.planLimits.invoicesPerMonth ?? null;
-  const invUsed = billing?.invoiceUsage.used ?? 0;
-  const usagePct = invLimit ? Math.min(100, Math.round((invUsed / invLimit) * 100)) : 0;
+  const plan = billing?.plan ?? "trial";
+  const isPro = plan === "pro";
+  const planLabel = { trial: "Trial", pro: "Pro", expired: "Trial ended" }[plan];
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto" }}>
@@ -163,36 +213,41 @@ export default function SettingsPage() {
       </Section>
 
       <Section title="Billing" sub="Your subscription and usage.">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isPro ? 0 : 14 }}>
-          <div style={{ fontSize: 13.5, color: "var(--t2)" }}>Current plan</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ fontSize: 13.5, color: "var(--t2)" }}>
+            Current plan
+            {plan === "trial" && billing?.trialDaysLeft != null && (
+              <span style={{ color: "var(--t3)", fontSize: 12.5 }}>
+                {" — "}
+                {billing.trialDaysLeft} day{billing.trialDaysLeft === 1 ? "" : "s"} left
+                {billing.trialEndsAt ? `, ends ${new Date(billing.trialEndsAt).toLocaleDateString()}` : ""}
+              </span>
+            )}
+          </div>
           <span
             style={{
               fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 999,
               background: isPro ? "linear-gradient(150deg,var(--acb),var(--ac))" : "var(--s2)",
-              color: isPro ? "#04130d" : "var(--t2)",
-              border: isPro ? "none" : "1px solid var(--bd)",
+              color: isPro ? "#04130d" : plan === "expired" ? "var(--dang)" : "var(--t2)",
+              border: isPro ? "none" : `1px solid ${plan === "expired" ? "var(--dang)" : "var(--bd)"}`,
             }}
           >
-            {isPro ? "Pro" : "Free"}
+            {planLabel}
           </span>
         </div>
 
-        {!isPro && (
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: 12.5, color: "var(--t3)" }}>Invoices this month</span>
-              <span style={{ fontSize: 12.5, color: "var(--t2)", fontFamily: "var(--fmono)" }}>
-                {invUsed} / {invLimit ?? "unlimited"}
-              </span>
-            </div>
-            <ProgressBar pct={usagePct} />
+        {!isPro && billing && (
+          <div style={{ marginBottom: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+            <UsageMeter label="Invoices this month" usage={billing.invoiceUsage} />
+            <UsageMeter label="Branches" usage={billing.branchUsage} />
+            <UsageMeter label="Team members" usage={billing.seatUsage} />
           </div>
         )}
 
         {isPro ? (
           <div style={{ fontSize: 12.5, color: "var(--t3)" }}>
-            {billing?.subscription.currentPeriodEnd
-              ? `Renews or expires ${new Date(billing.subscription.currentPeriodEnd).toLocaleDateString()}.`
+            {billing?.currentPeriodEnd
+              ? `Renews or expires ${new Date(billing.currentPeriodEnd).toLocaleDateString()}.`
               : "Active."}
           </div>
         ) : (
@@ -212,6 +267,23 @@ export default function SettingsPage() {
             {checkoutError && (
               <div style={{ fontSize: 12.5, color: "var(--dang)", marginTop: 8 }}>{checkoutError}</div>
             )}
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--t2)", marginBottom: 8 }}>
+                What Pro unlocks
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
+                {PRO_FEATURES.map((f) => (
+                  <li key={f} style={{ fontSize: 12.5, color: "var(--t3)" }}>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              {plan === "expired" && (
+                <div style={{ fontSize: 12.5, color: "var(--t3)", marginTop: 12 }}>
+                  Your existing invoices and audit records remain available to view, download and export.
+                </div>
+              )}
+            </div>
           </>
         )}
       </Section>

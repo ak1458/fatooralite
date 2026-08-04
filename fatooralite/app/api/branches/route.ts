@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/server";
+import { checkBranchLimit } from "@/lib/billing/plan";
+import { limitReached } from "@/lib/billing/deny";
 
 export const runtime = "nodejs";
 
@@ -43,6 +45,12 @@ export async function POST(req: Request) {
 
   const { deny } = await requirePermission(req, "settings:manage", parsed.data.companyId);
   if (deny) return deny;
+
+  // Every plan gets one branch — the onboarding wizard requires one, so gating
+  // the first would make setup impossible. The second is where multiBranch
+  // starts, which is why the limit is checked rather than the feature flag.
+  const branchLimit = await checkBranchLimit(parsed.data.companyId);
+  if (!branchLimit.allowed) return limitReached(branchLimit, "branches");
 
   const branch = await prisma.branch.create({ data: parsed.data });
   return NextResponse.json({ branch }, { status: 201 });

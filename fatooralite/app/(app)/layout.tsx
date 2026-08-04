@@ -4,6 +4,7 @@ import { Topbar } from "@/components/shell/Topbar";
 import { GlowBackground } from "@/components/common/GlowBackground";
 import { OnboardingGuard } from "@/components/common/OnboardingGuard";
 import { AssistantDock } from "@/components/ai/AssistantDock";
+import { TrialBanner } from "@/components/billing/TrialBanner";
 import { CompanyProvider } from "@/lib/useCompany";
 import { FadeIn } from "@/components/common/Motion";
 
@@ -36,6 +37,7 @@ export default function AppLayout({
             <Topbar />
             <main style={{ flex: 1, overflowY: "auto", padding: "26px 28px 60px" }}>
               <OnboardingGuard>
+                <TrialBanner />
                 <FadeIn>{children}</FadeIn>
               </OnboardingGuard>
             </main>

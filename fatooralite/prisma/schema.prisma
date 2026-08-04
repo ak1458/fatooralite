@@ -92,10 +92,14 @@ model Company {
 model Subscription {
   id                     String    @id @default(cuid())
   companyId              String    @unique
-  plan                   String    @default("free") // free | pro
+  // Paid-only product: a tenant is in a 7-day trial, on pro, or expired.
+  // There is no free tier. Plan resolution lives in lib/billing/entitlements.ts.
+  plan                   String    @default("trial") // trial | pro
   status                 String    @default("active") // active | past_due | canceled
   processorCustomerId    String?
   processorSubscriptionId String?
+  /** End of the 7-day trial. Set at registration; null on a pro row. */
+  trialEndsAt            DateTime?
   currentPeriodEnd       DateTime?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @default(now()) @updatedAt

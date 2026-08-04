@@ -5,7 +5,8 @@ import { getInvoiceList } from "@/lib/db/queries";
 import { createInvoiceSchema } from "@/lib/validation/schemas";
 import { requirePermission } from "@/lib/auth/server";
 import { scheduleCompanyIngest } from "@/lib/ai/tenant-ingest";
-import { checkInvoiceLimit } from "@/lib/billing/plan";
+import { checkInvoiceLimit, requireFeature } from "@/lib/billing/plan";
+import { featureLocked, limitReached } from "@/lib/billing/deny";
 import type { InvoiceInput } from "@/lib/zatca/types";
 
 export const runtime = "nodejs";
@@ -30,13 +31,13 @@ export async function POST(req: Request) {
   const { deny } = await requirePermission(req, "invoice:create", companyId);
   if (deny) return deny;
 
-  const { allowed, limit, used } = await checkInvoiceLimit(companyId);
-  if (!allowed) {
-    return NextResponse.json(
-      { error: "Monthly invoice limit reached on the free plan. Upgrade to continue.", limit, used },
-      { status: 402 },
-    );
-  }
+  // Two separate gates: the entitlement (an expired trial cannot issue at all)
+  // and the volume cap (a live trial can, up to its monthly allowance).
+  const denial = await requireFeature(companyId, "issueInvoice");
+  if (denial) return featureLocked(denial);
+
+  const invoiceLimit = await checkInvoiceLimit(companyId);
+  if (!invoiceLimit.allowed) return limitReached(invoiceLimit, "invoices");
 
   try {
     const validData = createInvoiceSchema.parse(input);

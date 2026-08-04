@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { updateCompanySchema, patchCompanySchema, checkOnboardingCompletion } from "@/lib/validation/schemas";
 import { requirePermission } from "@/lib/auth/server";
-import { PLAN_LIMITS, checkInvoiceLimit, getEffectivePlan } from "@/lib/billing/plan";
+import { checkBranchLimit, checkInvoiceLimit, checkSeatLimit, getTenantPlan } from "@/lib/billing/plan";
 
 export const runtime = "nodejs";
 
@@ -60,19 +60,30 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   if (!company) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const sub = await prisma.subscription.findUnique({ where: { companyId: params.id } });
-  // Single source of truth for "is this company actually Pro right now" —
-  // matches checkInvoiceLimit's own resolution (currentPeriodEnd expiry
-  // included), so this display can never disagree with what's enforced.
-  const isPro = (await getEffectivePlan(params.id)) === "pro";
+  // Single source of truth for "what plan is this company actually on right
+  // now" — the same resolution every enforcement gate uses (trial expiry and
+  // currentPeriodEnd included), so this display can never disagree with what
+  // is enforced.
+  const tenantPlan = await getTenantPlan(params.id);
 
-  // Monthly invoice usage — needed by the Settings > Billing usage display.
-  const { used, limit } = await checkInvoiceLimit(params.id);
+  // Usage against every limit, for the Settings > Billing display.
+  const [invoices, branches, seats] = await Promise.all([
+    checkInvoiceLimit(params.id),
+    checkBranchLimit(params.id),
+    checkSeatLimit(params.id),
+  ]);
 
   return NextResponse.json({
     ...company,
-    subscription: sub ?? { plan: "free", status: "active" },
-    planLimits: PLAN_LIMITS[isPro ? "pro" : "free"],
-    invoiceUsage: { used, limit },
+    subscription: sub ?? { plan: tenantPlan.plan, status: "expired", trialEndsAt: null },
+    plan: tenantPlan.plan,
+    trialDaysLeft: tenantPlan.trialDaysLeft,
+    trialEndsAt: tenantPlan.trialEndsAt,
+    currentPeriodEnd: tenantPlan.currentPeriodEnd,
+    planLimits: tenantPlan.limits,
+    invoiceUsage: { used: invoices.used, limit: invoices.limit },
+    branchUsage: { used: branches.used, limit: branches.limit },
+    seatUsage: { used: seats.used, limit: seats.limit },
   });
 }
 

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db/client";
 import { inviteUserSchema } from "@/lib/validation/schemas";
 import { inviteUser, UserError } from "@/lib/services/user-service";
 import { requirePermission } from "@/lib/auth/server";
+import { checkSeatLimit } from "@/lib/billing/plan";
+import { limitReached } from "@/lib/billing/deny";
 
 export const runtime = "nodejs";
 
@@ -47,6 +49,9 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
+
+  const seatLimit = await checkSeatLimit(companyId);
+  if (!seatLimit.allowed) return limitReached(seatLimit, "seats");
 
   try {
     const user = await inviteUser({ companyId, ...parsed.data });
