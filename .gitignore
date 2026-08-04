@@ -34,3 +34,10 @@ Thumbs.db
 # prisma local db
 *.db
 *.db-journal
+
+# build caches
+**/tsconfig.tsbuildinfo
+
+# agent worktrees — full repo copies created by parallel-agent runs.
+# Never commit these; `git worktree prune` + `git branch -D worktree-*` cleans up.
+.claude/worktrees/
