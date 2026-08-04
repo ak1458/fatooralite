@@ -4,6 +4,7 @@
  * is selected by the AI_PROVIDER env var with zero call-site changes:
  *
  *   AI_PROVIDER=openrouter (default) — OpenAI-compatible, free-model routing
+ *   AI_PROVIDER=groq                 — GroqCloud, OpenAI-compatible, low latency
  *   AI_PROVIDER=anthropic            — official @anthropic-ai/sdk (Messages API)
  *   AI_PROVIDER=openai               — OpenAI Chat Completions
  *
@@ -58,6 +59,7 @@ export interface ChatProvider {
 import { createOpenRouterProvider } from "./providers/openrouter";
 import { createOpenAIProvider } from "./providers/openai";
 import { createAnthropicProvider } from "./providers/anthropic";
+import { createGroqProvider } from "./providers/groq";
 
 let cached: ChatProvider | null = null;
 let cachedName: string | null = null;
@@ -73,11 +75,16 @@ export function getChatProvider(): ChatProvider {
     case "openai":
       cached = createOpenAIProvider();
       break;
+    case "groq":
+      cached = createGroqProvider();
+      break;
     case "openrouter":
       cached = createOpenRouterProvider();
       break;
     default:
-      throw new Error(`Unknown AI_PROVIDER "${name}" (expected openrouter | anthropic | openai)`);
+      throw new Error(
+        `Unknown AI_PROVIDER "${name}" (expected openrouter | groq | anthropic | openai)`,
+      );
   }
   return cached;
 }

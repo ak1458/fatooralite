@@ -12,7 +12,16 @@ const envSchema = z.object({
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters"),
 
   /* ---- optional (warn if absent) ---- */
+  /**
+   * Which AI backend lib/ai/provider.ts builds. Each has its own key below;
+   * only the selected provider's key matters, so all are optional here and
+   * the "AI is unconfigured" warning is resolved per provider.
+   */
+  AI_PROVIDER: z.enum(["openrouter", "groq", "anthropic", "openai"]).optional(),
   OPENROUTER_API_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
   ZATCA_MODE: z.enum(["simulation", "sandbox", "production"]).optional(),
   SEED_DEMO: z.string().optional(),
   ENCRYPTION_KEY: z.string().optional(),
@@ -55,9 +64,16 @@ export function validateEnv(): Env {
     );
   }
 
-  if (!result.data.OPENROUTER_API_KEY) {
+  const aiProvider = result.data.AI_PROVIDER ?? "openrouter";
+  const aiKeyVar = {
+    openrouter: "OPENROUTER_API_KEY",
+    groq: "GROQ_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY",
+    openai: "OPENAI_API_KEY",
+  }[aiProvider];
+  if (!process.env[aiKeyVar]) {
     console.warn(
-      "⚠️  OPENROUTER_API_KEY not set — AI assistant will run in mock/offline mode.",
+      `⚠️  ${aiKeyVar} not set (AI_PROVIDER=${aiProvider}) — AI assistant will run in mock/offline mode.`,
     );
   }
 

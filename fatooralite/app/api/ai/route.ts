@@ -123,9 +123,14 @@ export async function POST(req: Request) {
 
   // Mock mode: no API key configured. Stream a canned answer so the UI works.
   if (!isConfigured()) {
+    const provider = (process.env.AI_PROVIDER || "openrouter").toLowerCase();
+    const keyVar =
+      { openrouter: "OPENROUTER_API_KEY", groq: "GROQ_API_KEY", anthropic: "ANTHROPIC_API_KEY", openai: "OPENAI_API_KEY" }[
+        provider
+      ] ?? "the provider API key";
     const mock =
-      "I am Fatoora AI, running in **mock mode** — no `OPENROUTER_API_KEY` is configured. " +
-      "Add it to your `.env` to enable live answers.\n\n" +
+      `I am Fatoora AI, running in **mock mode** — no \`${keyVar}\` is configured ` +
+      `(AI_PROVIDER=${provider}). Add it to your \`.env\` to enable live answers.\n\n` +
       "Quick reminder: standard (B2B) invoices must be **cleared** by ZATCA before you share them, " +
       "while simplified (B2C) invoices must be **reported within 24 hours** of issuance.";
     return new Response(textStream(mock), { headers: STREAM_HEADERS });

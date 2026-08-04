@@ -21,6 +21,7 @@ fatooralite/lib/ai/
   providers/
     openai-compat.ts     # generic OpenAI-compatible adapter (fetch-based)
     openrouter.ts        # OpenRouter instance (models-array routing, free-model tuning)
+    groq.ts              # GroqCloud instance (low-latency demo path)
     openai.ts            # OpenAI instance
     anthropic.ts         # official @anthropic-ai/sdk adapter (Messages API)
   embeddings.ts          # EmbeddingProvider factory (local | openai | voyage)
@@ -44,9 +45,10 @@ interface ChatProvider {
 The internal wire format is OpenAI-style (`role`, `tool_calls` with JSON-string
 arguments) because the tool registry already speaks it. Adapters translate:
 
-- **OpenRouter / OpenAI** share `providers/openai-compat.ts` (same protocol).
-  OpenRouter adds its `models: [primary, fallback]` routing and
-  `reasoning: {effort: "low"}` tuning for free reasoning models.
+- **OpenRouter / Groq / OpenAI** share `providers/openai-compat.ts` (same
+  protocol). OpenRouter adds its `models: [primary, fallback]` routing and
+  `reasoning: {effort: "low"}` tuning for free reasoning models; Groq takes a
+  single `model`, so it declares no fallback.
 - **Anthropic** (`providers/anthropic.ts`, official SDK) maps:
   - `system` messages → the `system` parameter
   - assistant `tool_calls` → `tool_use` content blocks
@@ -60,8 +62,15 @@ arguments) because the tool registry already speaks it. Adapters translate:
 | Scenario | Env change |
 |---|---|
 | Development (default) | `AI_PROVIDER=openrouter`, `OPENROUTER_API_KEY=…` |
+| Live demo — Groq | `AI_PROVIDER=groq`, `GROQ_API_KEY=…`, optionally `GROQ_MODEL=llama-3.3-70b-versatile` |
 | Enterprise — Anthropic | `AI_PROVIDER=anthropic`, `ANTHROPIC_API_KEY=…`, optionally `AI_MODEL=claude-opus-4-8` |
 | Enterprise — OpenAI | `AI_PROVIDER=openai`, `OPENAI_API_KEY=…`, optionally `AI_MODEL=…` |
+
+Groq is [groq.com](https://console.groq.com) — LPU inference hosting for open
+models — not xAI's Grok. It is here for latency: the assistant has to answer
+*and* run tools fast enough to demo live, which the free OpenRouter tier does
+not reliably do. Whichever model is set must support tool calling, or the
+in-chat actions silently degrade to plain chat.
 
 That is the entire migration. Call sites (`/api/ai`, `/api/ai/agent`,
 `/api/ai/insights`) import only `lib/ai/provider`.
