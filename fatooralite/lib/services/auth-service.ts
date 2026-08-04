@@ -40,6 +40,7 @@ export async function registerCompany(input: RegisterInput, db: PrismaClient = d
           name: input.name,
           role: "owner",
           passwordHash: hashPassword(input.password),
+          acceptedTermsAt: new Date(),
         },
       });
       return { company, user };

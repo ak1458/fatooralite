@@ -39,6 +39,7 @@ export async function POST(req: Request) {
     name: user.name,
     role: user.role,
     companyId: company.id,
+    sessionVersion: 0, // new user, version starts at 0
   });
 
   const res = NextResponse.json(

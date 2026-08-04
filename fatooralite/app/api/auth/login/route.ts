@@ -29,6 +29,7 @@ export async function POST(req: Request) {
     name: user.name,
     role: user.role,
     companyId: user.companyId ?? undefined,
+    sessionVersion: user.sessionVersion,
   });
 
   const res = NextResponse.json({

@@ -6,6 +6,12 @@ export interface SessionPayload {
   name: string;
   role: string;
   companyId?: string;
+  /**
+   * Mirrors User.sessionVersion from the DB.  Incremented on every password
+   * reset so that old tokens issued before the reset are silently rejected.
+   * The guard in lib/auth/server.ts verifies this matches the DB value.
+   */
+  sessionVersion: number;
 }
 
 export const SESSION_COOKIE = "fl_session";
@@ -18,6 +24,15 @@ function secretKey(): Uint8Array {
     throw new Error("AUTH_SECRET must be set to a strong value in production");
   }
   return new TextEncoder().encode(secret);
+}
+
+/**
+ * Shared signing key for all auth-related JWTs (sessions, password-reset
+ * tokens, etc). Single source of truth so a secret rotation only ever
+ * touches one place.
+ */
+export function authSecretKey(): Uint8Array {
+  return secretKey();
 }
 
 /** Sign a 7-day session token. */
@@ -39,6 +54,7 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
       name: String(payload.name),
       role: String(payload.role),
       companyId: payload.companyId ? String(payload.companyId) : undefined,
+      sessionVersion: typeof payload.sessionVersion === "number" ? payload.sessionVersion : 0,
     };
   } catch {
     return null;

@@ -25,7 +25,7 @@ afterAll(async () => {
   }
 });
 
-const base = { name: "Ali Hassan", password: "secret12", companyName: "Acme Trading" };
+const base = { name: "Ali Hassan", password: "secret12", companyName: "Acme Trading", acceptedTerms: true as const };
 
 describe.skipIf(!hasTestDb)("registerCompany", () => {
   it("creates a company (pending onboarding) and an owner user with a hashed password", async () => {

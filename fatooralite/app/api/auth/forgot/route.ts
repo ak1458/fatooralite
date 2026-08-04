@@ -1,18 +1,42 @@
 import { NextResponse } from "next/server";
 import { SignJWT } from "jose";
 import { prisma } from "@/lib/db/client";
+import { authSecretKey } from "@/lib/auth/session";
+import { sendEmail } from "@/lib/email/send";
 
 export const runtime = "nodejs";
 
-const DEV_SECRET = "dev-insecure-secret-change-me-1234567890";
-function secretKey(): Uint8Array {
-  return new TextEncoder().encode(process.env.AUTH_SECRET ?? DEV_SECRET);
+function resetEmailHtml(resetUrl: string): string {
+  return `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; color: #1a1a1a;">
+  <h1 style="font-size: 20px; margin: 0 0 16px;">Reset your password</h1>
+  <p style="font-size: 15px; line-height: 1.6; margin: 0 0 24px; color: #333;">
+    We received a request to reset the password for your Fatoora Lite Pro account.
+    Click the button below to choose a new password.
+  </p>
+  <p style="margin: 0 0 24px;">
+    <a href="${resetUrl}"
+       style="display: inline-block; background-color: #0f766e; color: #ffffff; text-decoration: none;
+              padding: 12px 24px; border-radius: 6px; font-size: 15px; font-weight: 600;">
+      Reset password
+    </a>
+  </p>
+  <p style="font-size: 13px; line-height: 1.6; color: #666; margin: 0 0 8px;">
+    This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.
+  </p>
+  <p style="font-size: 13px; line-height: 1.6; color: #666; margin: 0;">
+    If the button doesn't work, copy and paste this link into your browser:<br />
+    <a href="${resetUrl}" style="color: #0f766e; word-break: break-all;">${resetUrl}</a>
+  </p>
+</div>`.trim();
 }
 
 /**
  * POST /api/auth/forgot
- * Generates a password-reset JWT (1-hour expiry) and logs it to the console.
- * Always returns 200 to prevent email enumeration.
+ * Generates a password-reset JWT (1-hour expiry) and emails it to the user
+ * (falls back to console-logging the link if email delivery isn't
+ * configured — see lib/email/send.ts). Always returns 200 to prevent email
+ * enumeration, regardless of whether the account exists or delivery succeeded.
  */
 export async function POST(req: Request) {
   try {
@@ -35,10 +59,14 @@ export async function POST(req: Request) {
         .setProtectedHeader({ alg: "HS256" })
         .setIssuedAt()
         .setExpirationTime("1h")
-        .sign(secretKey());
+        .sign(authSecretKey());
 
       const resetUrl = `${req.headers.get("origin") ?? "http://localhost:3000"}/reset?token=${token}`;
-      console.log(`\n🔑 Password reset link for ${email}:\n   ${resetUrl}\n`);
+      await sendEmail({
+        to: email,
+        subject: "Reset your Fatoora Lite Pro password",
+        html: resetEmailHtml(resetUrl),
+      });
     }
 
     // Always return success to prevent email enumeration

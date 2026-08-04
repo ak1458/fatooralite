@@ -9,7 +9,7 @@ const envSchema = z.object({
   /* ---- required (throw if absent) ---- */
   DATABASE_URL: z.string().min(1, "DATABASE_URL must be set"),
   DIRECT_URL: z.string().min(1, "DIRECT_URL must be set").optional(),
-  AUTH_SECRET: z.string().min(1, "AUTH_SECRET must be set"),
+  AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters"),
 
   /* ---- optional (warn if absent) ---- */
   OPENROUTER_API_KEY: z.string().optional(),
@@ -17,6 +17,20 @@ const envSchema = z.object({
   SEED_DEMO: z.string().optional(),
   ENCRYPTION_KEY: z.string().optional(),
   AUTH_ENFORCE: z.string().optional(),
+  /**
+   * CRON_SECRET: Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`.
+   * Required in production — without it the zatca-reporting cron endpoint
+   * is open to anyone who discovers the URL.
+   */
+  CRON_SECRET: z.string().optional(),
+
+  /* ---- optional distributed rate limiting ---- */
+  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+
+  /* ---- optional (no warning — feature is allowed to be unconfigured) ---- */
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -60,12 +74,21 @@ export function validateEnv(): Env {
   if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build") {
     if (!result.data.ENCRYPTION_KEY) {
       throw new Error(
-        "⛔  ENCRYPTION_KEY is required in production (ZATCA private keys must be encrypted at rest).",
+        "⛔  ENCRYPTION_KEY is required in production (ZATCA private keys must be encrypted at rest).\n" +
+        "    Generate with: openssl rand -base64 32",
       );
     }
+    // Use strict equality so typos like AUTH_ENFORCE=True or AUTH_ENFORCE=yes
+    // don't silently bypass the guard.
     if (result.data.AUTH_ENFORCE !== "true") {
       throw new Error(
         "⛔  AUTH_ENFORCE=true is required in production (login + RBAC enforcement).",
+      );
+    }
+    if (!result.data.CRON_SECRET) {
+      throw new Error(
+        "⛔  CRON_SECRET is required in production (protects the ZATCA reporting cron endpoint).\n" +
+        "    Generate with: openssl rand -base64 32, then set in Vercel dashboard and vercel.json.",
       );
     }
   }

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import type { PrismaClient } from "@prisma/client";
 import { SESSION_COOKIE, verifySessionToken } from "./session";
 import type { SessionPayload } from "./session";
 import { can } from "./rbac";
@@ -25,31 +26,32 @@ export async function getUserFromRequest(req: Request): Promise<SessionPayload |
 /**
  * Whether the user holds a permission — via their system role (code matrix)
  * or, failing that, a DB-backed custom role (User.roleId -> RolePermission).
+ * `db` is injectable (defaults to the real client) for testability.
  */
-export async function hasPermission(user: SessionPayload, permission: Permission): Promise<boolean> {
+export async function hasPermission(user: SessionPayload, permission: Permission, db: PrismaClient = prisma): Promise<boolean> {
   if (can(user.role, permission)) return true;
-  const dbUser = await prisma.user.findUnique({
+  const dbUser = await db.user.findUnique({
     where: { id: user.userId },
     select: { roleId: true },
   });
   if (!dbUser?.roleId) return false;
-  const grant = await prisma.rolePermission.findUnique({
+  const grant = await db.rolePermission.findUnique({
     where: { roleId_permission: { roleId: dbUser.roleId, permission } },
   });
   return !!grant;
 }
 
 /** All permissions a user effectively holds (system matrix + custom role). */
-export async function effectivePermissions(user: SessionPayload): Promise<Set<string>> {
+export async function effectivePermissions(user: SessionPayload, db: PrismaClient = prisma): Promise<Set<string>> {
   const perms = new Set<string>();
   const { MATRIX_LOOKUP } = await import("./rbac");
   for (const p of MATRIX_LOOKUP(user.role)) perms.add(p);
-  const dbUser = await prisma.user.findUnique({
+  const dbUser = await db.user.findUnique({
     where: { id: user.userId },
     select: { roleId: true },
   });
   if (dbUser?.roleId) {
-    const grants = await prisma.rolePermission.findMany({
+    const grants = await db.rolePermission.findMany({
       where: { roleId: dbUser.roleId },
       select: { permission: true },
     });
@@ -59,26 +61,63 @@ export async function effectivePermissions(user: SessionPayload): Promise<Set<st
 }
 
 /**
+ * Whether the JWT's embedded sessionVersion still matches the DB. A password
+ * reset increments User.sessionVersion, which must invalidate every token
+ * issued before the reset — otherwise a stolen session survives its full
+ * 7-day life even after the legitimate user "secures" their account.
+ * Fails closed: a missing/deleted user counts as invalid. `db` is injectable
+ * (defaults to the real client) so this is testable against a test database,
+ * matching the convention in lib/db/repo.ts and lib/billing/plan.ts.
+ */
+export async function hasCurrentSessionVersion(user: SessionPayload, db: PrismaClient = prisma): Promise<boolean> {
+  const dbUser = await db.user.findUnique({
+    where: { id: user.userId },
+    select: { sessionVersion: true },
+  });
+  return dbUser !== null && dbUser.sessionVersion === user.sessionVersion;
+}
+
+/**
+ * Whether `user` may act as `companyId` (undefined/null companyId means "no
+ * assertion", always allowed). Deny-by-default: a company-less session
+ * (User.companyId is nullable — reachable, not hypothetical) must NOT bypass
+ * this just because there's nothing to compare against. A prior truthy-guard
+ * version of this check (`companyId && user.companyId && ...`) short-
+ * circuited to "allow" for exactly that case; every caller of this helper
+ * replaces one of those copies.
+ */
+export function isCallerCompany(user: SessionPayload | null, companyId?: string | null): boolean {
+  return !companyId || user?.companyId === companyId;
+}
+
+/**
  * Guard a route handler: returns the user, or a 401/403 NextResponse to return
- * early. Auth enforcement is gated by AUTH_ENFORCE so the demo runs open by
- * default; set AUTH_ENFORCE=true to require login + permissions.
+ * early. Secure by default — enforcement is ON unless AUTH_ENFORCE is
+ * explicitly "false" (unauthenticated local demos only). This MUST match
+ * proxy.ts's page-level gate exactly: if the two ever disagree on the
+ * default, page routes can appear protected (redirecting to /login) while
+ * the underlying API routes stay wide open to a direct call, which is worse
+ * than no protection at all because it looks secure.
  */
 export async function requirePermission(
   req: Request,
   permission: Permission,
   targetCompanyId?: string,
 ): Promise<{ user: SessionPayload | null; deny?: NextResponse }> {
-  if (process.env.AUTH_ENFORCE !== "true") {
+  if (process.env.AUTH_ENFORCE === "false") {
     return { user: await getUserFromRequest(req) };
   }
   const user = await getUserFromRequest(req);
   if (!user) {
     return { user: null, deny: NextResponse.json({ error: "Authentication required" }, { status: 401 }) };
   }
+  if (!(await hasCurrentSessionVersion(user))) {
+    return { user: null, deny: NextResponse.json({ error: "Session no longer valid. Please sign in again." }, { status: 401 }) };
+  }
   if (!(await hasPermission(user, permission))) {
     return { user, deny: NextResponse.json({ error: "Insufficient permissions" }, { status: 403 }) };
   }
-  if (targetCompanyId && user.companyId && user.companyId !== targetCompanyId) {
+  if (!isCallerCompany(user, targetCompanyId)) {
     return { user, deny: NextResponse.json({ error: "Tenant mismatch. Access denied to this company's resources." }, { status: 403 }) };
   }
   return { user };

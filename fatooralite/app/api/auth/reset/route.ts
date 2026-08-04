@@ -2,13 +2,9 @@ import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/db/client";
 import { hashPassword } from "@/lib/auth/password";
+import { authSecretKey } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
-
-const DEV_SECRET = "dev-insecure-secret-change-me-1234567890";
-function secretKey(): Uint8Array {
-  return new TextEncoder().encode(process.env.AUTH_SECRET ?? DEV_SECRET);
-}
 
 /**
  * POST /api/auth/reset
@@ -25,7 +21,7 @@ export async function POST(req: Request) {
     // Verify the JWT
     let payload;
     try {
-      const result = await jwtVerify(token, secretKey());
+      const result = await jwtVerify(token, authSecretKey());
       payload = result.payload;
     } catch {
       return NextResponse.json({ error: "Invalid or expired reset link." }, { status: 400 });
@@ -45,11 +41,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "This reset link has already been used or is invalid." }, { status: 400 });
     }
 
-    // Hash and update password, clear the nonce
-    const passwordHash = await hashPassword(password);
+    // Hash and update password, clear the nonce, and bump sessionVersion to
+    // invalidate all outstanding session cookies (prevents session fixation
+    // after a password reset — old JWTs carry the old version and get
+    // rejected by requirePermission's DB-version check in lib/auth/server.ts).
+    const passwordHash = hashPassword(password);
     await prisma.user.update({
       where: { id: user.id },
-      data: { passwordHash, passwordResetNonce: null },
+      data: {
+        passwordHash,
+        passwordResetNonce: null,
+        sessionVersion: { increment: 1 },
+      },
     });
 
     return NextResponse.json({ ok: true });
