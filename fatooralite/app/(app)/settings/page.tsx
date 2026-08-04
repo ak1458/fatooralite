@@ -1,9 +1,17 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useCompany } from "@/lib/useCompany";
 import { ThemeToggle } from "@/components/shell/ThemeToggle";
 import { LangToggle } from "@/components/shell/LangToggle";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { ONBOARDING_STEPS, getStepKeys } from "@/lib/onboarding/steps";
+
+interface BillingInfo {
+  subscription: { plan: string; status: string; currentPeriodEnd?: string | null };
+  planLimits: { invoicesPerMonth: number | null; branches: number | null; seats: number | null };
+  invoiceUsage: { used: number; limit: number | null };
+}
 
 const input: React.CSSProperties = {
   width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--bd)",
@@ -28,14 +36,30 @@ export default function SettingsPage() {
   const [message, setMessage] = useState("");
   const [ingesting, setIngesting] = useState(false);
   const [chunks, setChunks] = useState<number | null>(null);
+  const [billing, setBilling] = useState<BillingInfo | null>(null);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
+
+  const loadCompany = useCallback((id: string) => {
+    return fetch(`/api/companies/${id}`).then((r) => r.json()).then((d) => {
+      setForm({ name: d.name || "", nameAr: d.nameAr || "", vatNumber: d.vatNumber || "", crNumber: d.crNumber || "", address: d.address || "" });
+      if (d.subscription) setBilling({ subscription: d.subscription, planLimits: d.planLimits, invoiceUsage: d.invoiceUsage });
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!company?.id) return;
-    fetch(`/api/companies/${company.id}`).then((r) => r.json()).then((d) =>
-      setForm({ name: d.name || "", nameAr: d.nameAr || "", vatNumber: d.vatNumber || "", crNumber: d.crNumber || "", address: d.address || "" }),
-    ).catch(() => {});
+    loadCompany(company.id);
     fetch(`/api/ai/ingest`).then((r) => r.json()).then((d) => setChunks(d.totalGlobal ?? null)).catch(() => {});
-  }, [company?.id]);
+    // Moyasar's redirect back to success_url races the webhook that
+    // actually grants Pro (see app/api/billing/webhook/route.ts) — the
+    // browser can land here before the server-to-server notification does.
+    // One delayed refetch covers that window without polling indefinitely.
+    if (new URLSearchParams(window.location.search).get("billing") === "success") {
+      setMessage("Payment received — activating your plan…");
+      setTimeout(() => loadCompany(company.id), 2500);
+    }
+  }, [company?.id, loadCompany]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -49,6 +73,29 @@ export default function SettingsPage() {
     } finally { setSaving(false); }
   }
 
+  async function startCheckout() {
+    if (!company?.id) return;
+    setCheckoutBusy(true);
+    setCheckoutError("");
+    try {
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId: company.id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setCheckoutError(data.error || "Could not start checkout.");
+    } catch {
+      setCheckoutError("Could not start checkout.");
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }
+
   async function reingest() {
     setIngesting(true);
     try {
@@ -57,6 +104,11 @@ export default function SettingsPage() {
       setChunks(d.totalGlobal ?? chunks);
     } finally { setIngesting(false); }
   }
+
+  const isPro = billing?.subscription.plan === "pro" && billing?.subscription.status === "active";
+  const invLimit = billing?.planLimits.invoicesPerMonth ?? null;
+  const invUsed = billing?.invoiceUsage.used ?? 0;
+  const usagePct = invLimit ? Math.min(100, Math.round((invUsed / invLimit) * 100)) : 0;
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto" }}>
@@ -111,7 +163,99 @@ export default function SettingsPage() {
       </Section>
 
       <Section title="Billing" sub="Your subscription and usage.">
-        <div style={{ fontSize: 13, color: "var(--t3)" }}>You&apos;re on the free sandbox plan. Paid plans are coming soon.</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isPro ? 0 : 14 }}>
+          <div style={{ fontSize: 13.5, color: "var(--t2)" }}>Current plan</div>
+          <span
+            style={{
+              fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 999,
+              background: isPro ? "linear-gradient(150deg,var(--acb),var(--ac))" : "var(--s2)",
+              color: isPro ? "#04130d" : "var(--t2)",
+              border: isPro ? "none" : "1px solid var(--bd)",
+            }}
+          >
+            {isPro ? "Pro" : "Free"}
+          </span>
+        </div>
+
+        {!isPro && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 12.5, color: "var(--t3)" }}>Invoices this month</span>
+              <span style={{ fontSize: 12.5, color: "var(--t2)", fontFamily: "var(--fmono)" }}>
+                {invUsed} / {invLimit ?? "unlimited"}
+              </span>
+            </div>
+            <ProgressBar pct={usagePct} />
+          </div>
+        )}
+
+        {isPro ? (
+          <div style={{ fontSize: 12.5, color: "var(--t3)" }}>
+            {billing?.subscription.currentPeriodEnd
+              ? `Renews or expires ${new Date(billing.subscription.currentPeriodEnd).toLocaleDateString()}.`
+              : "Active."}
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={startCheckout}
+              disabled={checkoutBusy}
+              style={{
+                padding: "10px 18px", borderRadius: 10, border: "none",
+                background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d",
+                fontWeight: 700, fontSize: 13.5, cursor: "pointer", fontFamily: "inherit",
+                opacity: checkoutBusy ? 0.7 : 1,
+              }}
+            >
+              {checkoutBusy ? "Starting checkout…" : "Upgrade to Pro"}
+            </button>
+            {checkoutError && (
+              <div style={{ fontSize: 12.5, color: "var(--dang)", marginTop: 8 }}>{checkoutError}</div>
+            )}
+          </>
+        )}
+      </Section>
+
+      <Section title="Onboarding setup" sub="Re-run the setup wizard or edit individual steps.">
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Link
+            href="/onboarding?reopen=true"
+            style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "13px 15px", borderRadius: 11, background: "var(--s2)", border: "1px solid var(--bd)",
+              textDecoration: "none", color: "var(--tx)",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>Reconfigure full setup</div>
+              <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 2 }}>
+                Restart the 6-step wizard from the beginning. All current data will be pre-filled.
+              </div>
+            </div>
+            <span style={{ color: "var(--t3)" }}>→</span>
+          </Link>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+            {ONBOARDING_STEPS.map((step) => (
+              step.key !== "finish" && step.key !== "zatca-connection" && step.key !== "branches" && (
+                <Link
+                  key={step.key}
+                  href={`/onboarding?step=${step.key}`}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 8,
+                    padding: "8px 12px", borderRadius: 999, background: "var(--s2)", border: "1px solid var(--bd)",
+                    textDecoration: "none", color: "var(--tx)", fontSize: 12.5, fontWeight: 500,
+                  }}
+                >
+                  {step.label}
+                </Link>
+              )
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--t3)" }}>
+            Jump directly to any completed step to update it — no need to redo the whole wizard.
+          </div>
+        </div>
       </Section>
     </div>
   );
