@@ -1,4 +1,4 @@
-# FatooraLite — Functional Specification
+# Fatoora Lite Pro — Functional Specification
 
 **Status:** For approval · The contract each module must satisfy. Every list view follows the
 **loading → data | empty | error** rule; every mutation is zod-validated, RBAC-checked, and

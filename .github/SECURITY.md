@@ -2,10 +2,10 @@
 
 ## Reporting a vulnerability
 
-If you discover a security vulnerability in FatooraLite, please report it
+If you discover a security vulnerability in Fatoora Lite Pro, please report it
 privately. **Do not open a public issue for security problems.**
 
-Email: **ashrafkamal1458@gmail.com** with subject `SECURITY: FatooraLite`.
+Email: **ashrafkamal1458@gmail.com** with subject `SECURITY: Fatoora Lite Pro`.
 
 Include: a description, steps to reproduce, affected version/commit, and impact.
 You will receive an acknowledgement within a few business days.

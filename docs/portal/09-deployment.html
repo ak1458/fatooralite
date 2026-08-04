@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Deployment Guide · FatooraLite Docs</title>
+<title>Deployment Guide · Fatoora Lite Pro Docs</title>
 <style>
 :root{
   --bg:#0b1210;--s1:#101a17;--s2:#16211d;--bd:#223129;--tx:#e8f0ec;--t2:#b7c6bf;
@@ -60,8 +60,8 @@ main input[type=checkbox]{accent-color:var(--ac)}
 <nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
 <div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html" class="active">Deployment Guide</a><a href="10-ai-architecture.html">AI Architecture</a></nav>
 <main>
-<h1>FatooraLite — Deployment Guide</h1>
-<p><strong>Audience:</strong> anyone deploying FatooraLite to production, start to finish. No prior
+<h1>Fatoora Lite Pro — Deployment Guide</h1>
+<p><strong>Audience:</strong> anyone deploying Fatoora Lite Pro to production, start to finish. No prior
 knowledge of the codebase assumed. Follow the steps in order; each has a verification.</p>
 <p>The reference stack is <strong>Vercel (app) + Neon (Postgres with pgvector)</strong>. Any Node 20+
 host and any Postgres 15+ with the <code>vector</code> extension works the same way — only the
@@ -166,6 +166,10 @@ Never commit them.</p>
 <tr>
 <td><code>ENCRYPTION_KEY</code></td>
 <td>from step 3</td>
+</tr>
+<tr>
+<td><code>CRON_SECRET</code></td>
+<td><strong>mandatory in production</strong> — <code>openssl rand -base64 32</code>. Protects <code>/api/cron/zatca-reporting</code>, which is otherwise a public, unauthenticated path (it&#39;s committed in <code>vercel.json</code>) that drives real ZATCA gateway submissions; the route fails closed (401) if this is unset, so the cron job itself won&#39;t run without it either — set it before relying on the 24h B2C reporting cron.</td>
 </tr>
 <tr>
 <td><code>APP_URL</code></td>
@@ -317,13 +321,42 @@ assistant a ZATCA question returns a grounded, cited answer.</p>
 <ul>
 <li><input disabled="" type="checkbox"> <code>AUTH_ENFORCE=true</code> and a strong, unique <code>AUTH_SECRET</code></li>
 <li><input disabled="" type="checkbox"> <code>ENCRYPTION_KEY</code> set (certificate private keys encrypted at rest)</li>
+<li><input disabled="" type="checkbox"> <code>CRON_SECRET</code> set (protects the ZATCA reporting cron endpoint)</li>
 <li><input disabled="" type="checkbox"> <code>SEED_DEMO</code> unset</li>
 <li><input disabled="" type="checkbox"> HTTPS enforced end-to-end (Vercel does this; self-hosted needs a proxy)</li>
 <li><input disabled="" type="checkbox"> Neon: enable branch protection / PITR backups</li>
 <li><input disabled="" type="checkbox"> Vercel: enable &quot;Protect Preview Deployments&quot; so previews aren&#39;t public</li>
+<li><input disabled="" type="checkbox"> GitHub: enable branch protection on <code>main</code> (require the CI check to pass before merge — CI running is not itself a merge gate without this)</li>
 <li><input disabled="" type="checkbox"> Set <code>ZATCA_MODE=production</code> only after sandbox onboarding passes</li>
 <li><input disabled="" type="checkbox"> Confirm no secrets in the repo: <code>git grep -iE &quot;sk-or-|sk-ant-|postgres://&quot; -- &#39;:!*.md&#39;</code> returns nothing</li>
-<li><input disabled="" type="checkbox"> Rate limits: <code>fatooralite/proxy.ts</code> applies per-IP limits — tune for your traffic</li>
+<li><input disabled="" type="checkbox"> Rate limits: <code>fatooralite/proxy.ts</code> calls <code>lib/ratelimit/limiter.ts</code>, which uses
+shared Upstash Redis when <code>UPSTASH_REDIS_REST_URL</code>/<code>UPSTASH_REDIS_REST_TOKEN</code>
+are set — <strong>set these on Vercel</strong>, or the fallback in-memory limiter is
+per-instance only and a multi-instance deploy under load effectively
+multiplies the intended per-IP budget</li>
+</ul>
+<hr>
+<h2>9b. Disaster recovery</h2>
+<p>No RPO/RTO target is committed yet — <strong>the owner needs to pick one</strong>; the
+mechanics below are ready to use once that&#39;s decided.</p>
+<ul>
+<li><strong>Database</strong>: Neon supports point-in-time recovery (PITR) on paid plans —
+confirm the plan&#39;s retention window (varies by tier) and enable it in the
+Neon dashboard. Restoring: create a new branch from a timestamp
+(<code>neonctl branches create --parent &lt;branch&gt; --timestamp &lt;ISO8601&gt;</code> or via
+the dashboard), verify it, then repoint <code>DATABASE_URL</code>/<code>DIRECT_URL</code>.</li>
+<li><strong>Secrets are not covered by database PITR.</strong> <code>ENCRYPTION_KEY</code> and
+<code>AUTH_SECRET</code> must be backed up separately (password manager / secrets
+vault), out-of-band from the database. A restored database is useless for
+decrypting stored certificate private keys without the <code>ENCRYPTION_KEY</code>
+that was in effect when they were encrypted — losing that key is
+equivalent to losing every tenant&#39;s ZATCA signing key.</li>
+<li><strong>Test the restore path before you need it.</strong> An untested backup is not a
+backup. Run a restore drill on a schedule (quarterly is a reasonable
+starting point) against a scratch Neon branch, and confirm a real
+application boot + login against the restored data.</li>
+<li><strong>Application code/config</strong>: stateless on Vercel — redeploying from git is
+the recovery path; no separate application-layer backup needed.</li>
 </ul>
 <hr>
 <h2>10. Upgrades</h2>
@@ -368,7 +401,7 @@ production.</p>
 </tr>
 </tbody></table>
 
-<div class="footer">FatooraLite documentation · built 2026-07-04 · source: docs/09-deployment.md</div>
+<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/09-deployment.md</div>
 </main>
 </div>
 </body>

@@ -1,4 +1,4 @@
-# FatooraLite — Product Requirements Document (PRD)
+# Fatoora Lite Pro — Product Requirements Document (PRD)
 
 **Version:** 1.0 (foundational) · **Owner:** Product · **Status:** For approval
 
@@ -6,7 +6,7 @@
 
 ## 1. Vision
 
-FatooraLite is the simplest way for a Saudi SME to be **ZATCA Phase 2 compliant**. A
+Fatoora Lite Pro is the simplest way for a Saudi SME to be **ZATCA Phase 2 compliant**. A
 business should be able to sign up, connect to ZATCA in minutes, and issue legally valid
 e-invoices forever after — with the cryptography, clearance, reporting, and audit trail
 handled for them. The long-term goal is a **commercial multi-tenant SaaS** product.

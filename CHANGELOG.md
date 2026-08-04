@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to FatooraLite are documented here.
+All notable changes to Fatoora Lite Pro are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [0.3.0] — 2026-07-03 · Production readiness

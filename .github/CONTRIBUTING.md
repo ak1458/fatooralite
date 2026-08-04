@@ -1,6 +1,6 @@
-# Contributing to FatooraLite
+# Contributing to Fatoora Lite Pro
 
-FatooraLite is proprietary software (see [LICENSE](LICENSE)). The source is public
+Fatoora Lite Pro is proprietary software (see [LICENSE](LICENSE)). The source is public
 for evaluation and portfolio purposes. External contributions are not generally
 accepted, but bug reports and feedback are welcome via Issues.
 

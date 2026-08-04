@@ -1,6 +1,6 @@
 <div align="center">
 
-# FatooraLite
+# Fatoora Lite Pro
 
 ### ZATCA Phase 2 e-invoicing compliance for Saudi SMEs
 
@@ -14,7 +14,7 @@ Compliance-first. Bilingual (Arabic-RTL / English). Dark & light. Installable PW
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon%20%2B%20pgvector-3ecf8e?logo=postgresql)
 ![PWA](https://img.shields.io/badge/PWA-installable-5a0fc8?logo=pwa)
 
-<img src=".github/screenshots/01-dashboard-dark-ar.png" alt="FatooraLite Compliance Command Center" width="900" />
+<img src=".github/screenshots/01-dashboard-dark-ar.png" alt="Fatoora Lite Pro Compliance Command Center" width="900" />
 
 </div>
 
@@ -22,7 +22,7 @@ Compliance-first. Bilingual (Arabic-RTL / English). Dark & light. Installable PW
 
 ## Overview
 
-**FatooraLite** turns an invoice into a ZATCA Phase-2 compliant, cryptographically
+**Fatoora Lite Pro** turns an invoice into a ZATCA Phase-2 compliant, cryptographically
 stamped document, clears/reports it through the Fatoora gateway, and keeps an
 auditable archive — through a clean, Arabic-first interface. It is built for
 owner-operated Saudi SMEs and the accountants who serve them: people pulled into

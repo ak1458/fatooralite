@@ -1,4 +1,4 @@
-# FatooraLite — User Flows
+# Fatoora Lite Pro — User Flows
 
 **Status:** For approval · Pairs with [Functional Spec](./04-functional-spec.md)
 

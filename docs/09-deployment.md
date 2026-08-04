@@ -1,6 +1,6 @@
-# FatooraLite — Deployment Guide
+# Fatoora Lite Pro — Deployment Guide
 
-**Audience:** anyone deploying FatooraLite to production, start to finish. No prior
+**Audience:** anyone deploying Fatoora Lite Pro to production, start to finish. No prior
 knowledge of the codebase assumed. Follow the steps in order; each has a verification.
 
 The reference stack is **Vercel (app) + Neon (Postgres with pgvector)**. Any Node 20+
@@ -80,6 +80,7 @@ Never commit them.
 | `AUTH_SECRET` | from step 3 |
 | `AUTH_ENFORCE` | `true` — **mandatory in production** (login + RBAC enforced) |
 | `ENCRYPTION_KEY` | from step 3 |
+| `CRON_SECRET` | **mandatory in production** — `openssl rand -base64 32`. Protects `/api/cron/zatca-reporting`, which is otherwise a public, unauthenticated path (it's committed in `vercel.json`) that drives real ZATCA gateway submissions; the route fails closed (401) if this is unset, so the cron job itself won't run without it either — set it before relying on the 24h B2C reporting cron. |
 | `APP_URL` | your canonical URL, e.g. `https://app.example.com` |
 
 ### ZATCA
@@ -113,6 +114,30 @@ Start with `sandbox`. Switch to `production` only after real onboarding succeeds
 > means a cold-start delay on the first AI request per instance; hosted embeddings
 > (`openai`/`voyage`) avoid it. **After switching embedding providers, re-ingest**
 > (step 8) — vectors from different models are not comparable.
+
+### Payments (optional — Moyasar, KSA)
+
+| Variable | Value |
+|---|---|
+| `MOYASAR_SECRET_KEY` | from the [Moyasar dashboard](https://dashboard.moyasar.com) (Settings → API Keys), after KYC |
+| `MOYASAR_WEBHOOK_SECRET` | shared secret you configure for the invoice callback in the same dashboard |
+| `NEXT_PUBLIC_APP_URL` | same value as `APP_URL` above (sitemap/robots read this separate, publicly-exposed var — pre-existing split, not unified) |
+
+**Both are optional at launch.** Without `MOYASAR_SECRET_KEY`, the app runs
+fully live on the Free plan — `POST /api/billing/checkout` returns a 501
+with a friendly "not yet enabled" message instead of erroring, and nothing
+else in the product depends on payments being configured. Ship first, add
+these when a real Moyasar merchant account exists (requires KSA business
+KYC — only the account owner can create it; see `docs/13-production-
+readiness-report.md` §3).
+
+`lib/billing/moyasar.ts`'s webhook payload parsing was written from
+Moyasar's docs, not a live test account (none existed at the time it was
+built) — **confirm the actual invoice-webhook JSON shape against one real
+sandbox transaction before enabling live Moyasar keys.** The code parses
+defensively (handles both a direct invoice object and an `{id,type,data}`
+envelope) specifically because the docs were ambiguous on which one the
+Invoices API's `callback_url` actually sends.
 
 ### Optional
 
@@ -197,13 +222,55 @@ assistant a ZATCA question returns a grounded, cited answer.
 
 - [ ] `AUTH_ENFORCE=true` and a strong, unique `AUTH_SECRET`
 - [ ] `ENCRYPTION_KEY` set (certificate private keys encrypted at rest)
+- [ ] `CRON_SECRET` set (protects the ZATCA reporting cron endpoint)
+- [ ] **Vercel Hobby plan constraint:** `vercel.json`'s cron runs once daily
+      (`0 3 * * *`), not every 15 minutes, because Hobby rejects any cron
+      more frequent than daily at deploy time. This is a real compliance-
+      timing tradeoff, not cosmetic: a B2C invoice issued shortly after the
+      daily run sits `reportingState: "pending"` for up to ~24h before the
+      next tick, which can cut ZATCA's 24h reporting deadline close with
+      little buffer. If invoice volume or deadline risk grows, either (a)
+      upgrade to Vercel Pro and restore `*/15 * * * *`, or (b) drive the
+      same endpoint from an external scheduler (e.g. a GitHub Actions cron
+      workflow calling it with the `CRON_SECRET` bearer token) — both work
+      with zero code changes to the route itself.
 - [ ] `SEED_DEMO` unset
 - [ ] HTTPS enforced end-to-end (Vercel does this; self-hosted needs a proxy)
 - [ ] Neon: enable branch protection / PITR backups
 - [ ] Vercel: enable "Protect Preview Deployments" so previews aren't public
+- [ ] GitHub: enable branch protection on `main` (require the CI check to pass before merge — CI running is not itself a merge gate without this)
 - [ ] Set `ZATCA_MODE=production` only after sandbox onboarding passes
 - [ ] Confirm no secrets in the repo: `git grep -iE "sk-or-|sk-ant-|postgres://" -- ':!*.md'` returns nothing
-- [ ] Rate limits: `fatooralite/proxy.ts` applies per-IP limits — tune for your traffic
+- [ ] Rate limits: `fatooralite/proxy.ts` calls `lib/ratelimit/limiter.ts`, which uses
+      shared Upstash Redis when `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`
+      are set — **set these on Vercel**, or the fallback in-memory limiter is
+      per-instance only and a multi-instance deploy under load effectively
+      multiplies the intended per-IP budget
+
+---
+
+## 9b. Disaster recovery
+
+No RPO/RTO target is committed yet — **the owner needs to pick one**; the
+mechanics below are ready to use once that's decided.
+
+- **Database**: Neon supports point-in-time recovery (PITR) on paid plans —
+  confirm the plan's retention window (varies by tier) and enable it in the
+  Neon dashboard. Restoring: create a new branch from a timestamp
+  (`neonctl branches create --parent <branch> --timestamp <ISO8601>` or via
+  the dashboard), verify it, then repoint `DATABASE_URL`/`DIRECT_URL`.
+- **Secrets are not covered by database PITR.** `ENCRYPTION_KEY` and
+  `AUTH_SECRET` must be backed up separately (password manager / secrets
+  vault), out-of-band from the database. A restored database is useless for
+  decrypting stored certificate private keys without the `ENCRYPTION_KEY`
+  that was in effect when they were encrypted — losing that key is
+  equivalent to losing every tenant's ZATCA signing key.
+- **Test the restore path before you need it.** An untested backup is not a
+  backup. Run a restore drill on a schedule (quarterly is a reasonable
+  starting point) against a scratch Neon branch, and confirm a real
+  application boot + login against the restored data.
+- **Application code/config**: stateless on Vercel — redeploying from git is
+  the recovery path; no separate application-layer backup needed.
 
 ---
 

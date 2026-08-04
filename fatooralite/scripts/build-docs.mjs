@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build the FatooraLite documentation portal.
+ * Build the Fatoora Lite Pro documentation portal.
  *
  *   cd fatooralite && npm run docs:build
  *
@@ -128,7 +128,7 @@ for (const [file, title] of DOCS) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title} · FatooraLite Docs</title>
+<title>${title} · Fatoora Lite Pro Docs</title>
 <style>${CSS}</style>
 </head>
 <body>
@@ -136,7 +136,7 @@ for (const [file, title] of DOCS) {
 <nav>${nav(file)}</nav>
 <main>
 ${body}
-<div class="footer">FatooraLite documentation · built ${built} · source: docs/${file}</div>
+<div class="footer">Fatoora Lite Pro documentation · built ${built} · source: docs/${file}</div>
 </main>
 </div>
 </body>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Architecture · FatooraLite Docs</title>
+<title>AI Architecture · Fatoora Lite Pro Docs</title>
 <style>
 :root{
   --bg:#0b1210;--s1:#101a17;--s2:#16211d;--bd:#223129;--tx:#e8f0ec;--t2:#b7c6bf;
@@ -60,8 +60,8 @@ main input[type=checkbox]{accent-color:var(--ac)}
 <nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
 <div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html">Deployment Guide</a><a href="10-ai-architecture.html" class="active">AI Architecture</a></nav>
 <main>
-<h1>FatooraLite — AI Architecture (Providers, RAG, Tool Calling)</h1>
-<p>AI is a core architectural layer of FatooraLite, not a bolt-on chat widget. This
+<h1>Fatoora Lite Pro — AI Architecture (Providers, RAG, Tool Calling)</h1>
+<p>AI is a core architectural layer of Fatoora Lite Pro, not a bolt-on chat widget. This
 document describes the three pillars — the <strong>provider-agnostic model layer</strong>, the
 <strong>RAG retrieval stack</strong>, and <strong>application-wide tool calling</strong> — and exactly how to
 switch from free development models to enterprise providers (Anthropic / OpenAI).</p>
@@ -137,7 +137,7 @@ OpenRouter adds its <code>models: [primary, fallback]</code> routing and
 <p>The <strong>relational schema</strong> (Prisma/Postgres) is the source of truth for structured
 application data — invoices, customers, certificates. The <strong>vector index</strong> answers a
 different question: <em>&quot;which pieces of knowledge are semantically relevant to this
-message?&quot;</em>. FatooraLite keeps both in one Postgres instance — pgvector provides the
+message?&quot;</em>. Fatoora Lite Pro keeps both in one Postgres instance — pgvector provides the
 vector database capability without operating a second system — but they are separate
 concerns with separate access paths:</p>
 <ul>
@@ -288,7 +288,7 @@ stream: streaming through the tool loop requires parsing streamed tool-call delt
 in all three provider adapters. The dedicated Q&amp;A endpoint (<code>POST /api/ai</code>) does
 stream tokens. Revisit if dock latency becomes a complaint.</p>
 
-<div class="footer">FatooraLite documentation · built 2026-07-04 · source: docs/10-ai-architecture.md</div>
+<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/10-ai-architecture.md</div>
 </main>
 </div>
 </body>

@@ -1,4 +1,4 @@
-# FatooraLite — Remaining Work (Technical Plan)
+# Fatoora Lite Pro — Remaining Work (Technical Plan)
 
 > **STATUS: COMPLETED (2026-07-03).** Everything below has been implemented and
 > committed on `feature/production-readiness`, including the production DB

@@ -1,4 +1,4 @@
-# FatooraLite — Current-State Gap Analysis
+# Fatoora Lite Pro — Current-State Gap Analysis
 
 Honest assessment of what is real, what is mock/broken, and exactly where. Grounded in the
 codebase, not assumptions. This is the punch-list the roadmap works through.

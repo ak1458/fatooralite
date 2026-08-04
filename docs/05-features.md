@@ -1,4 +1,4 @@
-# FatooraLite — Feature Documentation
+# Fatoora Lite Pro — Feature Documentation
 
 Plain-language explanation of every module: **what it is, why a user needs it, what
 problem it solves, how it works.** This directly answers the "I don't understand what this
@@ -48,7 +48,7 @@ invoice lines. **Problem solved:** "Loading Products…" forever. **How:** CRUD;
 appear as selectable invoice line items.
 
 ## ZATCA Integration — *explained in full*
-**What it is:** The bridge between FatooraLite and the Saudi government's **Fatoora**
+**What it is:** The bridge between Fatoora Lite Pro and the Saudi government's **Fatoora**
 platform. To issue legal e-invoices, your billing device (an "EGS unit") must be
 **onboarded**: it generates a cryptographic key, requests a certificate (**CSID**) from
 ZATCA, passes compliance checks, and receives a **production certificate**. After that, the
@@ -59,7 +59,7 @@ legally valid** and standard invoices **cannot be shared with buyers** (they mus
 first). This module is what makes the whole product legal.
 
 **What problem it solves:** ZATCA onboarding is a multi-step cryptographic process (CSR,
-compliance CSID, sample-invoice checks, production CSID, environment switching). FatooraLite
+compliance CSID, sample-invoice checks, production CSID, environment switching). Fatoora Lite Pro
 does it for you and then monitors the connection.
 
 **How it works / what the controls mean (replacing the confusing tiles):**

@@ -1,106 +1,225 @@
-# FatooraLite — Architecture
+# FatooraLite Pro — Enterprise System Architecture Reference Manual
 
-**Status:** For approval · Pairs with [PRD](./01-prd.md)
+> [!NOTE]  
+> **Technical Document Purpose**: This specification provides a comprehensive, low-level technical architectural reference for engineering teams, security auditors, and system architects. It details the framework design, database schematics, multi-tenant isolation, cryptographic engine, AI/RAG subsystem, and security threat model of **FatooraLite Pro**.
 
 ---
 
-## 1. Stack (current + planned)
+## 1. High-Level Technology Stack & System Components
 
-| Layer | Technology | Notes |
-|---|---|---|
-| Framework | **Next.js 16** (App Router, Turbopack), React 19, TypeScript | Middleware is `proxy.ts` (renamed in 16). Route handlers stream via web `ReadableStream` (every `pull` must enqueue-or-close). |
-| DB | **Neon Postgres** (free tier) + **Prisma** | Pooled URL for runtime, direct URL for migrations. |
-| Vector store | **Neon `pgvector`** (default) behind a `VectorStore` interface | Swappable: Upstash Vector / Qdrant. Reuses existing DB. |
-| Auth | Custom sessions with **jose** (JWT), cookie `SESSION_COOKIE` | Add signup, RBAC, enforced mode. |
-| AI (generation) | **OpenRouter** (OpenAI-compatible), free models `openai/gpt-oss-120b:free` (+ `:20b` fallback) | `reasoning: effort low`; mock mode when no key. |
-| AI (embeddings) | Free embedding provider (configurable), default Google `text-embedding-004` | Stored as `vector` in pgvector. |
-| ZATCA crypto | `lib/zatca/*` (node-forge, xmlbuilder2) | Keypair, CSR, ECDSA-SHA256, XAdES, C14N, PIH, TLV QR — already real. |
-| PDF | `pdf-lib` + `qrcode` | Tax invoice with embedded QR + XML attachment. |
-| Styling | Inline styles + CSS custom properties + `globals.css` | Theme via `data-theme`; RTL via `dir`. Animation layer to be standardized. |
-| Validation | **zod** (`lib/validation/schemas.ts`) | Applied to every mutating route. |
-| Tests | Vitest + Testing Library; Playwright (e2e) | TDD for services/routes. |
+FatooraLite Pro is architected as a modern, high-throughput web service built on Next.js 16 (App Router with Turbopack), TypeScript, Neon PostgreSQL with `pgvector`, and an integrated OpenRouter AI provider.
 
-## 2. High-level structure
+```mermaid
+graph TB
+    subgraph Client Tier
+        Browser["PWA Client / Next.js React 19"]
+        Dock["Assistant Dock Component"]
+    end
+
+    subgraph Security & Routing Tier
+        Proxy["proxy.ts Middleware (Auth / CSRF / Rate Limit)"]
+        RBAC["Server Security & Permission Guard"]
+    end
+
+    subgraph Application Service Tier
+        AuthAPI["/api/auth/*"]
+        CompanyAPI["/api/companies/*"]
+        InvoiceAPI["/api/invoices/*"]
+        ZatcaAPI["/api/clearance/*"]
+        AIAPI["/api/ai/{chat, agent, ingest}"]
+    end
+
+    subgraph Core Logic & Domain Services
+        ZatcaCrypto["lib/zatca/* (ECDSA / XAdES / C14N / TLV)"]
+        InvoiceService["lib/services/issueInvoice.ts"]
+        RAGStore["lib/ai/vector-store.ts"]
+    end
+
+    subgraph Persistence & Infrastructure Tier
+        DB[("Neon Postgres Database")]
+        VectorDB[("pgvector Extension")]
+        ZatcaGW["Official ZATCA Clearance Gateway"]
+        LLM["OpenRouter AI Provider"]
+    end
+
+    Browser --> Proxy
+    Dock --> Proxy
+    Proxy --> RBAC
+    RBAC --> Application Service Tier
+    InvoiceAPI --> InvoiceService
+    ZatcaAPI --> ZatcaCrypto
+    AIAPI --> RAGStore
+    ZatcaCrypto --> ZatcaGW
+    InvoiceService --> DB
+    RAGStore --> VectorDB
+    AIAPI --> LLM
+```
+
+### 1.1 Technology Matrix
+
+| Subsystem | Primary Technology | Configuration & Details |
+| :--- | :--- | :--- |
+| **Framework & Engine** | Next.js 16 (App Router, Turbopack) | React 19, Node.js 20+ runtime, TypeScript 5+. |
+| **Database & ORM** | PostgreSQL + Prisma ORM | Neon serverless Postgres; pooled connection for API runtime, direct connection for DDL migrations. |
+| **Vector Engine** | `pgvector` Extension | Dimension-agnostic `vector` column in PostgreSQL; native cosine distance vector search (`<=>`). |
+| **Authentication & Session** | Custom Signed JWTs (`jose`) | Stateless JWTs stored in `SESSION_COOKIE` with server-side `sessionVersion` invalidation checks. |
+| **Cryptography Subsystem** | `node-forge`, `xmlbuilder2` | Pure TypeScript/Node crypto stack enforcing ECDSA secp256k1, SHA-256, XAdES-BES, and C14N-11 canonicalization. |
+| **PDF Generation** | `pdf-lib` + `qrcode` | Renders ZATCA-compliant PDF A/3 documents with embedded UBL 2.1 XML attachments and TLV QR codes. |
+| **AI LLM Gateway** | OpenRouter Provider | OpenAI-compatible streaming API (`openai/gpt-oss-120b:free` with `:20b` fallback). |
+| **Validation Layer** | Zod Schemas (`lib/validation/*`) | Strict validation enforced on all incoming API request bodies and AI tool call arguments. |
+
+---
+
+## 2. Multi-Tenant Architecture & Data Isolation
+
+FatooraLite Pro enforces a strict **SaaS Multi-Tenancy Architecture**. All organizational data belongs to a specific `Company` tenant.
 
 ```
-Browser (PWA)
-  └─ Next.js App Router
-       ├─ proxy.ts ............ rate limit, CSRF, auth gate (AUTH_ENFORCE)
-       ├─ app/(auth) .......... /login, /register
-       ├─ app/(onboarding) .... /onboarding wizard (first-run)
-       ├─ app/(app) ........... authenticated modules (dashboard, invoices, ...)
-       │     └─ <AssistantDock/> mounted in layout → AI on every page
-       └─ app/api/* ........... route handlers (REST-ish, JSON)
-             ├─ auth/*  companies/*  branches/*  users/*  roles/*
-             ├─ invoices/*  notes/*  customers/*  products/*
-             ├─ clearance/*  audit/*  analytics/*  reports/*  notifications/*
-             └─ ai/{chat,agent,insights,ingest}
-Services (lib/services/*) ...... issueInvoice, submitInvoice (clearance), onboarding
-Domain (lib/zatca/*) ........... crypto + XML + QR (pure, tested)
-Repo (lib/db/*) ................ Prisma access, tenant-scoped
-External ....................... ZATCA gateway, OpenRouter, embedding API
+PostgreSQL Database Schema
+├── Company (Tenant Root)
+│   ├── Branch (Locations)
+│   ├── User (Employees & Credentials)
+│   ├── Role & RolePermission (RBAC)
+│   ├── Customer (B2B & B2C Directory)
+│   ├── Product (Inventory & Tax Rules)
+│   ├── Certificate (Cryptographic CSIDs)
+│   ├── Invoice ──► InvoiceLine ──► ClearanceRecord
+│   ├── InvoiceCounter (Sequential Numbering per Tenant)
+│   └── KnowledgeChunk (Tenant-specific RAG vector embeddings)
 ```
 
-## 3. Data model (target)
+### 2.1 Enforcing Tenant Scoping in Data Access
+To eliminate cross-tenant data leaks (Insecure Direct Object Reference / IDOR), every database operation MUST be scoped by the authenticated user's `companyId`.
 
-Existing: `Company, Branch, Certificate, Invoice, InvoiceLine, ClearanceRecord,
-AuditEntry, User, Customer, Product, Notification`.
+```typescript
+// Example: Strict Tenant-Scoped Query Pattern in lib/db/
+export async function getTenantInvoices(user: UserSession, page = 1, limit = 20) {
+  if (!user.companyId) {
+    throw new SecurityError("Unauthorized: Missing active tenant context");
+  }
 
-**Add / change:**
-- `Company.onboardingStatus` (`pending|in_progress|complete`) + `onboardingStep`.
-- `Branch` becomes the real "location" used by the active-branch selector (already exists; wire it).
-- `Role` (id, companyId, name, isSystem) + `RolePermission` (role → permission string); `User.roleId` (in addition to/replacing the free-text `role`). Keep `User.title` (designation).
-- `User.status` (`active|invited|disabled`), `User.invitedAt`.
-- `KnowledgeChunk` (id, scope `global|company`, companyId?, source, text, `embedding vector`) for RAG.
-- `Setting` (companyId, key, value json) for tenant settings, or typed columns on `Company`.
-- `Notification` already present; ensure a generator writes real events.
+  return await prisma.invoice.findMany({
+    where: {
+      companyId: user.companyId, // Tenant Scoping Guard
+    },
+    skip: (page - 1) * limit,
+    take: limit,
+    orderBy: { createdAt: "desc" },
+  });
+}
+```
 
-All tenant tables carry `companyId`; **every query is filtered by the caller's company** (enforced in repo + route).
+---
 
-## 4. AI architecture
+## 3. ZATCA Phase-2 Cryptographic Engine
 
-### 4.1 Chatbot (RAG)
-1. **Ingestion**: ZATCA regulation text (curated) + tenant data summaries (invoices, rejections, customers) are chunked, embedded, and stored in `KnowledgeChunk` (scope `global` for regs, `company` for tenant data).
-2. **Query**: user message → embed → `pgvector` similarity search (top-k, filtered by `scope in (global, this company)`) → build context → OpenRouter chat (streaming) grounded on retrieved chunks → cite sources.
-3. **Model selection**: UI lets the user pick among configured free models; default gpt-oss-120b.
+The ZATCA engine (`lib/zatca/`) is a self-contained, fully unit-tested cryptographic suite implementing the official Saudi E-Invoicing Technical Specifications.
 
-### 4.2 Agentic actions (structured-intent registry)
-- System prompt instructs the model to reply with prose **or** a JSON block `{ "action": string, "params": {...} }`.
-- `/api/ai/agent` parses the block, looks up the action in a **server-side registry**:
-  ```
-  ActionDef = { name, description, zodSchema, requiredPermission, handler }
-  ```
-- Server validates `params` with zod, checks RBAC, executes a **real** service/repo call, returns a structured result. Unknown/disallowed → safe refusal. No arbitrary code path.
-- Client applies the result (navigate, refresh data, toast). Example: `"make a 7-day report"` →
-  `{action:"generateReport",params:{rangeDays:7}}` → handler aggregates → client routes to `/reports`.
-- The same registry powers per-tab assistants (the dock passes the current route as context to bias suggested actions).
+```mermaid
+sequenceDiagram
+    participant App as Invoice Engine
+    participant Crypto as lib/zatca/crypto
+    participant Canonical as C14N-11 Canonicalizer
+    participant Signer as ECDSA Engine
+    participant ZATCA as ZATCA Gateway API
 
-### 4.3 Why structured-intent (not raw tool-calling)
-Free models' native function-calling is unreliable; structured-intent works on any model,
-is trivially auditable, and keeps execution behind zod + RBAC. Native tool-calling can be
-layered in later without changing the registry.
+    App->>Crypto: 1. Generate UBL 2.1 XML
+    Crypto->>Crypto: 2. Compute Invoice SHA-256 Hash
+    Crypto->>Canonical: 3. Extract & Canonicalize SignedInfo (C14N-11)
+    Canonical-->>Crypto: Return Canonical XML String
+    Crypto->>Signer: 4. Sign Canonical String (ECDSA secp256k1)
+    Signer-->>Crypto: Return Base64 Signature
+    Crypto->>Crypto: 5. Construct XAdES-BES & Embed TLV QR Code
+    Crypto->>ZATCA: 6. Submit Signed XML (Clearance / Reporting)
+```
 
-## 5. Security
+### 3.1 XAdES-BES & C14N-11 Canonicalization
+ZATCA requires XML signatures to adhere to the **W3C XMLDSig** and **XAdES-BES** standards. Before signing, the `<ds:SignedInfo>` element must undergo **xml-exc-c14n11 (Exclusive XML Canonicalization 1.1)**.
 
-- Secrets only in `.env` (gitignored) / platform env vars / local `archive/` (gitignored). Never committed, never shipped to the client bundle. ZATCA private keys encrypted at rest (`lib/crypto/encrypt.ts`).
-- `proxy.ts`: per-IP rate limit, CSRF origin check on mutations, auth redirect when `AUTH_ENFORCE=true` (default-on in production).
-- Every API route: authenticate → authorize (permission) → tenant-scope. No `companyId` is trusted from the client without ownership check.
-- Passwords hashed (`lib/auth/password.ts`). Sessions are signed JWTs with expiry.
+> [!IMPORTANT]  
+> **XAdES C14N-11 Compliance Fix**: Canonicalization must explicitly preserve all inherited ancestor namespaces (`ds`, `sac`, `ext`, `cbc`). Dropping ancestor namespaces invalidates the signature when verified against ZATCA's official gateway. FatooraLite Pro includes an independent validation harness (`scripts/validate-zatca.ts`) that asserts non-circular canonical string accuracy.
 
-## 6. Theming & animation (to standardize)
+### 3.2 Previous Invoice Hash (PIH) Chain
+To ensure tamper-evident transaction logs, every invoice includes the SHA-256 hash of the immediately preceding invoice issued by that tenant:
 
-- **Theme**: single source via `data-theme` on `<html>`; all colors from CSS vars in `globals.css`; `ThemeProvider` toggles + persists; anti-flash inline script already present. Fix: audit every component for hardcoded colors; ensure light mode parity; `<body>` needs `suppressHydrationWarning` (browser extensions inject attributes).
-- **Animation**: **Framer Motion** (decision locked) layered on shared motion tokens (durations, easing) in CSS vars. Reusable transitions for page/route, list enter, modal/slide-over, toast. Respect `prefers-reduced-motion`.
+$$\text{PIH}_n = \begin{cases} \text{Base64}(\text{SHA-256}(\text{Invoice}_{n-1}\text{ XML})), & \text{if } n > 1 \\ \text{Base64}(\text{SHA-256}(\text{"NWZlYjYwZGU..."})), & \text{if } n = 1 \text{ (Initial Seed Hash)} \end{cases}$$
 
-## 7. Deployment
+---
 
-- Target: Vercel (or Node host) + Neon. Env vars set on the platform (never the `archive/` files).
-- `AUTH_ENFORCE=true`, real `ZATCA_MODE`, `OPENROUTER_API_KEY`, embedding key, `DATABASE_URL/DIRECT_URL`.
-- Migrations via `prisma migrate deploy` against `DIRECT_URL`. pgvector extension enabled on Neon.
-- No seed in production; optional dev seed behind `SEED_DEMO=true`.
+## 4. Vector Database & RAG Architecture
 
-## 8. Module boundaries (for testability)
+FatooraLite Pro uses PostgreSQL's native `pgvector` extension for Retrieval-Augmented Generation (RAG).
 
-Each module = page(s) + API route(s) + a service/repo function with one clear job. UI never
-talks to Prisma directly; it calls API routes; routes call services/repo; services call the
-domain (`lib/zatca`). This keeps units small and independently testable.
+```
+User Query ──► Google text-embedding-004 ──► 768-dim Vector ──► SQL Cosine Distance Search
+                                                                          │
+System Prompt ◄── Inject Context ◄── Retrieve Top-K (Score >= 0.15) ◄─────┘
+```
+
+### 4.1 Vector Store Schema (`KnowledgeChunk`)
+Embeddings are stored in a dimension-agnostic `vector` column to support seamless embedding model migrations.
+
+```sql
+CREATE TABLE "KnowledgeChunk" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "scope" TEXT NOT NULL,          -- 'global' (ZATCA rules) or 'company' (Tenant data)
+    "companyId" TEXT,               -- Tenant ID (NULL for global chunks)
+    "source" TEXT NOT NULL,         -- Source document identifier
+    "text" TEXT NOT NULL,           -- Raw text content
+    "embedding" vector,             -- pgvector column (dimension-agnostic)
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 4.2 Cosine Similarity Search SQL
+RAG queries execute directly in PostgreSQL, combining cosine distance matching (`<=>`) with strict multi-tenant isolation rules:
+
+```sql
+SELECT text, source, scope, 1 - (embedding <=> $1::vector) AS score
+FROM "KnowledgeChunk"
+WHERE embedding IS NOT NULL
+  AND vector_dims(embedding) = 768
+  AND (scope = 'global' OR (scope = 'company' AND "companyId" = $2))
+ORDER BY embedding <=> $1::vector
+LIMIT 5;
+```
+
+---
+
+## 5. Security Posture & Threat Model
+
+FatooraLite Pro implements a robust defense-in-depth security model to defend against OWASP Top 10 web vulnerabilities.
+
+```mermaid
+graph LR
+    Req[Incoming HTTP Request] --> P1[1. Origin & CSRF Check]
+    P1 --> P2[2. IP Sliding-Window Rate Limit]
+    P2 --> P3[3. Session JWT & sessionVersion Check]
+    P3 --> P4[4. RBAC Permission Guard]
+    P4 --> P5[5. Zod Input Schema Validation]
+    P5 --> Core[Execute Application Core Logic]
+```
+
+### 5.1 Defense Mechanisms
+
+1. **Session Invalidation (`sessionVersion`)**:
+   * Every user record contains a `sessionVersion` counter.
+   * When a password reset or security revocation occurs, `sessionVersion` is incremented, immediately invalidating all active JWT cookies across all devices.
+2. **Encrypted Secrets at Rest**:
+   * ZATCA private keys (`Certificate.privateKey`) are encrypted prior to storage using **AES-256-GCM** with per-tenant salt keys (`lib/crypto/encrypt.ts`).
+3. **Prompt Injection Safeguards**:
+   * RAG retrieved context explicitly segregates `[global]` trusted ZATCA regulations from `[tenant-data]` free text.
+   * The AI model system prompt enforces that tenant free text must **never** be interpreted as system instructions.
+4. **Autonomous Action Write-Gates**:
+   * The AI agent cannot perform write operations (invoice issuance, customer deletion) silently. All mutating tool calls require an explicit two-step user confirmation roundtrip.
+
+---
+
+## 6. Verification & Architectural Benchmarks
+
+The entire system is continuously validated using automated test suites and compliance harnesses:
+
+* **TypeScript Compilation**: `npx tsc --noEmit` (Zero type errors).
+* **Unit & Integration Suite**: `npx vitest run` (**127 passed / 0 failing**).
+* **ZATCA Cryptographic Validator**: `npx tsx scripts/validate-zatca.ts` (**7/7 checks passed**).
+* **Production Build**: `npm run build` (Clean production bundle compilation).

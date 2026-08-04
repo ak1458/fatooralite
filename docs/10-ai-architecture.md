@@ -1,6 +1,6 @@
-# FatooraLite — AI Architecture (Providers, RAG, Tool Calling)
+# Fatoora Lite Pro — AI Architecture (Providers, RAG, Tool Calling)
 
-AI is a core architectural layer of FatooraLite, not a bolt-on chat widget. This
+AI is a core architectural layer of Fatoora Lite Pro, not a bolt-on chat widget. This
 document describes the three pillars — the **provider-agnostic model layer**, the
 **RAG retrieval stack**, and **application-wide tool calling** — and exactly how to
 switch from free development models to enterprise providers (Anthropic / OpenAI).
@@ -75,7 +75,7 @@ That is the entire migration. Call sites (`/api/ai`, `/api/ai/agent`,
 The **relational schema** (Prisma/Postgres) is the source of truth for structured
 application data — invoices, customers, certificates. The **vector index** answers a
 different question: *"which pieces of knowledge are semantically relevant to this
-message?"*. FatooraLite keeps both in one Postgres instance — pgvector provides the
+message?"*. Fatoora Lite Pro keeps both in one Postgres instance — pgvector provides the
 vector database capability without operating a second system — but they are separate
 concerns with separate access paths:
 

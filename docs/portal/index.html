@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Start Here · FatooraLite Docs</title>
+<title>Start Here · Fatoora Lite Pro Docs</title>
 <style>
 :root{
   --bg:#0b1210;--s1:#101a17;--s2:#16211d;--bd:#223129;--tx:#e8f0ec;--t2:#b7c6bf;
@@ -60,8 +60,8 @@ main input[type=checkbox]{accent-color:var(--ac)}
 <nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
 <div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html" class="active">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html">Deployment Guide</a><a href="10-ai-architecture.html">AI Architecture</a></nav>
 <main>
-<h1>FatooraLite — Product Documentation</h1>
-<p>This folder is the <strong>single source of truth</strong> for what FatooraLite is and how every
+<h1>Fatoora Lite Pro — Product Documentation</h1>
+<p>This folder is the <strong>single source of truth</strong> for what Fatoora Lite Pro is and how every
 feature must behave. Code is written to match these documents — not the other way
 around. If code and docs disagree, the docs win until a doc is deliberately revised.</p>
 <blockquote>
@@ -133,13 +133,25 @@ around. If code and docs disagree, the docs win until a doc is deliberately revi
 <td><a href="10-ai-architecture.html">AI Architecture</a></td>
 <td>Provider-agnostic AI layer, RAG/pgvector, app-wide tool calling</td>
 </tr>
+<tr>
+<td>11</td>
+<td><a href="11-onboarding-pipeline-handoff.html">Onboarding Pipeline Handoff</a></td>
+<td>In-flight: automated ZATCA CCSID→compliance→PCSID orchestration</td>
+</tr>
+<tr>
+<td>12</td>
+<td><a href="12-master-roadmap.html">Master Roadmap</a></td>
+<td><strong>Start here for new work.</strong> Onboarding-wizard vision, gap list, priorities</td>
+</tr>
 </tbody></table>
 <p><strong>Domain:</strong> Saudi Arabia ZATCA &quot;Fatoora&quot; Phase 2 (Integration Phase) e-invoicing
 compliance for SMEs. The product is intended to become a commercial SaaS.</p>
 <p><strong>Status:</strong> Implemented through the production-readiness phase (2026-07-03).
-Docs 00–08 defined the build; 09–10 document deploying and extending it.</p>
+Docs 00–08 defined the build; 09–10 document deploying and extending it; 11–12
+are the current, still-open direction — read 12 first, then check
+<a href="../handoff.md"><code>/handoff.md</code></a> for exact session-to-session progress.</p>
 
-<div class="footer">FatooraLite documentation · built 2026-07-04 · source: docs/README.md</div>
+<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/README.md</div>
 </main>
 </div>
 </body>

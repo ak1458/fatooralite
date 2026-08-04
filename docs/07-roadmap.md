@@ -1,4 +1,4 @@
-# FatooraLite — Implementation Roadmap
+# Fatoora Lite Pro — Implementation Roadmap
 
 Phased plan to take the product from "mock UI on a real engine" to production-ready. Each
 phase: built with TDD where it has logic, ends with working software + tests + a checkpoint.

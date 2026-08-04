@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Feature Docs · FatooraLite Docs</title>
+<title>Feature Docs · Fatoora Lite Pro Docs</title>
 <style>
 :root{
   --bg:#0b1210;--s1:#101a17;--s2:#16211d;--bd:#223129;--tx:#e8f0ec;--t2:#b7c6bf;
@@ -60,7 +60,7 @@ main input[type=checkbox]{accent-color:var(--ac)}
 <nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
 <div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html" class="active">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html">Deployment Guide</a><a href="10-ai-architecture.html">AI Architecture</a></nav>
 <main>
-<h1>FatooraLite — Feature Documentation</h1>
+<h1>Fatoora Lite Pro — Feature Documentation</h1>
 <p>Plain-language explanation of every module: <strong>what it is, why a user needs it, what
 problem it solves, how it works.</strong> This directly answers the &quot;I don&#39;t understand what this
 is for&quot; questions.</p>
@@ -100,7 +100,7 @@ in the invoice buyer picker.</p>
 invoice lines. <strong>Problem solved:</strong> &quot;Loading Products…&quot; forever. <strong>How:</strong> CRUD; products
 appear as selectable invoice line items.</p>
 <h2>ZATCA Integration — <em>explained in full</em></h2>
-<p><strong>What it is:</strong> The bridge between FatooraLite and the Saudi government&#39;s <strong>Fatoora</strong>
+<p><strong>What it is:</strong> The bridge between Fatoora Lite Pro and the Saudi government&#39;s <strong>Fatoora</strong>
 platform. To issue legal e-invoices, your billing device (an &quot;EGS unit&quot;) must be
 <strong>onboarded</strong>: it generates a cryptographic key, requests a certificate (<strong>CSID</strong>) from
 ZATCA, passes compliance checks, and receives a <strong>production certificate</strong>. After that, the
@@ -109,7 +109,7 @@ app uses that certificate to <strong>clear</strong> standard invoices and <stron
 legally valid</strong> and standard invoices <strong>cannot be shared with buyers</strong> (they must be cleared
 first). This module is what makes the whole product legal.</p>
 <p><strong>What problem it solves:</strong> ZATCA onboarding is a multi-step cryptographic process (CSR,
-compliance CSID, sample-invoice checks, production CSID, environment switching). FatooraLite
+compliance CSID, sample-invoice checks, production CSID, environment switching). Fatoora Lite Pro
 does it for you and then monitors the connection.</p>
 <p><strong>How it works / what the controls mean (replacing the confusing tiles):</strong></p>
 <ul>
@@ -176,7 +176,7 @@ Arabic-first UX. <strong>Problem solved:</strong> theming is inconsistent and ro
 CSS-variable theme system, consistent across every screen, with standardized motion tokens
 for smooth, premium animations.</p>
 
-<div class="footer">FatooraLite documentation · built 2026-07-04 · source: docs/05-features.md</div>
+<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/05-features.md</div>
 </main>
 </div>
 </body>
