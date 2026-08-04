@@ -20,8 +20,9 @@ phase marked **needs a detailed plan**.
 | Billing | Moyasar hosted checkout + verified webhook, built and inert (no merchant keys). |
 | AI | Provider-agnostic (OpenRouter / Groq / Anthropic / OpenAI). Tool calling **already works** — 11 tools, RBAC-checked, confirm-gated. |
 | Deployment | Live at `fatooralite.vercel.app`, `AUTH_ENFORCE=true`, `ZATCA_MODE=sandbox`. |
-| Tests | 184 passing / 34 skipped (DB-gated), `tsc` clean, `zatca:validate` 7/7. |
-| Repo | 18 semantic commits, `v0.1.0`–`v0.3.0` tagged, release policy documented, attribution guard installed, stale branches cleaned. |
+| Licensing | 7-day trial / Pro, enforced server-side at five points. No free tier. |
+| Tests | 219 passing / 43 skipped (DB-gated), `tsc` clean, `zatca:validate` 7/7. |
+| Repo | 21 semantic commits, `v0.1.0`–`v0.3.0` tagged, release policy documented, attribution guard installed, stale branches cleaned. |
 
 ### Blocked on the owner, not on engineering
 
@@ -113,10 +114,10 @@ other.
 
 ---
 
-## Phase 2 — Trial and Pro licensing *(needs a detailed plan)*
+## Phase 2 — Trial and Pro licensing ✅ core complete
 
-Decision taken: **7-day trial with the full compliance path but capped volume
-and reserved premium capability. No permanent free plan.**
+Commit `448634e`. Paid-only: a tenant is in a 7-day trial, on Pro, or expired.
+No free tier.
 
 | | Trial (7 days) | Pro |
 | --- | --- | --- |
@@ -125,54 +126,65 @@ and reserved premium capability. No permanent free plan.**
 | Branches | 1 | unlimited |
 | Seats | 2 | unlimited |
 | AI assistant, read-only tools | yes | yes |
-| AI write actions (`createInvoice`, `submitInvoice`, `addCustomer`, `addProduct`) | no | yes |
+| AI write actions | no | yes |
 | Bulk import / export | no | yes |
 | API keys | no | yes |
 | Custom invoice branding | no | yes |
 | Advanced reports | no | yes |
 
-### Task 2.1 — Model the trial
+**Where the logic lives.** `lib/billing/entitlements.ts` is pure — `resolvePlan`,
+`hasFeature`, the limit table, the trial arithmetic — so all 37 of its cases run
+without a database. `lib/billing/plan.ts` reads rows and counts on top of it.
+Resolution is conservative in both directions: a lapsed payment, a cancelled
+row, an unrecognised plan name and a missing row all resolve to `expired`.
 
-`PlanId` is currently `"free" | "pro"`. Replace with `"trial" | "pro" |
-"expired"`. `Subscription` gains `trialEndsAt`. A company created by
-registration gets a trial row with `trialEndsAt = now + 7 days` — today
-nothing creates a `Subscription` at all, and `getEffectivePlan` treats a
-missing row as free, which under a paid-only product must instead be an
-explicit trial.
+**Enforcement**, all server-side, all returning a 402 with
+`{reason, plan, feature, limit, used, upgradeUrl}`: `POST /api/invoices`
+(entitlement + monthly cap), `POST /api/branches`, `POST /api/users`, and
+`executeTool` in `lib/ai/tools.ts`. Chat is not a side door around licensing.
 
-Rewrite `getEffectivePlan` to a pure, testable resolver over
-`{plan, status, trialEndsAt, currentPeriodEnd, now}` so every state
-(trial active, trial lapsed, pro active, pro lapsed, no row) is unit-tested
-without a database. Keep the conservative default: anything ambiguous resolves
-to the *lower* tier.
+**Two deliberate exemptions**, both documented in the code:
 
-### Task 2.2 — One enforcement helper, used everywhere
+- An expired trial is **read-only, not locked out**. Viewing, downloading and
+  exporting existing invoices and audit records stays available.
+- Clearance and reporting (`POST /api/invoices/:id/clear`) is **not gated**. An
+  invoice reaching it has already been issued, and ZATCA requires a simplified
+  invoice to be reported within 24 hours. Blocking that on an expired trial
+  would leave a tenant holding invoices it is legally required to file and
+  cannot — turning a billing state into a regulatory violation.
 
-`checkInvoiceLimit` is the only gate today, on one route. Add
-`requireFeature(companyId, feature)` in `lib/billing/` returning a typed
-result, and call it from: `POST /api/invoices` (volume), branch creation,
-user invitation (seats), `executeTool` in `lib/ai/tools.ts` (write actions),
-and every Pro-only route added later. Server-side only — a hidden button is
-not an entitlement.
+**The migration mattered more than the column.** The database held 61 companies
+and zero subscription rows; since a missing row resolves to `expired`, every one
+would have been locked out of issuing on deploy.
+`20260804180703_subscription_trial` converts former free rows and backfills a
+trial row for every company without one. Verified after applying: 61 companies,
+61 trial rows, no orphans, no null trial-end dates. Registration now starts the
+trial inside the company-creation transaction, so the state cannot recur.
 
-An expired trial must be **read-only, not locked out**: viewing, exporting and
-downloading past invoices stays available. A compliance product that hides a
-tenant's own filed invoices behind a paywall is a liability.
+**UI.** A trial strip above page content that escalates rather than nags — muted
+early, warmer at three days, dismissible for a day at a time, non-dismissible
+only once the trial has ended. Settings → Billing shows the resolved plan, days
+remaining, usage against all three limits, and the full Pro feature list. Pro
+capabilities are listed, never hidden.
 
-### Task 2.3 — Make the boundary visible without being intrusive
+### Still open in this phase
 
-- Persistent, dismissible trial banner: days remaining, invoice count against
-  the cap, one "Upgrade" action. Escalates in tone at 3 days and at 1 day.
-- Pro-only affordances render, disabled, with a short reason and an upgrade
-  link — never hidden. Users cannot want what they cannot see.
-- The 402 response body carries `{feature, limit, used, upgradeUrl}` so the
-  frontend renders a real explanation rather than a generic error.
-- Settings → Billing shows plan, trial end date, usage against every limit.
-
-**Acceptance:** unit tests for every plan-resolution state; an integration
-test proving a trial tenant is refused the 26th invoice and a Pro tenant is
-not; an e2e test that an expired trial can still open and export an existing
-invoice.
+- **Per-control affordances.** Pro-only controls (add-branch, invite-user) are
+  refused server-side with a good message but are not yet rendered disabled with
+  an inline reason. Today the user finds out by clicking.
+- **Client-side 402 handling.** The response body carries everything needed for
+  a real explanation; no frontend code reads it yet. Related to the known gap
+  that the frontend does not detect a mid-session 401 either — worth one pass
+  that teaches `fetch` callers to handle both.
+- **Four gated features do not exist yet.** `bulkImport`, `apiKeys`,
+  `customBranding` and `advancedReports` are declared and enforced, but there is
+  nothing behind them to unlock. They are honest placeholders in the entitlement
+  table, not shipped capabilities — do not list them in marketing copy until
+  they are built.
+- **E2E coverage.** The unit and DB-backed tests cover resolution and the gates;
+  no end-to-end test yet proves a trial tenant is refused the 26th invoice
+  through the real UI, or that an expired tenant can still export.
+- **Pricing is still a placeholder** (`PRO_PRICE_HALALAS` = 149 SAR). Phase 7.
 
 ---
 
@@ -347,15 +359,21 @@ the operational layer around it:
 ## Suggested order
 
 1. ~~**Phase 1**~~ — done.
-2. **Phase 7** — market research runs in the background and its output changes
-   Phase 2's tier boundaries and pricing.
-3. **Phase 2** — licensing. Nothing ships commercially without it.
-4. **Phase 5 retest + Phase 4** — audit after licensing exists, not before;
-   plan gating adds a new authorization axis to re-verify.
+2. ~~**Phase 2**~~ — core done. Licensing was pulled ahead of market research
+   because nothing ships commercially without it, and the tier *boundaries* are
+   cheap to move later (they are one table in `entitlements.ts`); only the
+   price is genuinely research-dependent, and it is still a placeholder.
+3. **Phase 5 retest + Phase 4** — audit now, because plan gating just added a
+   second authorization axis to every check and that is exactly the kind of new
+   code that reintroduces a bypass. Start with the licensing surface itself.
+4. **Phase 7** — market research, to settle pricing before checkout goes live.
 5. **Phase 3** — AI depth. Highest demo value, lowest launch risk.
 6. **Phase 8, then 9** — deployment simplicity first, then the provisioning
    layer on top of it.
 7. **Phase 6** — cosmetic, do it whenever.
+
+Phase 2's own open items (per-control affordances, client-side 402 handling,
+e2e coverage) are listed in that section and are smaller than a phase each.
 
 The owner-blocked items at the top gate the actual launch date regardless of
 where engineering gets to.

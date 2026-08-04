@@ -1130,3 +1130,97 @@ is **Groq (groq.com, LPU inference hosting)** for demo latency — explicitly
 and 1.2 together (split the onboarding page + the a11y sweep in one pass), then
 Phase 7 market research in the background since its output changes Phase 2's
 tier boundaries and pricing before licensing is built.
+
+### 2026-08-04 (cont'd) — Launch plan Phases 1 and 2 implemented
+
+Owner's decisions this session: **do not push or merge** until all planned work
+is finished and verified (everything stays local); clean up the stale worktrees
+and branches (done); keep the backup bundle somewhere durable (done); then start
+implementing the plan.
+
+- [x] **DONE — worktree and branch cleanup.** Removed all eight worktrees under
+  `.claude/worktrees/`, pruned, and deleted the eight `worktree-*` branches plus
+  `audit-snapshot`. Verified first that all eight pointed at one orphan commit
+  (`05bb775`, a LICENSE rewrite) whose content the current `LICENSE` already
+  supersedes — nothing unique was lost. Branch list is now `main` and
+  `feature/production-readiness` only.
+- [x] **DONE — backup bundle moved out of the temp scratchpad** to
+  `archive/backups/2026-08-04-pre-reorg-backup.bundle` (`archive/` is
+  gitignored). `git bundle verify` reports a complete history. **It is on the
+  same disk as the repo** — if the machine is the risk being insured against,
+  copy it somewhere else too.
+
+#### Phase 1 — codebase organization (complete)
+
+See `docs/16-launch-plan.md` Phase 1 for the full write-up. Summary:
+`app/onboarding/page.tsx` 787 → 232 lines with steps under
+`components/onboarding/steps/`; every wizard field now renders through a shared
+`Field` component that owns the `htmlFor`/`id` association, `aria-required`,
+`role="alert"` errors and `aria-describedby`; four `no-restricted-imports`
+blocks in `eslint.config.mjs` enforce the layer boundaries (proved
+non-vacuous with a temporary probe file, then removed).
+
+- [x] **FIXED — launch blocker, found by writing a structural test rather than
+  by reading the code.** `invoiceTypes` is required by
+  `zatcaMandatoryCompanySchema` and therefore by the server-side guard on
+  `PATCH /api/companies/[id]`, but **no wizard step, registration field or
+  settings screen ever collected it**. A fresh tenant could complete all six
+  steps and be refused at "Go to dashboard" with a 422 naming a field no
+  screen exposes — onboarding was impossible to finish for anyone except the
+  seeded demo company, which sets the value directly. That is precisely why
+  five prior audit passes and the e2e suite all missed it: every test path
+  starts from the seed. Now collected in the Tax Registration step.
+  `lib/onboarding/steps.test.ts` derives the required-field list from the
+  schema itself, so the next mandatory field added without a step to collect
+  it fails a test instead of a customer.
+- [x] **FIXED — two related wizard defects in the same pass.** Step validators
+  returned a bare message and the caller derived the field key with
+  `message.split(" ")[0]`, so "Postal code is 5 digits" keyed to `Postal` and
+  "Enter a valid email" keyed to `Enter` — neither is a field, so those errors
+  rendered nowhere and Continue silently did nothing. Validators now return
+  `{field, message}`. Separately, business category / CR type / CR issue date
+  carried a required marker the validator did not enforce (a falsy guard
+  suppressed the error), so the step advanced with them empty and the failure
+  surfaced later at the completion guard.
+
+#### Phase 2 — trial and Pro licensing (core complete)
+
+Full write-up in `docs/16-launch-plan.md` Phase 2, including the open items.
+The parts worth knowing before touching this code:
+
+- `lib/billing/entitlements.ts` is pure and holds every decision;
+  `lib/billing/plan.ts` only reads rows. Add new rules to the former.
+- Resolution is conservative in both directions. A **missing Subscription row
+  resolves to `expired`, not `trial`** — deliberate, so a deleted row cannot
+  re-grant a trial. That made the migration load-bearing: the database had 61
+  companies and **zero** subscription rows, so without a backfill every
+  existing tenant would have been locked out of issuing the moment this
+  deployed. `20260804180703_subscription_trial` backfills them; verified
+  afterwards (61/61, no orphans, no null trial ends). Registration now starts
+  the trial inside the company-creation transaction so it cannot recur.
+- **Two deliberate non-gates, both commented in the code.** An expired trial is
+  read-only rather than locked out (its own filed invoices stay viewable and
+  exportable), and `POST /api/invoices/:id/clear` is not plan-gated at all —
+  an invoice reaching it is already issued and ZATCA requires simplified
+  invoices to be reported within 24 hours, so gating it would convert a
+  billing state into a regulatory violation. If someone later "tightens" these
+  for consistency, that is a regression, not a fix.
+- `bulkImport`, `apiKeys`, `customBranding` and `advancedReports` are declared
+  and enforced but **nothing exists behind them**. They are honest placeholders
+  in the entitlement table — do not put them in marketing copy yet.
+
+**Verified continuously, not only at the end:** `npx tsc --noEmit` clean,
+`npx vitest run` → **219 passed / 43 skipped, 0 failing** (was 139/34 at the
+start of the session), `npx tsx scripts/validate-zatca.ts` all 7 local checks
+pass, `npm run build` succeeds, `npm run lint` 20 → 17 problems (all
+pre-existing, none in touched modules, zero `jsx-a11y`).
+
+**Still local — nothing pushed, per the owner's instruction.** 21 commits and
+3 tags on `feature/production-readiness`; `main` remains at `acbd759`.
+
+**Next session should start at:** `docs/16-launch-plan.md` suggested order
+item 3 — the security retest of the licensing surface (plan gating just added
+a second authorization axis to every check, which is exactly where a bypass
+gets reintroduced), then the Phase 4 product audit. Phase 2's own leftovers
+(per-control disabled affordances, client-side 402/401 handling, e2e coverage
+of the trial cap) are each smaller than a phase and listed in that section.

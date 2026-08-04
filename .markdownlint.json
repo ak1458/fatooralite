@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint/main/schema/markdownlint-config-schema.json",
+  "//": "Repository-wide markdown rules. Only the deviations from the defaults are listed.",
+
+  "//MD013": "Prose is hard-wrapped at 76-80 columns by hand; tables, links and code samples routinely exceed any fixed limit.",
+  "MD013": false,
+
+  "//MD024": "Keep a Changelog repeats Added/Fixed/Changed under every version by design. siblings_only still catches a genuine duplicate within one release.",
+  "MD024": { "siblings_only": true },
+
+  "//MD033": "Inline HTML is occasionally the only way to express something in a GitHub-rendered doc.",
+  "MD033": false
+}

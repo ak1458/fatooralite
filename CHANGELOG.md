@@ -7,7 +7,58 @@ conventions: [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Paid-only licensing: a 7-day trial and Pro.** The free tier is gone. The
+  trial gets the whole ZATCA compliance path (sign, clear, report, QR, PDF)
+  capped at 25 invoices a month, 1 branch and 2 seats; Pro removes the caps and
+  unlocks AI write actions, bulk import/export, API access, custom branding and
+  advanced reports. Enforced server-side at invoice creation, branch creation,
+  user invitation and the AI tool executor, each returning a 402 carrying the
+  plan, the limit and an upgrade URL. Plan resolution
+  (`lib/billing/entitlements.ts`) is pure and conservative — a lapsed payment,
+  a cancelled row, an unknown plan name and a missing row all resolve down.
+- **Groq** as a fourth AI backend (`AI_PROVIDER=groq`), alongside OpenRouter,
+  Anthropic and OpenAI. Added for latency, so the assistant's tool calling is
+  fast enough to demonstrate live.
+- Trial status strip in the app shell and a full plan/usage panel in
+  Settings → Billing.
+- Layer boundaries (`lib/zatca` → `lib/db` → `lib/services` → `app/api` → UI)
+  are now lint-enforced rather than a convention.
+- Repository release process: semver policy, branch naming, a release
+  checklist, historical tags `v0.1.0`–`v0.3.0`, and a `commit-msg` hook that
+  rejects assistant attribution trailers.
+
+### Fixed
+
+- **A fresh tenant could not finish onboarding.** `invoiceTypes` is required by
+  the server-side completion guard but was collected by no wizard step,
+  registration field or settings screen, so the last click of the wizard
+  returned a 422 naming a field no screen exposed. Only the seeded demo
+  company — which sets the value directly — was unaffected, which is why every
+  prior test path missed it. Now collected in the Tax Registration step, with a
+  test that derives the required-field list from the schema.
+- Wizard step errors were keyed by the first word of their own message, so
+  "Postal code is 5 digits" and "Enter a valid email" rendered nowhere and
+  Continue silently did nothing.
+- Business category, CR type and CR issue date were marked required but not
+  enforced, deferring the failure to the end of the wizard.
+- Every wizard field is now programmatically associated with its label
+  (`htmlFor`/`id`), with `aria-required`, `role="alert"` errors and
+  `aria-describedby`. Previously labels were only visually adjacent.
+- The boot-time AI warning and the assistant's mock-mode message hardcoded
+  `OPENROUTER_API_KEY`, so running with Anthropic or OpenAI warned about a key
+  that was correctly absent and named the wrong variable to set.
+
+### Changed
+
+- `app/onboarding/page.tsx` split from 787 lines into step components under
+  `components/onboarding/steps/` plus shared `Field`, `StepNav` and
+  `WizardChrome` pieces.
+- An expired trial is read-only, not locked out: existing invoices and audit
+  records stay viewable and exportable. Submitting an already-issued invoice to
+  ZATCA is never plan-gated — the 24-hour reporting obligation outlives any
+  billing state.
 
 ## [0.4.0] — 2026-08-04 · Guided onboarding, billing, and signing correctness
 
