@@ -7,6 +7,7 @@ const valid = {
   password: "secret12",
   companyName: "Acme Trading",
   vatNumber: "300000000000003",
+  acceptedTerms: true,
 };
 
 describe("registerSchema", () => {
@@ -28,5 +29,15 @@ describe("registerSchema", () => {
 
   it("rejects a missing company name", () => {
     expect(registerSchema.safeParse({ ...valid, companyName: "" }).success).toBe(false);
+  });
+
+  it("rejects registration without accepting terms", () => {
+    const { acceptedTerms: _acceptedTerms, ...withoutTerms } = valid;
+    expect(registerSchema.safeParse(withoutTerms).success).toBe(false);
+    expect(registerSchema.safeParse({ ...valid, acceptedTerms: false }).success).toBe(false);
+  });
+
+  it("accepts registration with terms accepted", () => {
+    expect(registerSchema.safeParse({ ...valid, acceptedTerms: true }).success).toBe(true);
   });
 });

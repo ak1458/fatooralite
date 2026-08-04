@@ -1,19 +1,10 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/db/client";
-import { updateCompanySchema } from "@/lib/validation/schemas";
+import { updateCompanySchema, patchCompanySchema, checkOnboardingCompletion } from "@/lib/validation/schemas";
 import { requirePermission } from "@/lib/auth/server";
+import { PLAN_LIMITS, checkInvoiceLimit, getEffectivePlan } from "@/lib/billing/plan";
 
 export const runtime = "nodejs";
-
-const patchCompanySchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  nameAr: z.string().max(100).nullable().optional(),
-  crNumber: z.string().max(20).nullable().optional(),
-  address: z.string().max(500).nullable().optional(),
-  onboardingStatus: z.enum(["pending", "in_progress", "complete"]).optional(),
-  onboardingStep: z.number().int().min(0).max(10).optional(),
-});
 
 /** PATCH /api/companies/[id] — partial update (profile fields + onboarding progress). */
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
@@ -32,6 +23,28 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
+  // The wizard is the only intended path to onboardingStatus: "complete", and
+  // it gates every step client-side — but this route is the actual trust
+  // boundary. Without this check, any direct call (bypassing the wizard UI
+  // entirely) could mark a company "complete" with none of the ZATCA-mandatory
+  // fields ever filled in, which is exactly the compliance gap the wizard
+  // exists to close. Branch count (>=1) is enforced client-side only for now;
+  // not re-checked here.
+  if (parsed.data.onboardingStatus === "complete") {
+    const existing = await prisma.company.findUnique({ where: { id: params.id } });
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const check = checkOnboardingCompletion(existing, parsed.data);
+    if (!check.ok) {
+      return NextResponse.json(
+        { error: `Cannot complete onboarding — missing or invalid: ${check.path} (${check.message})` },
+        { status: 422 },
+      );
+    }
+  }
+  // (checkOnboardingCompletion itself is a no-op unless parsed.data.onboardingStatus
+  // === "complete" — the `if` above is just an optimization to skip the extra
+  // DB read on every ordinary patch, not a correctness requirement.)
+
   const company = await prisma.company.update({ where: { id: params.id }, data: parsed.data });
   return NextResponse.json(company);
 }
@@ -45,7 +58,22 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
     where: { id: params.id },
   });
   if (!company) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(company);
+
+  const sub = await prisma.subscription.findUnique({ where: { companyId: params.id } });
+  // Single source of truth for "is this company actually Pro right now" —
+  // matches checkInvoiceLimit's own resolution (currentPeriodEnd expiry
+  // included), so this display can never disagree with what's enforced.
+  const isPro = (await getEffectivePlan(params.id)) === "pro";
+
+  // Monthly invoice usage — needed by the Settings > Billing usage display.
+  const { used, limit } = await checkInvoiceLimit(params.id);
+
+  return NextResponse.json({
+    ...company,
+    subscription: sub ?? { plan: "free", status: "active" },
+    planLimits: PLAN_LIMITS[isPro ? "pro" : "free"],
+    invoiceUsage: { used, limit },
+  });
 }
 
 export async function PUT(req: Request, context: { params: Promise<{ id: string }> }) {

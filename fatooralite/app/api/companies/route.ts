@@ -21,8 +21,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ companies: company ? [company] : [] });
   }
 
-  // No session: only expose companies when auth enforcement is off (local demo).
-  if (process.env.AUTH_ENFORCE === "true") {
+  // No session: only expose companies when auth enforcement is explicitly off
+  // (local demo). Secure by default — must match proxy.ts/requirePermission's
+  // "enforced unless AUTH_ENFORCE=false" default, or this becomes the one
+  // route that quietly stays open when everything else is locked down.
+  if (process.env.AUTH_ENFORCE !== "false") {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
   const companies = await prisma.company.findMany({
