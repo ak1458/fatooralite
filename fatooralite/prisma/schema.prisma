@@ -1,4 +1,4 @@
-// FatooraLite data model — PostgreSQL (Neon in production, pgvector enabled).
+// Fatoora Lite Pro data model — PostgreSQL (Neon in production, pgvector enabled).
 // Local dev: run `docker compose up -d` (pgvector/pgvector image) or point
 // DATABASE_URL/DIRECT_URL at a Neon project. Migrations use DIRECT_URL.
 //
@@ -27,7 +27,44 @@ model Company {
   nameAr    String?
   vatNumber String   @unique
   crNumber  String?
-  address   String?
+  address   String? // deprecated: legacy free-text; superseded by the national-address fields below
+
+  // Business identity — drives the onboarding wizard's business-info step.
+  // businessCategory is a taxonomy code from lib/constants/business-categories.ts,
+  // not a DB enum, so new categories don't need a migration.
+  businessCategory      String?
+  businessCategoryOther String? // required (zod-level) when businessCategory = "other"
+  crType                String? // CRN | MOM | MLS | SAG | 700 | OTH — ZATCA seller PartyIdentification scheme
+  crIssueDate           String? // YYYY-MM-DD
+  crIssuePlace          String?
+
+  // Tax registration
+  vatRegistrationDate String? // YYYY-MM-DD
+  economicActivity    String? // ISIC/activity as printed on the VAT certificate
+
+  // Saudi national address — field names mirror the Saudi National Address
+  // format; see lib/zatca/types.ts PostalAddress for the ZATCA XML mapping
+  // (buildingNumber/streetName/district/city/postalCode line up 1:1).
+  buildingNumber   String? // 4 digits
+  streetName       String?
+  streetNameAr     String?
+  district         String?
+  districtAr       String?
+  city             String?
+  cityAr           String?
+  postalCode       String? // 5 digits
+  additionalNumber String? // 4 digits (secondary/unit number)
+  province         String?
+  countryCode      String? @default("SA")
+
+  // Contact & operations
+  contactName  String?
+  contactPhone String?
+  contactEmail String?
+  invoiceTypes String? // standard | simplified | both
+  iban         String? // SA + 22 digits
+  bankName     String?
+
   // Onboarding lifecycle: pending -> in_progress -> complete. Drives the
   // first-run wizard guard; new tenants start "pending".
   onboardingStatus String   @default("pending")
@@ -44,6 +81,26 @@ model Company {
   notifications  Notification[]
   roles          Role[]
   invoiceCounter InvoiceCounter?
+  subscription   Subscription?
+}
+
+/// One row per tenant. Plan limits are enforced in lib/billing/plan.ts, not
+/// read directly off this row, so limit numbers can change without a
+/// migration — this row only records which plan + processor state a company
+/// is in. processorCustomerId/processorSubscriptionId are nullable because
+/// the free plan has no payment processor involvement at all.
+model Subscription {
+  id                     String    @id @default(cuid())
+  companyId              String    @unique
+  plan                   String    @default("free") // free | pro
+  status                 String    @default("active") // active | past_due | canceled
+  processorCustomerId    String?
+  processorSubscriptionId String?
+  currentPeriodEnd       DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @default(now()) @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model Branch {
@@ -126,6 +183,14 @@ model Invoice {
   @@index([companyId, status])
   // Drives the reporting cron's due-query (oldest deadline first).
   @@index([kind, reportingState, reportingDeadline])
+  // Postgres does not auto-index foreign key columns. Neither is filtered on
+  // yet (branchId isn't queried anywhere in the app despite the PRD's FR5
+  // calling for branch-scoped invoice lists — the topbar branch selector
+  // doesn't actually filter data yet, a real functional gap, not just a
+  // missing index), but both are FKs that will be filtered on eventually and
+  // an index here is free.
+  @@index([customerId])
+  @@index([branchId])
 }
 
 model InvoiceLine {
@@ -196,6 +261,10 @@ model User {
   status    String  @default("active") // active|invited|disabled
   passwordHash       String?
   passwordResetNonce String?
+  /// Incremented on every password reset. Embedded in session JWTs so that
+  /// old tokens are rejected after a reset — prevents session fixation attacks.
+  sessionVersion     Int       @default(0)
+  acceptedTermsAt    DateTime? // set at registration when the ToS/privacy checkbox is accepted
   createdAt          DateTime @default(now())
   updatedAt          DateTime @default(now()) @updatedAt
 
