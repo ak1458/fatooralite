@@ -8,7 +8,7 @@ If you have been granted access to contribute, follow this guide.
 
 ## Repository layout
 
-```
+```text
 README.md  LICENSE  CHANGELOG.md  CLAUDE.md  handoff.md
 docs/                 numbered product docs (00-15), plans/, portal/ (generated)
 archive/              historical material and local secrets — git-ignored
@@ -48,7 +48,15 @@ npm run dev
 - **TypeScript strict.** No `any` without cause.
 - **Layered architecture:** pure engine (`lib/zatca`) → repositories (`lib/db`)
   → services (`lib/services`) → API (`app/api`) → UI. A layer may only import
-  from layers below it.
+  from layers below it. Enforced by `no-restricted-imports` rules in
+  `eslint.config.mjs`, so a violation fails `npm run lint` rather than relying
+  on a reviewer noticing. Components in particular must never import
+  `lib/db` or `lib/services` — that would also pull server-only code into the
+  client bundle.
+- **Form fields go through `components/onboarding/Field`** (or an equivalent
+  labelled wrapper). A bare `<label>` beside an `<input>` is not an
+  association: it needs `htmlFor`/`id`, and errors need `role="alert"` plus
+  `aria-describedby`.
 - **Tenant scoping is not optional.** Every query against a tenant-owned model
   filters on `companyId`, and every route asserts the caller's tenant via
   `requirePermission` / `isCallerCompany`. Deny by default — never write a
@@ -62,12 +70,12 @@ npm run dev
 
 | Branch           | Purpose                                                 |
 | ---------------- | ------------------------------------------------------- |
-| `main`           | Always deployable. Protected. Tagged releases cut here.  |
-| `release/x.y`    | Stabilisation for an upcoming minor, if one is needed.   |
-| `feature/<slug>` | New functionality.                                       |
-| `fix/<slug>`     | Bug fixes.                                               |
-| `chore/<slug>`   | Tooling, deps, docs-only, CI.                            |
-| `hotfix/<slug>`  | Cut from the release tag, merged to `main`, re-tagged.   |
+| `main`           | Always deployable. Protected. Tagged releases cut here. |
+| `release/x.y`    | Stabilisation for an upcoming minor, if one is needed.  |
+| `feature/<slug>` | New functionality.                                      |
+| `fix/<slug>`     | Bug fixes.                                              |
+| `chore/<slug>`   | Tooling, deps, docs-only, CI.                           |
+| `hotfix/<slug>`  | Cut from the release tag, merged to `main`, re-tagged.  |
 
 Branches merge into `main` via PR. Delete the branch after merge. Agent worktree
 branches (`worktree-*`) are scratch — never merge them; `git worktree prune` and
@@ -77,7 +85,7 @@ branches (`worktree-*`) are scratch — never merge them; `git worktree prune` a
 
 Conventional Commits, one logical change per commit:
 
-```
+```text
 <type>(<scope>): <imperative summary, lower case, no trailing period>
 
 <body: what changed and, more importantly, why. Wrap at 76 columns.>
