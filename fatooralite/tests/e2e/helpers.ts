@@ -10,6 +10,7 @@ export function freshAccount() {
     companyName: `E2E Co ${stamp}`,
     // 15 digits, ZATCA-shaped (3...3)
     vatNumber: `3${stamp.slice(-13).padStart(13, "0")}3`,
+    acceptedTerms: true,
   };
 }
 
