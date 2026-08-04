@@ -20,12 +20,6 @@ const helpLinkStyle: React.CSSProperties = {
   transition: "opacity 0.15s",
 };
 
-const helpLinkHover: React.CSSProperties = {
-  opacity: 0.8,
-  background: "var(--ac)",
-  color: "#04130d",
-};
-
 interface HelpLinkProps {
   slug: string;
   label?: string;

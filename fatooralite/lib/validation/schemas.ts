@@ -118,29 +118,75 @@ export const patchCompanySchema = z
  * business-info step validates a company's profile against before allowing
  * the user to advance past it (roadmap §4 step 1).
  */
+const zatcaMandatoryFields = {
+  name: z.string().min(1, "Name is required").max(100),
+  vatNumber: z.string().length(15, "VAT must be exactly 15 digits").regex(/^[0-9]+$/, "VAT must contain only digits"),
+  businessCategory: z.enum(BUSINESS_CATEGORY_CODES, { message: "Select a business category" }),
+  businessCategoryOther: z.string().max(200).optional().nullable(),
+  crNumber: z.string().regex(/^\d{10}$/, "CR number is 10 digits"),
+  crType: z.enum(["CRN", "MOM", "MLS", "SAG", "700", "OTH"], { message: "Select a CR type" }),
+  crIssueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+  vatRegistrationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+  economicActivity: z.string().min(1, "Economic activity is required").max(200),
+  buildingNumber: z.string().regex(/^\d{4}$/, "Building number is 4 digits"),
+  streetName: z.string().min(1, "Street is required").max(150),
+  district: z.string().min(1, "District is required").max(100),
+  city: z.string().min(1, "City is required").max(100),
+  postalCode: z.string().regex(/^\d{5}$/, "Postal code is 5 digits"),
+  additionalNumber: z.string().regex(/^\d{4}$/, "Additional number is 4 digits"),
+  contactName: z.string().min(1, "Contact name is required").max(100),
+  contactPhone: z.string().regex(/^\+?\d{7,15}$/, "Enter a valid phone number"),
+  contactEmail: z.string().email("Enter a valid email").max(200),
+  invoiceTypes: z.enum(["standard", "simplified", "both"], { message: "Select which invoice types you issue" }),
+} as const;
+
 export const zatcaMandatoryCompanySchema = z
+  .object(zatcaMandatoryFields)
+  .superRefine(requireOtherCategoryDetail);
+
+/**
+ * Per-step slices of the same field definitions the completion guard uses.
+ *
+ * The wizard validates a step against its slice before advancing, and
+ * `checkOnboardingCompletion` validates the merged company against the whole
+ * object at the end. Both read from `zatcaMandatoryFields`, so a rule can
+ * never be stricter in one place than the other — the failure mode otherwise
+ * is a tenant clearing every step and then being refused at the last click
+ * with an error no screen can fix.
+ *
+ * `name` and `vatNumber` are set at registration and rendered read-only, but
+ * they stay in their step's slice so the step still fails loudly if a company
+ * somehow reaches the wizard without them.
+ */
+export const businessIdentityStepSchema = z
   .object({
-    name: z.string().min(1, "Name is required").max(100),
-    vatNumber: z.string().length(15, "VAT must be exactly 15 digits").regex(/^[0-9]+$/, "VAT must contain only digits"),
-    businessCategory: z.enum(BUSINESS_CATEGORY_CODES),
-    businessCategoryOther: z.string().max(200).optional().nullable(),
-    crNumber: z.string().regex(/^\d{10}$/, "CR number is 10 digits"),
-    crType: z.enum(["CRN", "MOM", "MLS", "SAG", "700", "OTH"]),
-    crIssueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
-    vatRegistrationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
-    economicActivity: z.string().min(1, "Economic activity is required").max(200),
-    buildingNumber: z.string().regex(/^\d{4}$/, "Building number is 4 digits"),
-    streetName: z.string().min(1, "Street is required").max(150),
-    district: z.string().min(1, "District is required").max(100),
-    city: z.string().min(1, "City is required").max(100),
-    postalCode: z.string().regex(/^\d{5}$/, "Postal code is 5 digits"),
-    additionalNumber: z.string().regex(/^\d{4}$/, "Additional number is 4 digits"),
-    contactName: z.string().min(1, "Contact name is required").max(100),
-    contactPhone: z.string().regex(/^\+?\d{7,15}$/, "Enter a valid phone number"),
-    contactEmail: z.string().email("Enter a valid email").max(200),
-    invoiceTypes: z.enum(["standard", "simplified", "both"]),
+    name: zatcaMandatoryFields.name,
+    businessCategory: zatcaMandatoryFields.businessCategory,
+    businessCategoryOther: zatcaMandatoryFields.businessCategoryOther,
+    crNumber: zatcaMandatoryFields.crNumber,
+    crType: zatcaMandatoryFields.crType,
+    crIssueDate: zatcaMandatoryFields.crIssueDate,
   })
   .superRefine(requireOtherCategoryDetail);
+
+export const taxRegistrationStepSchema = z.object({
+  vatNumber: zatcaMandatoryFields.vatNumber,
+  vatRegistrationDate: zatcaMandatoryFields.vatRegistrationDate,
+  economicActivity: zatcaMandatoryFields.economicActivity,
+  invoiceTypes: zatcaMandatoryFields.invoiceTypes,
+});
+
+export const addressContactStepSchema = z.object({
+  buildingNumber: zatcaMandatoryFields.buildingNumber,
+  additionalNumber: zatcaMandatoryFields.additionalNumber,
+  streetName: zatcaMandatoryFields.streetName,
+  district: zatcaMandatoryFields.district,
+  city: zatcaMandatoryFields.city,
+  postalCode: zatcaMandatoryFields.postalCode,
+  contactName: zatcaMandatoryFields.contactName,
+  contactPhone: zatcaMandatoryFields.contactPhone,
+  contactEmail: zatcaMandatoryFields.contactEmail,
+});
 
 /**
  * The actual completion guard used by `PATCH /api/companies/[id]`: only when

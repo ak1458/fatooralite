@@ -1,6 +1,6 @@
 "use client";
 
-import { BUSINESS_CATEGORIES, type BusinessCategory } from "@/lib/constants/business-categories";
+import { BUSINESS_CATEGORIES } from "@/lib/constants/business-categories";
 
 export type OnboardingStepKey =
   | "business-identity"
@@ -50,11 +50,12 @@ export const ONBOARDING_STEPS: readonly OnboardingStepConfig[] = [
   {
     key: "tax-registration",
     label: "Tax registration",
-    description: "VAT number, registration date, and economic activity",
+    description: "VAT number, registration date, economic activity, and invoice types",
     fields: [
       "vatNumber",
       "vatRegistrationDate",
       "economicActivity",
+      "invoiceTypes",
     ],
     validationSchema: "zatcaMandatoryCompanySchema",
     order: 1,
