@@ -20,8 +20,8 @@ phase marked **needs a detailed plan**.
 | Billing | Moyasar hosted checkout + verified webhook, built and inert (no merchant keys). |
 | AI | Provider-agnostic (OpenRouter / Groq / Anthropic / OpenAI). Tool calling **already works** — 11 tools, RBAC-checked, confirm-gated. |
 | Deployment | Live at `fatooralite.vercel.app`, `AUTH_ENFORCE=true`, `ZATCA_MODE=sandbox`. |
-| Tests | 143 passing / 34 skipped (DB-gated), `tsc` clean, `zatca:validate` 7/7. |
-| Repo | 15 semantic commits, `v0.1.0`–`v0.3.0` tagged, release policy documented, attribution guard installed. |
+| Tests | 184 passing / 34 skipped (DB-gated), `tsc` clean, `zatca:validate` 7/7. |
+| Repo | 18 semantic commits, `v0.1.0`–`v0.3.0` tagged, release policy documented, attribution guard installed, stale branches cleaned. |
 
 ### Blocked on the owner, not on engineering
 
@@ -40,58 +40,76 @@ These gate launch and no amount of code closes them:
 
 ---
 
-## Phase 1 — Codebase organization *(in progress)*
+## Phase 1 — Codebase organization ✅ complete
 
-**Done this session:** 15 semantic commits replacing 136 uncommitted files;
-`.claude/worktrees/` ignored; loose plan documents consolidated into
-`docs/plans/`; `CONTRIBUTING.md` corrected (it described a `doc/` folder that
-does not exist and a mock-data directory that was deleted); branching, commit,
-semver and milestone conventions written; `v0.1.0`–`v0.3.0` tagged;
-`.githooks/commit-msg` blocks assistant attribution.
+Commits `2399c06`…`8747d80`. Test count 143 → 184; `tsc` clean, build green,
+`zatca:validate` 7/7, lint 20 → 18 problems (all pre-existing, none in the
+touched modules, zero `jsx-a11y`).
 
-The layered structure (`lib/zatca` → `lib/db` → `lib/services` → `app/api` →
-UI) is sound and files are well-sized. Only one genuine outlier remains.
+**Repository and release hygiene.** 136 uncommitted files became 15 semantic
+commits; `.claude/worktrees/` ignored and the eight stale worktree branches
+plus `audit-snapshot` deleted (all pointed at one orphan commit whose LICENSE
+change the current file already supersedes); loose plan documents consolidated
+into `docs/plans/`; `CONTRIBUTING.md` rewritten (it described a `doc/` folder
+that does not exist and a mock-data directory deleted during de-mocking);
+branching, commit, semver, release and milestone conventions written;
+`v0.1.0`–`v0.3.0` tagged; `.githooks/commit-msg` blocks assistant attribution.
 
-### Task 1.1 — Split `app/onboarding/page.tsx` (787 lines)
+**Task 1.1 — split the wizard.** `app/onboarding/page.tsx` was 787 lines, by a
+wide margin the largest source file in the repository, holding six step
+components, the wizard chrome, the validators and the routing. Now 232 lines
+of routing, state and step dispatch, with steps under
+`components/onboarding/steps/` and shared pieces in `Field`, `StepNav`,
+`WizardChrome`, `styles` and `types`. Largest new file is 320 lines.
 
-Six step components, the wizard shell, the step registry consumer and the
-deep-link handling all live in one file — by a wide margin the largest source
-file in the repository (next is 523).
+**Task 1.2 — accessibility.** Rather than patching ~30 fields individually,
+every field renders through `components/onboarding/Field`, which owns the
+`htmlFor`/`id` association, the required marker (`aria-required`, kept out of
+the accessible name), the error (`role="alert"` + `aria-invalid` +
+`aria-describedby`) and the hint. A field cannot be added without it. The
+stepper is an ordered list with `aria-current="step"` and text equivalents for
+state that colour alone carried; ZATCA activation progress is announced via
+`role="status"`. Covered by 19 component tests, including a per-step assertion
+that every control has an accessible name.
 
-- Create `components/onboarding/steps/BusinessIdentityStep.tsx`,
-  `TaxRegistrationStep.tsx`, `AddressContactStep.tsx`, `ZatcaStep.tsx`,
-  `BranchesStep.tsx`, `FinishStep.tsx`.
-- Create `components/onboarding/WizardShell.tsx` (progress rail, next/back,
-  validation gate) and `components/onboarding/fields.ts` (the shared `label` /
-  `input` style objects currently duplicated per step).
-- `app/onboarding/page.tsx` keeps only routing, `?step=` / `?reopen=`
-  handling, the `<Suspense>` boundary and company fetch/patch.
+**Task 1.3 — layer boundaries.** Four `no-restricted-imports` blocks in
+`eslint.config.mjs` enforce `lib/zatca` → `lib/db` → `lib/services` →
+`app/api` → UI. Built on the rule ESLint ships rather than adding
+`eslint-plugin-boundaries`. Existing code was already clean; the rules were
+proved non-vacuous with a temporary probe file.
 
-**Do this together with Task 1.2** — both touch every field in every step, and
-two sweeps over the same lines is wasted work.
+### Blocker found and fixed along the way
 
-### Task 1.2 — Wizard label/`htmlFor` accessibility sweep
+`invoiceTypes` is required by `zatcaMandatoryCompanySchema`, and therefore by
+the server-side guard on `PATCH /api/companies/[id]`, but it was collected by
+no wizard step, no registration field and no settings screen. A fresh tenant
+could complete all six steps and be refused at "Go to dashboard" with a 422
+naming a field no screen exposes — **onboarding was impossible to finish for
+anyone except the seeded demo company**, which sets the value directly, which
+is why every prior audit and the e2e suite missed it.
 
-Known gap, flagged twice and deliberately not partially patched: step
-components use bare `<label style={label}>` next to `<input>`/`<select>` with
-no `id`/`htmlFor`. Screen readers do not associate them and clicking the label
-does not focus the field.
+Now collected in the Tax Registration step. `lib/onboarding/steps.test.ts`
+derives the required-field list from the schema rather than hand-listing it,
+so adding a mandatory field without a step to collect it fails a test instead
+of a customer.
 
-Every field gets a stable `id`, its label a matching `htmlFor`, and any
-validation message `aria-describedby` + `role="alert"`. Add a Playwright
-assertion that every `<input>` in the wizard has an accessible name.
+Two related defects fixed in the same pass:
 
-### Task 1.3 — Enforce the layer boundary in lint
+- Step validators returned a bare message and the caller derived the field key
+  with `message.split(" ")[0]`, which only worked while a message began with
+  its own field name. "Postal code is 5 digits" keyed to `Postal` and "Enter a
+  valid email" keyed to `Enter`, so those errors rendered nowhere and Continue
+  silently did nothing. Validators now return `{field, message}`.
+- Business category, CR type and CR issue date carried a required marker the
+  validator did not enforce, so the step advanced with them empty and the
+  failure surfaced later at the completion guard. CR issue place carried the
+  marker but is not in the mandatory schema, so the marker was removed rather
+  than a rule invented.
 
-The layering is a convention with nothing enforcing it. Add an
-`eslint-plugin-boundaries` (or `no-restricted-imports`) rule to
-`eslint.config.mjs`: `lib/zatca` may not import from `lib/db`, `lib/services`
-or `app`; `lib/db` may not import from `lib/services` or `app`; `components`
-may not import from `lib/db`. Fix or explicitly exempt whatever it catches.
-
-**Acceptance:** `npm run lint`, `npm test`, `npm run build` green; no source
-file over ~400 lines except generated ones; the wizard behaves identically
-(e2e passes).
+Per-step schema slices (`businessIdentityStepSchema`, `taxRegistrationStepSchema`,
+`addressContactStepSchema`) are built from the same field definitions the
+completion guard uses, so a rule can never be stricter in one place than the
+other.
 
 ---
 
@@ -328,8 +346,7 @@ the operational layer around it:
 
 ## Suggested order
 
-1. **Phase 1** — finish the split and the a11y sweep. Cheap, and every later
-   phase edits these files.
+1. ~~**Phase 1**~~ — done.
 2. **Phase 7** — market research runs in the background and its output changes
    Phase 2's tier boundaries and pricing.
 3. **Phase 2** — licensing. Nothing ships commercially without it.
