@@ -25,6 +25,7 @@ const labelStyle: React.CSSProperties = {
 export default function RegisterPage() {
   const router = useRouter();
   const [form, setForm] = useState({ name: "", email: "", password: "", companyName: "", vatNumber: "" });
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -39,7 +40,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, acceptedTerms }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Registration failed");
@@ -130,11 +131,31 @@ export default function RegisterPage() {
             />
           </div>
 
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 16, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              style={{ marginTop: 2 }}
+              required
+            />
+            <span style={{ fontSize: 12.5, color: "var(--t3)", lineHeight: 1.5 }}>
+              I agree to the{" "}
+              <Link href="/terms" target="_blank" style={{ color: "var(--ac)", fontWeight: 600, textDecoration: "none" }}>
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" target="_blank" style={{ color: "var(--ac)", fontWeight: 600, textDecoration: "none" }}>
+                Privacy Policy
+              </Link>
+            </span>
+          </label>
+
           {error && <div style={{ color: "var(--dang)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || !acceptedTerms}
             style={{
               width: "100%",
               padding: "12px 18px",
@@ -144,9 +165,9 @@ export default function RegisterPage() {
               color: "#04130d",
               fontSize: 14,
               fontWeight: 700,
-              cursor: busy ? "wait" : "pointer",
+              cursor: busy ? "wait" : !acceptedTerms ? "not-allowed" : "pointer",
               fontFamily: "inherit",
-              opacity: busy ? 0.7 : 1,
+              opacity: busy || !acceptedTerms ? 0.7 : 1,
             }}
           >
             {busy ? "Creating your account…" : "Create account"}

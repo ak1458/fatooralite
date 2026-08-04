@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useLang } from "@/lib/i18n/LangProvider";
 
 const L = {
-  title: { en: "Sign in to FatooraLite", ar: "تسجيل الدخول إلى فاتورة لايت" },
+  title: { en: "Sign in to Fatoora Lite Pro", ar: "تسجيل الدخول إلى فاتورة لايت برو" },
   sub: { en: "ZATCA Phase 2 compliance", ar: "الامتثال للمرحلة الثانية للهيئة" },
   email: { en: "Email", ar: "البريد الإلكتروني" },
   password: { en: "Password", ar: "كلمة المرور" },

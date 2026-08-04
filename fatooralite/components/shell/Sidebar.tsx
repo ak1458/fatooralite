@@ -5,7 +5,7 @@ import { NavGroup } from "./NavGroup";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { TrustPill } from "./TrustPill";
 
-const BRAND = "FatooraLite";
+const BRAND = "Fatoora Lite Pro";
 
 export function Sidebar() {
   const { t } = useLang();

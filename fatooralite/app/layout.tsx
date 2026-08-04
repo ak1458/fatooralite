@@ -32,10 +32,27 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FatooraLite — ZATCA Compliance",
-  description: "ZATCA Phase 2 e-invoicing compliance for Saudi SMEs",
+  title: {
+    default: "Fatoora Lite Pro — ZATCA Phase-2 E-Invoicing Platform",
+    template: "%s | Fatoora Lite Pro",
+  },
+  description: "Enterprise ZATCA Phase-2 e-invoicing SaaS platform for Saudi Arabian businesses. Compliant cryptographic clearance, reporting, and automated tax invoicing.",
+  keywords: ["ZATCA", "E-invoicing", "Saudi Arabia", "VAT", "Fatoora", "Phase-2", "CSID", "Tax Invoice"],
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "FatooraLite", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Fatoora Lite Pro", statusBarStyle: "black-translucent" },
+  openGraph: {
+    title: "Fatoora Lite Pro — ZATCA Phase-2 E-Invoicing Platform",
+    description: "Enterprise ZATCA Phase-2 e-invoicing SaaS platform for Saudi Arabian businesses.",
+    url: "https://fatooralite.com",
+    siteName: "Fatoora Lite Pro",
+    locale: "ar_SA",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Fatoora Lite Pro — ZATCA Phase-2 E-Invoicing",
+    description: "ZATCA Phase-2 compliant e-invoicing platform for Saudi businesses.",
+  },
 };
 
 export const viewport: Viewport = {

@@ -1,4 +1,4 @@
-// FatooraLite service worker — modest offline support.
+// Fatoora Lite Pro service worker — modest offline support.
 const CACHE = "fatooralite-v1";
 const ASSETS = [
   "/dashboard",

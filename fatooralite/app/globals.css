@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ============================================================
-   FatooraLite design tokens (ported from the approved design).
+   Fatoora Lite Pro design tokens (ported from the approved design).
    Components reference ONLY these vars — never literal colors.
    Theme is switched via [data-theme] on <html>.
    ============================================================ */

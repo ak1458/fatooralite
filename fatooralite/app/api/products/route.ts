@@ -19,6 +19,7 @@ export async function GET(req: Request) {
     await prisma.product.findMany({
       where: { companyId },
       orderBy: { createdAt: "desc" },
+      take: 50,
     })
   ).map((p) => ({ ...p, unitPrice: num(p.unitPrice) }));
   return NextResponse.json({ products });

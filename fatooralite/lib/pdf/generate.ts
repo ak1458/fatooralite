@@ -150,7 +150,7 @@ export async function generatePdf(invoice: Invoice, options: PdfOptions = {}): P
     });
   }
   pdfDoc.setTitle(`Invoice ${invoice.invoiceNumber}`);
-  pdfDoc.setProducer("FatooraLite");
+  pdfDoc.setProducer("Fatoora Lite Pro");
 
   return pdfDoc.save();
 }
