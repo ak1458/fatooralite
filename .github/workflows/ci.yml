@@ -34,8 +34,26 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Dependency audit (blocks on critical only)
+        # As of 2026-07-20 there are known high/moderate advisories in
+        # onnxruntime-node (via the optional local-embedding provider) and
+        # next's bundled postcss — both need a manual, tested major-version
+        # bump, not an autonomous force-fix; see handoff.md. --audit-level=critical
+        # keeps CI green for those known/tracked issues while still catching
+        # anything newly critical. Raise this once the known ones are cleared.
+        run: npm audit --audit-level=critical
+
       - name: Unit tests
         run: npm test
+
+      - name: ZATCA signature validation
+        # Independent from the unit-test suite on purpose: engine.test.ts and
+        # this script both exist, but a canonicalization bug in the signing
+        # code can pass unit tests that reuse the same (buggy) canonicalizer
+        # to "verify" what it just signed — see handoff.md's XAdES
+        # ancestor-namespace fix for exactly this happening undetected for a
+        # full session. This step is the one check that would have caught it.
+        run: npm run zatca:validate
 
       - name: Build
         run: npm run build

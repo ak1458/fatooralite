@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
-import { submitInvoice } from "@/lib/services/clearance-service";
+import { submitInvoice, AlreadySubmittedError } from "@/lib/services/clearance-service";
 
 export const runtime = "nodejs";
 // Vercel execution ceiling (Hobby 10s / Pro 60s / Enterprise ≤300s). The loop
@@ -18,9 +18,15 @@ const CONCURRENCY = 5;         // don't hammer the gateway from one invocation
  * cron drains the backlog, oldest-deadline-first. Runs every 15 minutes.
  */
 export async function GET(req: Request) {
-  // Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`.
+  // Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`. Fail CLOSED: an
+  // unset CRON_SECRET must deny, not skip, the check — this path is public
+  // (the route itself is committed in vercel.json) and drives real ZATCA
+  // gateway submissions, so "misconfigured" must not mean "wide open." Env
+  // validation already requires CRON_SECRET in production (lib/env.ts), but
+  // that's a boot-time guard on NODE_ENV — this is the actual request-time
+  // trust boundary and must not depend on that check having run correctly.
   if (
-    process.env.CRON_SECRET &&
+    !process.env.CRON_SECRET ||
     req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`
   ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -56,9 +62,17 @@ export async function GET(req: Request) {
           data: { reportingState: ok ? "reported" : "failed" },
         });
         ok ? reported++ : failed++;
-      } catch {
-        // Transient error (gateway/network): leave PENDING so the next tick retries.
-        failed++;
+      } catch (err) {
+        if (err instanceof AlreadySubmittedError) {
+          // Already reported by a concurrent run or a manual clear in the
+          // UI — clear it from the pending queue instead of retrying
+          // forever (submitInvoice's guard would throw this every tick).
+          await prisma.invoice.update({ where: { id: inv.id }, data: { reportingState: "reported" } });
+          reported++;
+        } else {
+          // Transient error (gateway/network): leave PENDING so the next tick retries.
+          failed++;
+        }
       }
     }
   }
