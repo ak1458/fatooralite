@@ -1,7 +1,110 @@
 # Changelog
 
 All notable changes to Fatoora Lite Pro are documented here.
-Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
+Format follows [Keep a Changelog](https://keepachangelog.com/) and
+[Semantic Versioning](https://semver.org/). Release process and branching
+conventions: [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
+
+## [Unreleased]
+
+Nothing yet.
+
+## [0.4.0] — 2026-08-04 · Guided onboarding, billing, and signing correctness
+
+### Added
+
+- **Six-step guided onboarding wizard** — Business Identity, Tax Registration,
+  Address & Contact, ZATCA Connection, Branches & Locations, Finish. Driven by
+  an `ONBOARDING_STEPS` registry with per-field validation against
+  `zatcaMandatoryCompanySchema`, RTL handling for Arabic fields, and contextual
+  help links. Settings can deep-link into any completed step (`?step=<key>`) or
+  re-run the whole wizard (`?reopen=true`).
+- **`POST /api/onboarding/activate`** — collapses CCSID → compliance → PCSID
+  into a single round trip and resumes from an existing compliance certificate
+  instead of burning a fresh OTP.
+- **Full ZATCA business profile on `Company`** — business category (14-code
+  taxonomy), CR type/issue date/place, VAT registration date, economic activity,
+  Saudi national address, contact details, invoice types, IBAN/bank.
+- **Billing** — Moyasar hosted-checkout integration (`POST /api/billing/checkout`),
+  verified idempotent webhook (`POST /api/billing/webhook`), `Subscription` model,
+  plan limits enforced with a 402 on invoice creation, real usage in Settings.
+  Ships inert until `MOYASAR_SECRET_KEY` is set.
+- **Operations** — distributed rate limiting (Upstash REST, in-memory fallback),
+  transactional email (Resend REST) so password-reset links are actually
+  delivered, `GET /api/health` for uptime monitors, Dependabot for npm and
+  actions, `zatca:validate` and `npm audit` steps in CI.
+- **Legal pages** — the four missing routes from `proxy.ts`'s allowlist
+  (`/cancellation-policy`, `/data-retention`, `/acceptable-use`,
+  `/security-policy`), plus `robots.ts` and `sitemap.ts`.
+- Terms-of-service acceptance at registration (`User.acceptedTermsAt`).
+
+### Fixed
+
+- **XAdES `SignedInfo` canonicalization dropped ancestor namespaces.** C14N 1.1
+  is inclusive canonicalization and must render every ancestor namespace onto
+  the canonicalized subtree's apex; `xml-crypto` only renders what it is handed
+  in `ancestorNamespaces` and never walks the DOM itself. The Invoice root's
+  default, `cac`, `cbc` and `ext` declarations were therefore absent from the
+  bytes that were signed, so a spec-compliant verifier — including ZATCA's
+  gateway — would fail `SignatureValue` verification on **every** invoice.
+  Reference 2 (`#xadesSignedProperties`) additionally had no `ds:Transforms` at
+  all and was digested over raw serialization. Both the unit test and
+  `validate-zatca` previously re-verified with the same faulty canonicalizer, a
+  tautological check that could not detect this; both now assert on the
+  canonical output directly.
+- **VAT was rounded per line and then summed** instead of computed once from
+  each category's aggregated taxable base (EN16931 BR-CO-17). Three lines of
+  0.03 SAR each round to 0.00 individually but aggregate to 0.01 — exactly the
+  mismatch ZATCA's BR-KSA validation rejects. Document totals now derive from
+  the same tax-subtotal result so they cannot drift from the breakdown rows.
+- **Tenant isolation bypass for company-less sessions.** Four guards
+  short-circuited to *allow* when `User.companyId` was null, a reachable state.
+  Replaced by a single deny-by-default `isCallerCompany()` helper.
+- **Password reset did not invalidate outstanding sessions** — `sessionVersion`
+  was minted and incremented but never verified against the DB.
+- **`AUTH_ENFORCE` defaulted open in three call sites** while `proxy.ts`
+  defaulted closed, leaving API routes unauthenticated while page routes
+  correctly redirected.
+- **The ZATCA reporting cron failed open** when `CRON_SECRET` was unset, on a
+  publicly committed route path that drives real gateway submissions. The cron
+  path was also missing from `proxy.ts`'s allowlist, so with `AUTH_ENFORCE=true`
+  it had never actually reached its own secret check.
+- **Onboarding completion could be reached without passing steps 1–3**, on both
+  the client deep link and the `PATCH /api/companies/[id]` route.
+- **RAG poisoning surface** — tenant free text was retrieved alongside the
+  trusted global corpus with no trust distinction. Chunks are now scope-tagged
+  in the system prompt, and the confirm-before-write gate covers `addCustomer`
+  and `addProduct` as well as invoice actions.
+- Unauthenticated `/api/*` returns a JSON 401 instead of a 307 to `/login`.
+- Re-submitting an already cleared or reported invoice is refused.
+- `GET /api/health` no longer echoes raw database errors.
+- `Modal` gained `role="dialog"`, a focus trap, and focus restoration on close.
+- `/refund-policy` and `/contact` no longer publish commitments and support
+  addresses that do not exist.
+
+### Changed
+
+- Product renamed **Fatoora Lite → Fatoora Lite Pro** across the UI, docs,
+  portal, PWA manifest, PDF metadata and ZATCA CSR common name. The npm package
+  name, the `fatooralite/` directory and the repository slug are unchanged on
+  purpose — they are technical identifiers that deployment configuration
+  depends on.
+- `CONTRIBUTING.md` and `SECURITY.md` moved under `.github/`; loose plan
+  documents consolidated into `docs/plans/`.
+- `ENCRYPTION_KEY` is separate from `AUTH_SECRET`, so rotating the latter no
+  longer renders stored certificate private keys undecryptable.
+- `GET /api/customers` and `/api/products` cap results at 50, matching invoices
+  and notifications.
+
+### Known limitations
+
+- Not verified against a live ZATCA gateway; that requires a Fatoora portal OTP.
+- Moyasar webhook payload shape is written from published docs, not a live
+  sandbox transaction.
+- `confirmedAction` in the AI agent route is still a client-trusted flag rather
+  than a server-minted pending-action token.
+- The branch selector does not yet scope data by `branchId` (PRD FR5).
+- The audit trail covers invoices only; security events are not recorded.
 
 ## [0.3.0] — 2026-07-03 · Production readiness
 

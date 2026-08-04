@@ -30,6 +30,27 @@ There's no way to force this split via a hook — Claude Code hooks fire on
 tool/file events, not on semantic "is this a planning task," so this is a
 convention the main thread follows deliberately, not a mechanical gate.
 
+## No tool attribution in the repository (mandatory)
+
+Fatoora Lite Pro is presented as professionally engineered software. Assistant
+attribution in the repository misrepresents that and puts AI accounts in
+GitHub's contributor graph.
+
+**Never** add to a commit message, PR body, changelog entry, code comment, or
+generated file:
+
+- `Co-Authored-By:` trailers naming an assistant or `noreply@anthropic.com`
+- "Generated with …" / "Created by …" footers naming a tool
+- robot emoji sign-offs, or links to assistant product pages
+
+Write commits as the human author would. The `commit-msg` hook in `.githooks/`
+rejects the common forms; enable it once per clone with
+`git config core.hooksPath .githooks`. The hook is a backstop, not the rule —
+do not work around it.
+
+Naming a model is fine in *technical* content where it is the subject, e.g.
+`lib/ai/providers/anthropic.ts` or `docs/10-ai-architecture.md`.
+
 ## Progress tracking (mandatory)
 
 `handoff.md` must stay current. Whenever a task from `docs/12-master-roadmap.md`
