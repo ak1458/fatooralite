@@ -26,6 +26,9 @@ export interface Retrieved {
   text: string;
   source: string;
   score: number;
+  /** 'global' = curated ZATCA corpus (trusted). 'company' = tenant-supplied
+   *  data (customer/product/invoice text) — reference data, never instructions. */
+  scope: "global" | "company";
 }
 
 function toVectorLiteral(embedding: number[]): string {
@@ -64,8 +67,8 @@ export async function retrieve(
 ): Promise<Retrieved[]> {
   const q = await embedOne(query);
   const qvec = toVectorLiteral(q);
-  const rows = await prisma.$queryRaw<{ text: string; source: string; score: number }[]>`
-    SELECT text, source, 1 - (embedding <=> ${qvec}::vector) AS score
+  const rows = await prisma.$queryRaw<{ text: string; source: string; score: number; scope: "global" | "company" }[]>`
+    SELECT text, source, scope, 1 - (embedding <=> ${qvec}::vector) AS score
     FROM "KnowledgeChunk"
     WHERE embedding IS NOT NULL
       AND vector_dims(embedding) = ${q.length}

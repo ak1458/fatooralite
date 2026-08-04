@@ -157,6 +157,10 @@ const TOOLS: Record<string, ToolDef> = {
       email: z.string().email().max(200).optional(),
     }),
     permission: "invoice:create",
+    confirm(args) {
+      const a = args as { name?: string; vatNumber?: string; city?: string; email?: string };
+      return `Create customer "${a.name ?? ""}"${a.city ? ` (${a.city})` : ""}${a.vatNumber ? `, VAT ${a.vatNumber}` : ""}.`;
+    },
     async handler(args, ctx) {
       const a = args as { name: string; vatNumber?: string; city?: string; email?: string };
       await prisma.customer.create({ data: { companyId: ctx.companyId, name: a.name, vatNumber: a.vatNumber ?? null, city: a.city ?? null, email: a.email ?? null } });
@@ -178,6 +182,10 @@ const TOOLS: Record<string, ToolDef> = {
       sku: z.string().max(50).optional(),
     }),
     permission: "invoice:create",
+    confirm(args) {
+      const a = args as { name?: string; unitPrice?: number; sku?: string };
+      return `Create product "${a.name ?? ""}" — SAR ${(a.unitPrice ?? 0).toFixed(2)}${a.sku ? `, SKU ${a.sku}` : ""}.`;
+    },
     async handler(args, ctx) {
       const a = args as { name: string; unitPrice: number; vatCategory?: "S" | "Z" | "E" | "O"; sku?: string };
       await prisma.product.create({ data: { companyId: ctx.companyId, name: a.name, unitPrice: a.unitPrice, vatCategory: a.vatCategory ?? "S", sku: a.sku ?? null } });

@@ -17,7 +17,7 @@ export function createOpenRouterProvider(): ChatProvider {
       process.env.AI_FALLBACK_MODEL || process.env.OPENROUTER_FALLBACK_MODEL || "openai/gpt-oss-20b:free",
     extraHeaders: () => ({
       "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
-      "X-Title": "FatooraLite",
+      "X-Title": "Fatoora Lite Pro",
     }),
     useModelsArray: true,
     lowReasoningEffort: true,
