@@ -43,6 +43,7 @@ const L = {
   desc: { en: "Description", ar: "الوصف" },
   qty: { en: "Qty", ar: "الكمية" },
   price: { en: "Unit price", ar: "سعر الوحدة" },
+  remove: { en: "Remove line", ar: "حذف السطر" },
   addLine: { en: "Add line", ar: "إضافة بند" },
   taxable: { en: "Taxable", ar: "الخاضع للضريبة" },
   vat: { en: "VAT (15%)", ar: "الضريبة (١٥٪)" },
@@ -373,11 +374,12 @@ export function NewInvoiceForm() {
         </div>
         {lines.map((l, i) => (
           <div key={i} style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "150px 1fr 80px 110px 36px", gap: 8, marginBottom: mobile ? 16 : 8, paddingBottom: mobile ? 16 : 0, borderBottom: mobile ? "1px dashed var(--bd)" : "none" }}>
-            <select onChange={(e) => handleProductSelect(i, e.target.value)} style={inputStyle}>
+            <select aria-label={`${label("product")} — ${label("lines")} ${i + 1}`} onChange={(e) => handleProductSelect(i, e.target.value)} style={inputStyle}>
               <option value="">{label("product")}...</option>
               {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             <input
+              aria-label={`${label("desc")} — ${label("lines")} ${i + 1}`}
               placeholder={label("desc")}
               value={l.description}
               onChange={(e) => updateLine(i, { description: e.target.value })}
@@ -385,6 +387,7 @@ export function NewInvoiceForm() {
             />
             <input
               type="number"
+              aria-label={`${label("qty")} — ${label("lines")} ${i + 1}`}
               placeholder={label("qty")}
               value={l.quantity}
               onChange={(e) => updateLine(i, { quantity: Number(e.target.value) })}
@@ -392,12 +395,13 @@ export function NewInvoiceForm() {
             />
             <input
               type="number"
+              aria-label={`${label("price")} — ${label("lines")} ${i + 1}`}
               placeholder={label("price")}
               value={l.unitPrice}
               onChange={(e) => updateLine(i, { unitPrice: Number(e.target.value) })}
               style={inputStyle}
             />
-            <button onClick={() => removeLine(i)} style={{ ...btnGhost, padding: 0 }} aria-label="remove">
+            <button onClick={() => removeLine(i)} style={{ ...btnGhost, padding: 0 }} aria-label={`${label("remove")} ${i + 1}`}>
               ×
             </button>
           </div>
