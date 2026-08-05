@@ -1,9 +1,17 @@
 # Fatoora Lite Pro — Working Agreement
 
-**Read `handoff.md` (repo root) first, every session.** It's the authoritative
-session-to-session progress tracker — what's done, what's next, notes for
-whoever picks this up. `docs/12-master-roadmap.md` is the vision/priority
-document behind it.
+**Read `START-HERE.md` (repo root) first, every session.** It is the single
+entry point: current state, what is left in priority order, what is blocked on
+the owner, and the invariants that must not be "fixed". It is short by design.
+
+Then, only as needed:
+
+- `docs/16-launch-plan.md` — the phase plan and full write-ups of what each
+  phase delivered.
+- `handoff.md` — the chronological diary (~1500 lines). **Search it, don't read
+  it end to end.** It's the authoritative record of what happened and why, but
+  `START-HERE.md` is what tells you where to begin.
+- `docs/12-master-roadmap.md` — the product vision behind the plan.
 
 ## Two-agent workflow (planning vs. implementation)
 
@@ -53,12 +61,19 @@ Naming a model is fine in *technical* content where it is the subject, e.g.
 
 ## Progress tracking (mandatory)
 
-`handoff.md` must stay current. Whenever a task from `docs/12-master-roadmap.md`
-is completed:
-1. Mark it done in `handoff.md` (checkbox + brief note on what/where).
-2. Record anything the next session needs to know (gotchas, decisions made,
-   what deliberately wasn't done and why).
-3. Update the "next session should start at" pointer.
+Three files, each with one job. Whenever a piece of work is finished:
+
+1. **`START-HERE.md`** — update *Current state* and *What is left*. This is the
+   file the next session reads first, so it must never describe work that is
+   already done. Keep it short; it is an index, not a record.
+2. **`docs/16-launch-plan.md`** — mark the phase, and write up what was
+   actually delivered versus what was planned.
+3. **`handoff.md`** — append a dated entry: what you did, what you deliberately
+   did *not* do and why, and anything that cost you time. This is the diary;
+   it is append-only in spirit, so don't rewrite history in it.
+
+Also add any new **invariant** to `START-HERE.md` — something that looks like a
+bug and is deliberate. Those are the things a later session breaks by "fixing".
 
 This is what lets a different AI session — or a different underlying model —
 pick up exactly where the previous one stopped instead of re-deriving
