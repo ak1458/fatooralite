@@ -1497,3 +1497,50 @@ refuse server-side with a good message but do not render disabled with an
 inline reason, so users find out by clicking. After that the plan's order is
 Phase 7 (market research, to settle pricing before checkout goes live), then
 Phase 3 (AI depth), then 8 and 9.
+
+### 2026-08-05 (cont'd) — Phase 2 closed: plan gates explain themselves before the click
+
+Still all local. 31 commits on `feature/production-readiness`.
+
+- [x] **DONE — Pro-gated controls now say why they are unavailable.** The
+  server already refused at the limit with a 402 carrying a full explanation,
+  and `ApiRefusalWatcher` surfaced it — but only *after* the click. A tenant at
+  their trial cap pressed a live-looking button and got a toast. Three pieces:
+  - `lib/useCompany.tsx` carries plan + usage, fetched alongside branches in
+    the round trip it already made. Every consumer shares that one read;
+    `TrialBanner` was duplicating the same request and no longer does.
+  - `checkLimit()` in `lib/billing/entitlements.ts` is the predicate — pure,
+    beside the rest of the plan logic, and used by **both** `usePlan()` and its
+    tests. The first draft of the test reimplemented the rule, which would have
+    kept passing after the real one broke; that was corrected.
+  - `PlanGate` renders the decision behind a render prop, so each call site
+    keeps its own button styling.
+
+  **Read this before "tightening" it: the gate fails OPEN on purpose.** An
+  unknown or failed plan read allows the action. The server returns 402 if the
+  tenant is genuinely over, so failing open costs one round trip; failing
+  closed would lock a paying customer out of their own product because one
+  request did not land. There is a test asserting exactly that.
+
+  At the invoice cap the create action renders a real disabled `<button>`, not
+  a `Link` styled to look dead — a disabled-looking anchor is still followable
+  by keyboard and by URL.
+
+  Branch creation is deliberately **not** gated in the UI: it only happens in
+  the onboarding wizard, where the first branch is always permitted and the
+  step already renders the server's message inline for a second one. A gate
+  there would be dead code.
+
+**Verified:** tsc clean, lint 0, **280 passed / 43 skipped** (was 267),
+zatca:validate 7/7, build succeeds. All five CI gates return 0.
+
+**Phases 1, 2, 4 and 5 are now complete.** What remains in Phase 2 is not
+engineering: `bulkImport`, `apiKeys`, `customBranding` and `advancedReports`
+are declared and enforced with nothing behind them (do not put them in
+marketing copy), and the Pro price is a placeholder pending Phase 7.
+
+**Next session should start at:** Phase 7 (market research — it settles the
+pricing that is currently a 149 SAR placeholder, and should land before
+checkout goes live), then Phase 3 (AI depth: the server-minted confirmation
+token, a wider tool registry, and an end-to-end tool-calling check once a
+GROQ_API_KEY exists), then Phases 8 and 9.

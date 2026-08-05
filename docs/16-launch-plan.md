@@ -21,8 +21,8 @@ phase marked **needs a detailed plan**.
 | AI | Provider-agnostic (OpenRouter / Groq / Anthropic / OpenAI). Tool calling **already works** — 11 tools, RBAC-checked, confirm-gated. |
 | Deployment | Live at `fatooralite.vercel.app`, `AUTH_ENFORCE=true`, `ZATCA_MODE=sandbox`. |
 | Licensing | 7-day trial / Pro, enforced server-side at five points. No free tier. |
-| Tests | 267 passing / 43 skipped (DB-gated), `tsc` clean, `lint` 0, `zatca:validate` 7/7. |
-| Repo | 28 semantic commits, `v0.1.0`–`v0.3.0` tagged, release policy documented, attribution guard installed, stale branches cleaned. |
+| Tests | 280 passing / 43 skipped (DB-gated), `tsc` clean, `lint` 0, `zatca:validate` 7/7. |
+| Repo | 31 semantic commits, `v0.1.0`–`v0.3.0` tagged, release policy documented, attribution guard installed, stale branches cleaned. |
 
 ### Blocked on the owner, not on engineering
 
@@ -114,7 +114,7 @@ other.
 
 ---
 
-## Phase 2 — Trial and Pro licensing ✅ core complete
+## Phase 2 — Trial and Pro licensing ✅ complete
 
 Commit `448634e`. Paid-only: a tenant is in a 7-day trial, on Pro, or expired.
 No free tier.
@@ -167,15 +167,22 @@ only once the trial has ended. Settings → Billing shows the resolved plan, day
 remaining, usage against all three limits, and the full Pro feature list. Pro
 capabilities are listed, never hidden.
 
+**Per-control affordances ✅** (commit `04c4bc0`). Plan and usage live in the
+session context, fetched in a round trip it already made, so every consumer
+shares one read. `checkLimit()` in `entitlements.ts` is the pure predicate,
+used by both `usePlan()` and its tests rather than reimplemented in either.
+`PlanGate` renders the decision via a render prop so call sites keep their own
+styling. At the invoice cap the create action becomes a real disabled
+`<button>`, not a `Link` styled to look dead — the latter is still followable
+by keyboard and by URL. **It fails open by design:** an unknown or failed plan
+read allows the action, because the server returns 402 anyway and failing
+closed would lock a paying customer out over one dropped request.
+
+**Client-side 402/401 handling ✅** (commit `619e5fc`) — one `window.fetch`
+wrapper covering all ~63 call sites.
+
 ### Still open in this phase
 
-- **Per-control affordances.** Pro-only controls (add-branch, invite-user) are
-  refused server-side with a good message but are not yet rendered disabled with
-  an inline reason. Today the user finds out by clicking.
-- **Client-side 402 handling.** The response body carries everything needed for
-  a real explanation; no frontend code reads it yet. Related to the known gap
-  that the frontend does not detect a mid-session 401 either — worth one pass
-  that teaches `fetch` callers to handle both.
 - **Four gated features do not exist yet.** `bulkImport`, `apiKeys`,
   `customBranding` and `advancedReports` are declared and enforced, but there is
   nothing behind them to unlock. They are honest placeholders in the entitlement
@@ -412,9 +419,10 @@ the operational layer around it:
    layer on top of it.
 7. **Phase 6** — cosmetic, do it whenever.
 
-Phase 2's last open item — Pro-only controls refuse server-side but do not
-render disabled with an inline reason — is smaller than a phase and is the
-only missing piece of the licensing UX. Client-side 402 handling is done.
+Phase 2 is now complete. What remains inside it is not engineering: four
+entitlement flags (bulk import, API keys, custom branding, advanced reports)
+are declared and enforced with nothing behind them yet, and the Pro price is
+still a placeholder pending Phase 7.
 
 **A note on method, earned the hard way.** Phases 1, 2 and 4 each turned up a
 defect that made a headline feature unusable — onboarding that could not be
