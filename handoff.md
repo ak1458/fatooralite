@@ -1544,3 +1544,85 @@ pricing that is currently a 149 SAR placeholder, and should land before
 checkout goes live), then Phase 3 (AI depth: the server-minted confirmation
 token, a wider tool registry, and an end-to-end tool-calling check once a
 GROQ_API_KEY exists), then Phases 8 and 9.
+
+### 2026-08-05 (cont'd) — Investor-demo pass: end-to-end as a real new tenant
+
+Owner is demoing to investors, so priority switched from the plan's order to
+"does the product actually work, and is everything it says true". Ran the
+whole journey as a brand-new company rather than reading code. **Everything
+below was invisible to five audit passes and 285 tests, because every
+existing test path starts from the seeded tenant.**
+
+- [x] **FIXED — registration created the account, then crashed, and locked the
+  user out.** `createSessionToken()` sat outside the try/catch; company, owner
+  and trial were committed, then the handler escaped, so the browser got a 500
+  with an *empty body* and every retry hit "a company with this VAT number
+  already exists". Guarded now, reports the account as created, redirects to
+  `/login?registered=1`. The trigger was `AUTH_SECRET` still being the
+  `.env.example` placeholder — `lib/env.ts` now rejects it at boot, so it is a
+  failed deploy rather than a corrupted signup. Literal lives in
+  `lib/auth/dev-secret.ts` so guard and signer cannot drift.
+- [x] **FIXED — the seller on a signed invoice came from the request body.**
+  `issueInvoice()` gets the verified `companyId` *and* `input.seller`, and
+  stamps the latter into the UBL and the verification QR. Any authenticated
+  user could issue a signed invoice bearing another business's VAT number.
+  Stored under their own company, so not a data leak — a false identity
+  assertion, worse on a compliance product. Now derived server-side; verified
+  by attempting the impersonation and confirming the XML and QR carry the real
+  tenant.
+- [x] **FIXED — local self-signed certificates were stored as
+  `kind: "production"`.** Every consumer asking for an active production
+  certificate then reported "Production CSID: Active" and "Gateway: Connected"
+  for a tenant that had never contacted ZATCA. Migration
+  `20260805150000_relabel_local_certificates` relabels existing rows, keyed on
+  the placeholder secret only `provisionLocalCertificate` writes, so a real
+  CSID cannot be caught by it. **Signing is unaffected —
+  `getActiveCertificate()` selects on status, not kind.**
+- [x] **FIXED — the dashboard was largely decoration.** "100% Compliant" was a
+  hardcoded string beside the score ring (a tenant at 0.0 was told it was
+  fully compliant); "ZATCA Ready" tracked holding any key pair; the
+  "Production Connected — api.zatca.gov.sa" sidebar pill was hardcoded on
+  every page; inactive badges dimmed the same text, so "Production Connected"
+  still read as a claim; "Real-Time API Health" drew a fixed always-rising SVG
+  beside its own "— ms / N/A uptime" labels; "Invoice Volume" printed the
+  normalised bar height as a count, so a new tenant's first invoice showed as
+  **"100 invoices today"**. All now derive from real state or say plainly that
+  no data exists.
+- [x] **FIXED — AI tool calling failed on every request.** The flagship demo
+  feature returned "The assistant hit an error" every time. The agent forces
+  `tool_choice: "required"`, which the free fallback model rejects
+  ('inference-enforced tool_choice ... not supported for model
+  "gpt-oss-20b"'); the provider now retries once with `"auto"`. Finding it took
+  far longer than it should have because `chatWithTools` was the one provider
+  method that threw a bare status with **no body** — fixed, reading from the
+  already-parsed JSON since `res.text()` is empty after the stream is consumed.
+
+#### ZATCA sandbox onboarding — the "blocked on owner" item, now settled by evidence
+
+`scripts/zatca-sandbox-onboard.ts` runs the three real gateway steps and stops
+where the gateway stops, printing its own message. The open question was
+whether the developer portal takes a fixed OTP. **It does not.** Probed
+directly: omitting the header returns a structured
+`{"code":"Missing-OTP"}`; every fixed value tried (123345, 111111, 999999)
+returns a bare `"Invalid Request"`. The OTP is validated against a live
+Fatoora portal session. This is now established by evidence rather than
+assumption, and recorded in the script so nobody re-derives it.
+
+Run it the moment an OTP exists (they expire within the hour):
+
+    npx tsx scripts/zatca-sandbox-onboard.ts <otp>
+
+#### Also verified working for a brand-new tenant
+
+Invoice PDF (200, `%PDF-1.7`, 11 KB), reports and analytics endpoints, AI chat
+answering from real tenant data, AI read tools, navigation tool, and the
+entitlement gate refusing an AI write on a trial with no row created. The VAT
+report reads zero for this tenant because it counts only cleared/reported
+invoices — correct, and a consequence of not being ZATCA-onboarded, not a bug.
+
+**Demo note:** `aiWriteActions` is Pro-only, so AI *write* actions cannot be
+demonstrated on a trial tenant. The seeded Almarai company is on Pro — demo
+the agent from that account, or the write path will be refused on stage.
+
+**Verified:** tsc clean, lint 0, 285 passed / 43 skipped, zatca:validate 7/7,
+build succeeds.
