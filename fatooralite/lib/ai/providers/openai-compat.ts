@@ -80,11 +80,12 @@ export class OpenAICompatProvider implements ChatProvider {
     tools: ToolSchema[],
     opts?: ChatOptions,
   ): Promise<AssistantMessage> {
-    const body = this.body(messages, false, opts, tools);
+    let body = this.body(messages, false, opts, tools);
 
     // Free/shared models are intermittently rate-limited upstream; retry once.
     let data: { choices?: CompletionChoice[]; error?: { code?: number } } | null = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    let relaxedToolChoice = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
       const res = await fetch(`${this.cfg.baseUrl}/chat/completions`, {
         method: "POST",
         headers: this.headers(),
@@ -93,11 +94,32 @@ export class OpenAICompatProvider implements ChatProvider {
       data = await res.json().catch(() => null);
       if (res.ok && data?.choices?.length) break;
       const rateLimited = res.status === 429 || data?.error?.code === 429;
-      if (attempt === 0 && rateLimited) {
+      if (attempt < 2 && rateLimited) {
         await new Promise((r) => setTimeout(r, 1500));
         continue;
       }
-      if (!res.ok) throw new Error(`${this.name} ${res.status}`);
+
+      // Not every model supports an enforced tool_choice. OpenRouter's
+      // models-array routing can also land on a fallback that does not, even
+      // when the primary does — which is how this surfaced: a 400 reading
+      // 'inference-enforced tool_choice (required/named) is not supported for
+      // model "gpt-oss-20b"'. Forcing a tool call is an optimisation to stop
+      // weaker models replying "done" without acting; losing the whole request
+      // over it is far worse than falling back to "auto".
+      if (!res.ok && !relaxedToolChoice && /tool_choice/i.test(JSON.stringify(data ?? {}))) {
+        relaxedToolChoice = true;
+        body = this.body(messages, false, { ...opts, toolChoice: "auto" }, tools);
+        continue;
+      }
+      // Report the provider's own message. This threw a bare "openrouter 400",
+      // the least diagnosable failure in the app — tool calling is precisely
+      // where a provider rejects a request (model without tool support, schema
+      // it dislikes) and the reason was being discarded. The body is read from
+      // the already-parsed `data`, not res.text(): the stream is consumed by
+      // the res.json() above, so re-reading it yields an empty string.
+      if (!res.ok) {
+        throw new Error(`${this.name} ${res.status}: ${JSON.stringify(data ?? {}).slice(0, 400)}`);
+      }
     }
 
     const m = data?.choices?.[0]?.message ?? {};
