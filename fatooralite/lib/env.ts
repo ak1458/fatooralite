@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEV_AUTH_SECRET } from "@/lib/auth/dev-secret";
 
 /**
  * Runtime environment validation.  Imported once at boot (via db/client.ts)
@@ -105,6 +106,19 @@ export function validateEnv(): Env {
       throw new Error(
         "⛔  CRON_SECRET is required in production (protects the ZATCA reporting cron endpoint).\n" +
         "    Generate with: openssl rand -base64 32, then set in Vercel dashboard and vercel.json.",
+      );
+    }
+    // The dev placeholder is published in .env.example and in this repo, so a
+    // deployment carrying it can have its session cookies forged by anyone.
+    // lib/auth/session.ts refuses to sign with it — but that throws on the
+    // first request that needs a session, which for a fresh deployment is a
+    // user's registration, *after* their company row has already committed.
+    // Failing at boot instead turns a corrupted signup into a failed deploy.
+    if (result.data.AUTH_SECRET === DEV_AUTH_SECRET) {
+      throw new Error(
+        "⛔  AUTH_SECRET is still the development placeholder from .env.example.\n" +
+        "    Session cookies signed with it are forgeable by anyone who has read this repo.\n" +
+        "    Generate with: openssl rand -base64 32 | tr -d '\\r\\n'",
       );
     }
   }

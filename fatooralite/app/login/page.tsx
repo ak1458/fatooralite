@@ -24,7 +24,10 @@ function LoginForm() {
   // Derived during render rather than stored, so it costs no extra render
   // pass; without it the user is dropped on a blank login form with no idea
   // why they were signed out, which reads as the app losing their work.
-  const expired = useSearchParams().get("expired") === "1";
+  const params = useSearchParams();
+  const expired = params.get("expired") === "1";
+  // Set when registration created the account but could not issue a session.
+  const justRegistered = params.get("registered") === "1";
   const t = (k: keyof typeof L) => L[k][lang];
 
   async function submit(e: React.FormEvent) {
@@ -120,6 +123,14 @@ function LoginForm() {
             </div>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
           </label>
+
+          {justRegistered && !error && (
+            <div role="status" style={{ color: "var(--ac)", fontSize: 12.5, marginBottom: 12 }}>
+              {lang === "ar"
+                ? "تم إنشاء حسابك. الرجاء تسجيل الدخول للمتابعة."
+                : "Your account was created. Sign in to continue."}
+            </div>
+          )}
 
           {expired && !error && (
             <div role="status" style={{ color: "var(--t2)", fontSize: 12.5, marginBottom: 12 }}>

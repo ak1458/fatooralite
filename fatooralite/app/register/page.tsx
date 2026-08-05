@@ -42,8 +42,17 @@ export default function RegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, acceptedTerms }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Registration failed");
+      // Read defensively: a crashed route returns an empty body, and
+      // res.json() then throws "Unexpected end of JSON input", which is what
+      // the user used to see instead of an actual message.
+      const data = await res.json().catch(() => ({}) as { error?: string; accountCreated?: boolean });
+      if (!res.ok) throw new Error(data.error || `Registration failed (${res.status})`);
+      // The account exists but no session was issued — send them to sign in
+      // rather than to onboarding, which would just bounce them to /login.
+      if (data.accountCreated && !data.user) {
+        router.push("/login?registered=1");
+        return;
+      }
       router.push("/onboarding");
       router.refresh();
     } catch (err) {

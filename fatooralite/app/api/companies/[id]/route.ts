@@ -67,6 +67,15 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   // is enforced.
   const tenantPlan = await getTenantPlan(params.id);
 
+  // Whether this tenant holds a real ZATCA-issued production CSID, as opposed
+  // to a local self-signed certificate. The shell renders a "Production
+  // Connected" pill from this; it used to be hardcoded and therefore claimed a
+  // gateway connection for every tenant, onboarded or not.
+  const productionCsid = await prisma.certificate.findFirst({
+    where: { companyId: params.id, kind: "production", status: "active" },
+    select: { id: true },
+  });
+
   // Usage against every limit, for the Settings > Billing display.
   const [invoices, branches, seats] = await Promise.all([
     checkInvoiceLimit(params.id),
@@ -77,6 +86,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   return NextResponse.json({
     ...company,
     subscription: sub ?? { plan: tenantPlan.plan, status: "expired", trialEndsAt: null },
+    zatcaConnected: Boolean(productionCsid),
     plan: tenantPlan.plan,
     trialDaysLeft: tenantPlan.trialDaysLeft,
     trialEndsAt: tenantPlan.trialEndsAt,

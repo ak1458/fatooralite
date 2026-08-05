@@ -63,6 +63,9 @@ export interface PlanUsage {
   limit: number | null;
 }
 
+/** True only when the tenant holds a real ZATCA production CSID. */
+export type ZatcaConnection = boolean | null;
+
 export interface PlanState {
   plan: "trial" | "pro" | "expired";
   trialDaysLeft: number | null;
@@ -85,6 +88,8 @@ interface AppContextType {
   refresh: () => Promise<void>;
   /** null until loaded, or if the plan endpoint could not be reached. */
   plan: PlanState | null;
+  /** null while unknown — the UI must not claim a connection it has not confirmed. */
+  zatcaConnected: ZatcaConnection;
 }
 
 const AppContext = createContext<AppContextType>({
@@ -98,6 +103,7 @@ const AppContext = createContext<AppContextType>({
   isLoading: true,
   refresh: async () => {},
   plan: null,
+  zatcaConnected: null,
 });
 
 /**
@@ -112,6 +118,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [plan, setPlan] = useState<PlanState | null>(null);
+  const [zatcaConnected, setZatcaConnected] = useState<ZatcaConnection>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -132,6 +139,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
             .then((r) => (r.ok ? r.json() : null))
             .catch(() => null),
         ]);
+        setZatcaConnected(planRes ? Boolean(planRes.zatcaConnected) : null);
         setPlan(
           planRes?.plan
             ? {
@@ -153,12 +161,14 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         setBranches([]);
         setActiveBranchId(null);
         setPlan(null);
+        setZatcaConnected(null);
       }
     } catch {
       setUser(null);
       setCompanyState(null);
       setBranches([]);
       setPlan(null);
+      setZatcaConnected(null);
     }
   }, []);
 
@@ -198,6 +208,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         isLoading,
         refresh,
         plan,
+        zatcaConnected,
       }}
     >
       {children}
@@ -229,6 +240,11 @@ export function usePlan() {
   /** Delegates to lib/billing/entitlements.ts so the rule lives in one place. */
   const check = (kind: LimitKind) => checkLimit(plan?.plan ?? null, kind, plan?.[kind] ?? null);
   return { plan, check, isPro: plan?.plan === "pro" };
+}
+
+/** Real ZATCA gateway state for the active company. */
+export function useZatcaConnection(): ZatcaConnection {
+  return useContext(AppContext).zatcaConnected;
 }
 
 /** Branch (location) selection for the active company. */

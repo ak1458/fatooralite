@@ -33,14 +33,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Could not create your account" }, { status: 500 });
   }
 
-  const token = await createSessionToken({
-    userId: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    companyId: company.id,
-    sessionVersion: 0, // new user, version starts at 0
-  });
+  // The company, owner and trial are committed by this point. Anything that
+  // throws from here on used to escape the handler entirely, so the browser
+  // got a 500 with an *empty body* ("Unexpected end of JSON input") while the
+  // account silently existed — and every retry then hit "a company with this
+  // VAT number already exists". The user was locked out of both signing up and
+  // knowing they could sign in. Session minting is the realistic failure here
+  // (a missing or placeholder AUTH_SECRET), so it reports the account as
+  // created and points at sign-in rather than dead-ending.
+  let token: string;
+  try {
+    token = await createSessionToken({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      companyId: company.id,
+      sessionVersion: 0, // new user, version starts at 0
+    });
+  } catch (err) {
+    console.error("Register: account created but session could not be issued:", err);
+    return NextResponse.json(
+      {
+        error: "Your account was created, but we could not sign you in automatically. Please sign in.",
+        accountCreated: true,
+      },
+      { status: 201 },
+    );
+  }
 
   const res = NextResponse.json(
     {

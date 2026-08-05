@@ -15,5 +15,13 @@ import { ZodError } from "zod";
  */
 export function zodErrorResponse(error: unknown): NextResponse | null {
   if (!(error instanceof ZodError)) return null;
-  return NextResponse.json({ error: error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+  const issue = error.issues[0];
+  // Include the field path: "Invalid input: expected string, received
+  // undefined" alone gives an integrator no way to tell which field is wrong.
+  const path = issue?.path.join(".");
+  const message = issue?.message ?? "Invalid input";
+  return NextResponse.json(
+    { error: path ? `${path}: ${message}` : message, field: path || undefined },
+    { status: 400 },
+  );
 }

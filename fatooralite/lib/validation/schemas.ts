@@ -241,11 +241,14 @@ export const createInvoiceSchema = z.object({
   documentType: z.enum(["invoice", "credit", "debit"]).optional().default("invoice"),
   issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   issueTime: z.string().regex(/^\d{2}:\d{2}:\d{2}$/).optional(),
+  // Accepted for backward compatibility but IGNORED: POST /api/invoices
+  // overwrites it with the authenticated company's own identity, because this
+  // ends up in the signed XML and the verification QR.
   seller: z.object({
     name: z.string().min(1),
     vatNumber: z.string().length(15),
     crNumber: z.string().optional(),
-  }),
+  }).optional(),
   buyer: z.object({
     name: z.string().min(1),
     vatNumber: z.string().length(15).optional(),

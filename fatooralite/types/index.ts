@@ -59,7 +59,10 @@ export interface HealthBar {
 
 export interface VolumeBar {
   day: Bilingual;
+  /** Bar height, 0-100, normalised against the busiest day in the window. */
   pct: number;
+  /** Actual invoice count for the day. Never render `pct` as a count. */
+  count: number;
   highlight?: boolean;
 }
 

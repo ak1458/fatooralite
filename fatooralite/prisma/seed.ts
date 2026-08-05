@@ -81,14 +81,18 @@ async function main() {
   await prisma.certificate.create({
     data: {
       companyId: company.id,
-      kind: "production",
+      // "local", not "production": the token below is a placeholder string,
+      // not a ZATCA-issued CSID. Labelling it "production" made the demo
+      // tenant's dashboard claim "Production CSID: Active" and "Gateway:
+      // Connected" to api.zatca.gov.sa, which is not true of any tenant that
+      // has not completed real onboarding with a Fatoora portal OTP. Local
+      // signing works either way — getActiveCertificate() selects on status.
+      kind: "local",
       csrPem: csr,
       privateKey: kp.privateKeyPem,
       publicKey: kp.publicKeyPem,
-      // Placeholder CSID — replace by running real ZATCA onboarding (Settings →
-      // Onboarding). Signing works locally; gateway clearance needs real values.
       token: "PLACEHOLDER-CSID-TOKEN",
-      secret: "PLACEHOLDER-CSID-SECRET",
+      secret: "LOCAL-DEV-SECRET",
       status: "active",
       issuedAt: new Date("2025-12-19"),
       expiresAt: new Date("2026-12-19"),

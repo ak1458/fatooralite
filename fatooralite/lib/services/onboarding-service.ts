@@ -29,8 +29,10 @@ export async function provisionLocalCertificate(
   companyId: string,
   db: PrismaClient = defaultDb,
 ): Promise<{ certificateId: string; created: boolean }> {
+  // Any active certificate means the company can already sign — a real ZATCA
+  // CSID included, which must never be replaced by a local placeholder.
   const existing = await db.certificate.findFirst({
-    where: { companyId, kind: "production", status: "active" },
+    where: { companyId, status: "active" },
     orderBy: { createdAt: "desc" },
   });
   if (existing) return { certificateId: existing.id, created: false };
@@ -49,7 +51,16 @@ export async function provisionLocalCertificate(
   const cert = await db.certificate.create({
     data: {
       companyId,
-      kind: "production",
+      // "local", NOT "production". This is a self-signed key pair that has
+      // never touched ZATCA. It was stored as "production", and every consumer
+      // that asks for an active production certificate — the dashboard, the
+      // clearance page, the integration panel, the AI insights — then reported
+      // "Production CSID: Active" and "Gateway: Connected" to a tenant who had
+      // not onboarded at all. For a compliance product that is not a cosmetic
+      // mislabel: it tells a business it is filing with the tax authority when
+      // it is not. getActiveCertificate() selects on status, not kind, so
+      // signing still works with this.
+      kind: "local",
       status: "active",
       csrPem,
       privateKey: encryptPrivateKey(kp.privateKeyPem),

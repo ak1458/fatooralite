@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db/client";
 import { zodErrorResponse } from "@/lib/validation/http";
 import { Prisma } from "@prisma/client";
 import { issueInvoice, NoCertificateError } from "@/lib/services/invoice-service";
@@ -40,10 +41,28 @@ export async function POST(req: Request) {
   const invoiceLimit = await checkInvoiceLimit(companyId);
   if (!invoiceLimit.allowed) return limitReached(invoiceLimit, "invoices");
 
+  // The seller is the authenticated tenant — never whatever the client sent.
+  // issueInvoice() stamps input.seller into the signed UBL and into the QR
+  // code a buyer scans to verify the document, so trusting the request body
+  // let any authenticated user issue a cryptographically signed invoice
+  // bearing another business's name and VAT number. It is stored under their
+  // own companyId either way, so this is not a data leak — it is an identity
+  // assertion, which for a compliance product is worse.
+  const seller = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { name: true, vatNumber: true, crNumber: true },
+  });
+  if (!seller) return NextResponse.json({ error: "Company not found" }, { status: 404 });
+
   try {
     const validData = createInvoiceSchema.parse(input);
     const typedInput = {
       ...validData,
+      seller: {
+        name: seller.name,
+        vatNumber: seller.vatNumber,
+        ...(seller.crNumber ? { crNumber: seller.crNumber } : {}),
+      },
       issueTime: validData.issueTime ?? "00:00:00",
       lines: validData.lines.map(line => ({
         ...line,
@@ -51,7 +70,7 @@ export async function POST(req: Request) {
         taxCategory: line.taxCategory ?? "S"
       }))
     } as InvoiceInput;
-    
+
     const result = await issueInvoice(companyId, typedInput);
     scheduleCompanyIngest(companyId);
     return NextResponse.json(result, { status: 201 });

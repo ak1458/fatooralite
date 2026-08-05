@@ -10,29 +10,36 @@ export async function getDashboardKpis(companyId: string, db: PrismaClient = def
   // These four are independent, and the database is remote — awaiting them in
   // sequence cost four round trips for no reason. Measured against a 20k-invoice
   // tenant: 6236 ms sequential, 1440 ms in parallel (scripts/bench-shape.ts).
-  const [totalInvoices, clearedInvoices, vatResult, cert] = await Promise.all([
+  const [totalInvoices, clearedInvoices, vatResult, cert, localCert] = await Promise.all([
     db.invoice.count({ where: { companyId } }),
     db.invoice.count({ where: { companyId, status: "cleared" } }),
     db.invoice.aggregate({ where: { companyId, status: "cleared" }, _sum: { vatAmount: true } }),
     db.certificate.findFirst({ where: { companyId, kind: "production", status: "active" } }),
+    db.certificate.findFirst({ where: { companyId, kind: "local", status: "active" } }),
   ]);
   const totalVat = num(vatResult._sum.vatAmount);
 
   const clearanceRate = totalInvoices > 0 ? (clearedInvoices / totalInvoices) * 100 : 100;
 
+  // "Ready" means a real ZATCA production CSID, nothing less. A local
+  // self-signed certificate lets the company sign invoices offline; it does
+  // not connect them to the gateway, and saying otherwise tells a business it
+  // is filing with the tax authority when it is not.
   const isReady = !!cert;
+  const signingCert = cert ?? localCert;
+  const localOnly = !cert && !!localCert;
   let daysLeft = 0;
-  if (cert?.expiresAt) {
-    daysLeft = Math.max(0, Math.floor((cert.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  if (signingCert?.expiresAt) {
+    daysLeft = Math.max(0, Math.floor((signingCert.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
   }
 
-  // Health bars derived from real state only: certificate presence gates the
+  // Health bars derived from real state only: a production CSID gates the
   // gateway APIs; XML validation/signing is a local module that ships with the
   // app. No synthetic uptime percentages.
   const healthBars: HealthBar[] = [
     { label: { en: "Clearance API", ar: "واجهة الإجازة" }, pct: isReady ? 100 : 0 },
     { label: { en: "Reporting API", ar: "واجهة الإبلاغ" }, pct: isReady ? 100 : 0 },
-    { label: { en: "Certificates", ar: "الشهادات" }, pct: cert ? 100 : 0 },
+    { label: { en: "Certificates", ar: "الشهادات" }, pct: signingCert ? 100 : 0 },
     { label: { en: "XML Validation", ar: "التحقق من XML" }, pct: 100 },
   ];
 
@@ -44,9 +51,24 @@ export async function getDashboardKpis(companyId: string, db: PrismaClient = def
 
   const kpis: Kpi[] = [
     { label: { en: "ZATCA Readiness", ar: "جاهزية الهيئة" }, value: `${score}%`, tag: isReady ? "Ready" : "Pending Setup", tone: isReady ? "ac" : "warn", icon: "compliance" },
-    { label: { en: "Production CSID", ar: "شهادة الإنتاج CSID" }, value: cert ? "Active" : "None", tag: cert ? "Active" : "Action Required", tone: cert ? "ac" : "warn", icon: "cert" },
-    { label: { en: "Certificate Expiry", ar: "انتهاء الشهادة" }, value: cert ? String(daysLeft) : "N/A", tag: cert ? "days left" : "—", tone: !cert || daysLeft > 30 ? "ac" : "warn", icon: "clock" },
-    { label: { en: "Gateway", ar: "البوابة" }, value: isReady ? "Connected" : "Not connected", tag: isReady ? "CSID active" : "Connect ZATCA", tone: isReady ? "info" : "warn", icon: "bolt" },
+    {
+      label: { en: "Production CSID", ar: "شهادة الإنتاج CSID" },
+      // A local certificate is named as one. Reporting it as an active
+      // production CSID is the difference between "you can sign invoices" and
+      // "you are registered with the tax authority".
+      value: cert ? "Active" : localOnly ? "Local only" : "None",
+      tag: cert ? "Active" : localOnly ? "Not onboarded to ZATCA" : "Action Required",
+      tone: cert ? "ac" : "warn",
+      icon: "cert",
+    },
+    { label: { en: "Certificate Expiry", ar: "انتهاء الشهادة" }, value: signingCert ? String(daysLeft) : "N/A", tag: signingCert ? "days left" : "—", tone: !signingCert || daysLeft > 30 ? "ac" : "warn", icon: "clock" },
+    {
+      label: { en: "Gateway", ar: "البوابة" },
+      value: isReady ? "Connected" : "Not connected",
+      tag: isReady ? "CSID active" : localOnly ? "Local signing only" : "Connect ZATCA",
+      tone: isReady ? "info" : "warn",
+      icon: "bolt",
+    },
   ];
 
   return {
@@ -132,7 +154,8 @@ export async function getDashboardVolume(companyId: string, db: PrismaClient = d
     
     bars.push({
       day: { en: enDays[d.getDay()], ar: arDays[d.getDay()] },
-      pct: count, // we will normalize this below
+      pct: count, // normalised below; `count` keeps the real figure
+      count,
       highlight: i === 0, // Highlight today
     });
   }
@@ -173,7 +196,10 @@ export async function getDashboardIntegration(companyId: string, db: PrismaClien
   ];
 
   const badges = [
-    { key: "trustReady", icon: "check", active: hasAnyCert },
+    // hasCert, not hasAnyCert: a local self-signed key pair means the company
+    // can sign, not that it is ready with ZATCA. Showing "ZATCA Ready" beside
+    // "Not connected" and a 0% readiness score contradicted the rest of the page.
+    { key: "trustReady", icon: "check", active: hasCert },
     { key: "trustPhase2", icon: "compliance", active: hasCert },
     { key: "trustProd", icon: "bolt", active: hasCert },
     { key: "trustEnc", icon: "lock", active: true }, // encryption module is always available

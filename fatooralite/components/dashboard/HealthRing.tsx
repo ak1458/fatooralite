@@ -72,21 +72,32 @@ export function HealthRing({ score, healthBars: bars, healthValues: values }: He
             {t.healthSub}
           </div>
         </div>
+        {/* Derived from the score this pill sits next to. It was the fixed
+            string "100% Compliant", rendered unconditionally — so a tenant
+            scoring 0 was told it was fully compliant, on a compliance
+            product. */}
         <span
           style={{
             fontSize: 11.5,
             fontWeight: 700,
             padding: "5px 11px",
             borderRadius: 20,
-            background: "var(--acs)",
-            color: "var(--ac)",
+            background: score >= 100 ? "var(--acs)" : score > 0 ? "var(--warns)" : "var(--s2)",
+            color: score >= 100 ? "var(--ac)" : score > 0 ? "var(--warn)" : "var(--t3)",
             display: "flex",
             alignItems: "center",
             gap: 6,
           }}
         >
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ac)" }} />
-          {t.compliant}
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: score >= 100 ? "var(--ac)" : score > 0 ? "var(--warn)" : "var(--t3)",
+            }}
+          />
+          {`${Math.round(score)}% ${t.compliant}`}
         </span>
       </div>
 

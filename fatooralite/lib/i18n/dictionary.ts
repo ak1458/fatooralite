@@ -42,10 +42,17 @@ export interface Dict {
   live: string;
   viewAll: string;
   compliant: string;
+  /** Shown in place of the API-health chart while no latency data exists. */
+  apiHealthEmpty: string;
   trustReady: string;
   trustPhase2: string;
   trustProd: string;
   trustEnc: string;
+  /** Shown when the corresponding trust badge is NOT active. */
+  trustReadyOff: string;
+  trustPhase2Off: string;
+  trustProdOff: string;
+  trustEncOff: string;
   complianceHealth: string;
   healthSub: string;
   apiHealthTitle: string;

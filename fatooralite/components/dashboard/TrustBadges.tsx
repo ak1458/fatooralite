@@ -38,8 +38,11 @@ export function TrustBadges({ badges: badgeProp }: { badges?: TrustBadge[] }) {
           <span style={{ display: "flex", color: b.active ? "var(--ac)" : "var(--t3)" }}>
             <Icon name={b.icon} size={15} sw={1.9} />
           </span>
+          {/* An inactive badge says what is actually true. Dimming "Production
+              Connected" to 50% opacity still reads, at a glance and in a
+              screenshot, as a claim that the tenant is connected. */}
           <span style={{ fontSize: 12.5, fontWeight: 600, color: b.active ? "var(--t2)" : "var(--t3)" }}>
-            {t[b.key as keyof Dict]}
+            {t[(b.active ? b.key : `${b.key}Off`) as keyof Dict] ?? t[b.key as keyof Dict]}
           </span>
         </div>
       ))}

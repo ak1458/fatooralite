@@ -16,7 +16,9 @@ export interface SessionPayload {
 
 export const SESSION_COOKIE = "fl_session";
 
-const DEV_SECRET = "dev-insecure-secret-change-me-1234567890";
+import { DEV_AUTH_SECRET } from "@/lib/auth/dev-secret";
+
+const DEV_SECRET = DEV_AUTH_SECRET;
 
 function secretKey(): Uint8Array {
   const secret = process.env.AUTH_SECRET ?? DEV_SECRET;
