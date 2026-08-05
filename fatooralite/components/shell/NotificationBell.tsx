@@ -1,10 +1,17 @@
 "use client";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useCompany } from "@/lib/useCompany";
 import { Icon } from "@/components/ui/Icon";
 
 interface Note { id: string; title: string; message: string; type: string; read: boolean; createdAt: string }
+
+async function fetchNotes(companyId: string): Promise<Note[]> {
+  return fetch(`/api/notifications?companyId=${companyId}`)
+    .then((r) => r.json())
+    .then((d) => d.notifications ?? [])
+    .catch(() => []);
+}
 
 export function NotificationBell() {
   const { company } = useCompany();
@@ -12,15 +19,18 @@ export function NotificationBell() {
   const [notes, setNotes] = useState<Note[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(() => {
-    if (!company?.id) return;
-    fetch(`/api/notifications?companyId=${company.id}`)
-      .then((r) => r.json())
-      .then((d) => setNotes(d.notifications ?? []))
-      .catch(() => {});
-  }, [company?.id]);
+  // The fetch lives outside the component (see fetchNotes above) so the effect
+  // and the click handler can share it without a useCallback. The React
+  // Compiler could not preserve that memoization and was skipping this
+  // component entirely as a result.
+  const companyId = company?.id;
+  const load = () => {
+    if (companyId) fetchNotes(companyId).then(setNotes);
+  };
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (companyId) fetchNotes(companyId).then(setNotes);
+  }, [companyId]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };

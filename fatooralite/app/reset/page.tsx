@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLang } from "@/lib/i18n/LangProvider";
 
@@ -28,11 +28,10 @@ function ResetForm() {
   const [error, setError] = useState("");
   const t = (k: keyof typeof L) => L[k][lang];
 
-  useEffect(() => {
-    if (!token) {
-      setError(t("errorNoToken"));
-    }
-  }, [token]);
+  // Derived, not stored: this depends only on the URL, and writing it into
+  // state from an effect costs an extra render pass for a value that can
+  // never change while the page is mounted.
+  const tokenError = token ? "" : t("errorNoToken");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -152,7 +151,7 @@ function ResetForm() {
               />
             </label>
 
-            {error && <div style={{ color: "var(--dang)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+            {(error || tokenError) && <div style={{ color: "var(--dang)", fontSize: 13, marginBottom: 12 }}>{error || tokenError}</div>}
 
             <button
               type="submit"

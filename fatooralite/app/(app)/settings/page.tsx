@@ -107,8 +107,11 @@ export default function SettingsPage() {
     // browser can land here before the server-to-server notification does.
     // One delayed refetch covers that window without polling indefinitely.
     if (new URLSearchParams(window.location.search).get("billing") === "success") {
-      setMessage("Payment received — activating your plan…");
-      setTimeout(() => loadCompany(company.id), 2500);
+      // Queued rather than set synchronously: a sync setState in an effect body
+      // triggers a second render pass before paint.
+      const id = company.id;
+      queueMicrotask(() => setMessage("Payment received — activating your plan…"));
+      setTimeout(() => loadCompany(id), 2500);
     }
   }, [company?.id, loadCompany]);
 

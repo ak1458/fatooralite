@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { zodErrorResponse } from "@/lib/validation/http";
 import { prisma } from "@/lib/db/client";
 import { updateCompanySchema, patchCompanySchema, checkOnboardingCompletion } from "@/lib/validation/schemas";
 import { requirePermission } from "@/lib/auth/server";
@@ -102,10 +103,9 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     });
     
     return NextResponse.json(company);
-  } catch (error: any) {
-    if (error.name === "ZodError") {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
-    }
+  } catch (error) {
+    const invalid = zodErrorResponse(error);
+    if (invalid) return invalid;
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

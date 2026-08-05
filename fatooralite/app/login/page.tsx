@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLang } from "@/lib/i18n/LangProvider";
 
 const L = {
@@ -13,13 +13,18 @@ const L = {
   demo: { en: "Demo: khalid@almarai.example / owner1234", ar: "تجريبي: khalid@almarai.example / owner1234" },
 };
 
-export default function LoginPage() {
+function LoginForm() {
   const { lang } = useLang();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // ApiRefusalWatcher appends ?expired=1 when a request 401s mid-session.
+  // Derived during render rather than stored, so it costs no extra render
+  // pass; without it the user is dropped on a blank login form with no idea
+  // why they were signed out, which reads as the app losing their work.
+  const expired = useSearchParams().get("expired") === "1";
   const t = (k: keyof typeof L) => L[k][lang];
 
   async function submit(e: React.FormEvent) {
@@ -116,6 +121,14 @@ export default function LoginPage() {
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
           </label>
 
+          {expired && !error && (
+            <div role="status" style={{ color: "var(--t2)", fontSize: 12.5, marginBottom: 12 }}>
+              {lang === "ar"
+                ? "انتهت صلاحية جلستك. الرجاء تسجيل الدخول مرة أخرى."
+                : "Your session expired. Please sign in again."}
+            </div>
+          )}
+
           {error && <div style={{ color: "var(--dang)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
           <button
@@ -147,5 +160,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { zodErrorResponse } from "@/lib/validation/http";
 import { prisma } from "@/lib/db/client";
 import { createProductSchema } from "@/lib/validation/schemas";
 import { requirePermission } from "@/lib/auth/server";
@@ -44,10 +45,9 @@ export async function POST(req: Request) {
     });
     scheduleCompanyIngest(companyId);
     return NextResponse.json({ ...product, unitPrice: num(product.unitPrice) }, { status: 201 });
-  } catch (error: any) {
-    if (error.name === "ZodError") {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
-    }
+  } catch (error) {
+    const invalid = zodErrorResponse(error);
+    if (invalid) return invalid;
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

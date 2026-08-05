@@ -23,8 +23,13 @@ export function useAsyncData<T>(
   const [state, dispatch] = useReducer(asyncReducer<T>, initialAsyncState as AsyncState<T>);
   const [nonce, setNonce] = useState(0);
 
+  // Latest-value ref, updated after render. Assigning during render is a
+  // React Compiler violation, and the effect below reads it after commit, so
+  // it still sees the current fetcher.
   const fetcherRef = useRef(fetcher);
-  fetcherRef.current = fetcher;
+  useEffect(() => {
+    fetcherRef.current = fetcher;
+  });
 
   const retry = useCallback(() => setNonce((n) => n + 1), []);
 

@@ -117,8 +117,19 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setIsLoading(true);
-    refresh().finally(() => setIsLoading(false));
+    // isLoading starts true (see useState above), so the effect only clears it.
+    // Awaited inside an async IIFE rather than chained off .finally() so the
+    // update is unambiguously post-await, with a cancellation guard so an
+    // unmount mid-flight does not set state on a dead component. refresh()
+    // handles its own errors and never rejects.
+    let cancelled = false;
+    void (async () => {
+      await refresh();
+      if (!cancelled) setIsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [refresh]);
 
   const setActiveBranch = (id: string) => {

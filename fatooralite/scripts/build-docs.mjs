@@ -9,7 +9,7 @@
  * Self-contained output: inline CSS, no external requests, works from file://.
  */
 
-import { readFileSync, writeFileSync, readdirSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { marked } from "marked";

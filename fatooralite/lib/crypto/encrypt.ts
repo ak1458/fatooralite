@@ -2,7 +2,7 @@ import crypto from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
-const TAG_LENGTH = 16;
+// The GCM auth tag is a fixed 16 bytes; node's cipher appends it for us.
 
 /**
  * Returns the 32-byte AES-256-GCM encryption key from the ENCRYPTION_KEY

@@ -41,7 +41,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
         "Content-Disposition": `attachment; filename="invoice_${invoice.invoiceNumber}.pdf"`,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("PDF generation error:", error);
     return NextResponse.json({ error: "Failed to generate PDF" }, { status: 500 });
   }

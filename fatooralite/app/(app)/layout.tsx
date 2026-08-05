@@ -5,6 +5,7 @@ import { GlowBackground } from "@/components/common/GlowBackground";
 import { OnboardingGuard } from "@/components/common/OnboardingGuard";
 import { AssistantDock } from "@/components/ai/AssistantDock";
 import { TrialBanner } from "@/components/billing/TrialBanner";
+import { ApiRefusalWatcher } from "@/components/common/ApiRefusalWatcher";
 import { CompanyProvider } from "@/lib/useCompany";
 import { FadeIn } from "@/components/common/Motion";
 
@@ -44,6 +45,7 @@ export default function AppLayout({
           </div>
         </div>
         <AssistantDock />
+        <ApiRefusalWatcher />
       </div>
     </CompanyProvider>
   );

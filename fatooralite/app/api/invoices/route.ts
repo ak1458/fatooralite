@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { zodErrorResponse } from "@/lib/validation/http";
 import { Prisma } from "@prisma/client";
 import { issueInvoice, NoCertificateError } from "@/lib/services/invoice-service";
 import { getInvoiceList } from "@/lib/db/queries";
@@ -54,10 +55,9 @@ export async function POST(req: Request) {
     const result = await issueInvoice(companyId, typedInput);
     scheduleCompanyIngest(companyId);
     return NextResponse.json(result, { status: 201 });
-  } catch (err: any) {
-    if (err.name === "ZodError") {
-      return NextResponse.json({ error: err.errors }, { status: 400 });
-    }
+  } catch (err) {
+    const invalid = zodErrorResponse(err);
+    if (invalid) return invalid;
     if (err instanceof NoCertificateError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }

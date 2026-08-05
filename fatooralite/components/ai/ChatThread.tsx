@@ -66,7 +66,7 @@ export function ChatThread() {
       if (!opened) {
         setMessages((prev) => [...prev, { role: "assistant", text: "No response received. Please try again." }]);
       }
-    } catch (err) {
+    } catch {
       setMessages((prev) => [...prev, { role: "assistant", text: "Connection error. Please try again." }]);
     } finally {
       setIsLoading(false);
