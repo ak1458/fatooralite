@@ -1335,3 +1335,90 @@ has not had a pass. Phase 2's per-control disabled affordances (Pro-only
 buttons still refuse server-side rather than rendering disabled with a
 reason) are also still open and are now the only piece of the licensing UX
 missing.
+
+### 2026-08-05 (cont'd) — Phase 4 product audit, done by running the app
+
+Still all local, nothing pushed. 25 commits on `feature/production-readiness`.
+
+This pass was deliberately done in a **real browser against a production
+build**, signed in as the demo tenant, at 1440 and 360 in both themes. Almost
+nothing below is visible in source review, which is why five prior audits
+missed it.
+
+- [x] **FIXED — light-mode contrast failures.** `globals.css` states the rule
+  ("Components reference ONLY these vars — never literal colors") and 74
+  literals had accumulated against it. The ones that mattered bypassed a token
+  whose value **differs between themes**: the DRAFT banners on seven public
+  legal pages were `#1a1200` on `var(--warn)`, which is fine in dark mode and
+  ~3.2:1 in light mode (below AA) on pages any prospect can reach without an
+  account; the unread badge was white on `var(--dang)`, ~2:1 in dark mode.
+  Added `--on-ac`/`--on-warn`/`--on-dang`/`--acbd`/`--scrim`, replaced all 74,
+  and added `app/theme-tokens.test.ts` to hold the count at zero and to assert
+  both theme blocks define the same token set. **Proved that test fails on a
+  planted literal before trusting it.** `app/layout.tsx` is the single
+  documented exemption (metadata cannot read a CSS variable).
+- [x] **FIXED — static and PWA assets were behind the auth gate.** `proxy.ts`
+  allowlisted no static paths, so `/manifest.webmanifest`, `/sw.js`,
+  `/robots.txt` and `/sitemap.xml` all 307'd to `/login`. **The service worker
+  has therefore never registered** — a browser refuses a worker script that
+  arrives via a redirect, which is what the "script resource is behind a
+  redirect" console error on the login page was — there was no install prompt
+  because the manifest could not be parsed, and crawlers got the login page.
+  An earlier audit recorded SEO as "adequate, robots.ts/sitemap.ts exist".
+  They existed and were unreachable. **Lesson worth keeping: "the file
+  exists" and "the file is served" are different claims.**
+- [x] **FIXED — HSTS was emitted over plain HTTP**, with `preload` and a
+  one-year max-age, including from a localhost dev server. Now sent only when
+  the connection is actually https (via `x-forwarded-proto`, so it still
+  applies behind Vercel — verified both directions).
+- [x] **FIXED — the seeded demo tenant could not reach the dashboard.** The
+  seed fills every ZATCA-mandatory field, a branch and sample invoices, but
+  left `onboardingStatus` at its `"pending"` default, so `OnboardingGuard`
+  redirected it into the wizard. Anyone running `SEED_DEMO=true` to evaluate
+  the product never saw the populated app the fixture exists to demonstrate.
+- [x] **FIXED — 360px layout.** The topbar's right cluster ran 64px past the
+  viewport (the profile button carries name + role + chevron) and the app
+  shell clips horizontally rather than scrolling, so the control was cut off
+  and partly unclickable. Collapses to the avatar below 720px with an
+  `aria-label` so it keeps an accessible name. Page headings collided with
+  their action buttons on four pages (space-between rows with no wrap). Main
+  padding now clears the fixed assistant button.
+- [x] **FIXED — `robots.txt`, `sitemap.xml` and the OpenGraph URL** pointed at
+  `https://fatooralite.com`, which is not the deployment. Now via
+  `lib/appUrl.ts`, falling back to localhost — honestly wrong rather than
+  confidently wrong.
+- [x] **FIXED — "Unknown" buyer.** A simplified B2C invoice has no named buyer
+  by design; the list labelled that `Unknown`, reading as missing data.
+
+**Recovered, worth knowing:** `lib/hooks/` (`useMediaQuery`,
+`useSidebarState`) plus the drawer/collapsed/full sidebar modes and the mobile
+layouts for the invoice table and list pages were sitting **uncommitted** in
+the working tree from an earlier session — my path-scoped `git add` calls
+during the big commit pass missed them. Committed with this pass, because the
+tree does not build without `lib/hooks` once those files import it. If you see
+a similar surprise again, `git status` after every commit is the cheap guard,
+and prefer `git add -A` with a reviewed diff over path lists.
+
+**False alarms, recorded so nobody re-investigates them:** the Settings form
+looked empty and the plan badge said "Trial" in a screenshot — both were
+mid-load, correct a second later (do not screenshot before the fetch
+settles). The sidebar looked clipped in a full-page capture — an artifact of
+capturing a fixed-position element full-page; it has `overflow-y: auto` and
+its last item is reachable. Two elements still exceed the viewport at 360px:
+the decorative `GlowBackground` radial gradients, `pointer-events: none`.
+
+**Verified:** `tsc` clean; **267 passed / 43 skipped**; `lint` exits 0;
+`zatca:validate` 7/7; `build` succeeds. All five CI gates in order return 0.
+In-browser: no console errors, no document overflow, auth gate still 401 JSON
+for `/api/*` and 307 for pages.
+
+**Not done in Phase 4, honestly:** a full keyboard-traversal and screen-reader
+pass outside the wizard and `Modal` (the `jsx-a11y` lint rules are clean and
+spot checks pass, but that is not the same as an audit), and the performance
+domain entirely — no bundle-size review and no N+1 check under realistic row
+counts. The demo tenant has 2 invoices, which proves nothing about 10,000.
+
+**Next session should start at:** those two remaining Phase 4 domains
+(accessibility sweep, performance under volume), or Phase 2's last open item —
+Pro-only controls still refuse server-side rather than rendering disabled with
+an inline reason, which is now the only missing piece of the licensing UX.

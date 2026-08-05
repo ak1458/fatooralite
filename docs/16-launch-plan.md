@@ -21,8 +21,8 @@ phase marked **needs a detailed plan**.
 | AI | Provider-agnostic (OpenRouter / Groq / Anthropic / OpenAI). Tool calling **already works** — 11 tools, RBAC-checked, confirm-gated. |
 | Deployment | Live at `fatooralite.vercel.app`, `AUTH_ENFORCE=true`, `ZATCA_MODE=sandbox`. |
 | Licensing | 7-day trial / Pro, enforced server-side at five points. No free tier. |
-| Tests | 219 passing / 43 skipped (DB-gated), `tsc` clean, `zatca:validate` 7/7. |
-| Repo | 21 semantic commits, `v0.1.0`–`v0.3.0` tagged, release policy documented, attribution guard installed, stale branches cleaned. |
+| Tests | 267 passing / 43 skipped (DB-gated), `tsc` clean, `lint` 0, `zatca:validate` 7/7. |
+| Repo | 25 semantic commits, `v0.1.0`–`v0.3.0` tagged, release policy documented, attribution guard installed, stale branches cleaned. |
 
 ### Blocked on the owner, not on engineering
 
@@ -223,31 +223,40 @@ Model choice must support tool calling; verify before demoing.
 
 ---
 
-## Phase 4 — Full product audit *(parallel agents)*
+## Phase 4 — Full product audit *(3 of 5 domains done)*
 
-Five independent domains, no shared state, one agent each. **Every agent runs
-with `isolation: "worktree"` created from a branch that has the current work
+Done in a real browser against a production build, signed in as the demo
+tenant, at 1440 and 360 in both themes — commit `8cc51b2`. Running the app
+found things source review had missed five times: seven public legal pages
+failing AA contrast in light mode only, a service worker that had never
+registered because `proxy.ts` gated `/sw.js`, `robots.txt` and `sitemap.xml`
+served as the login page to crawlers, a demo tenant that could not reach its
+own dashboard, and a profile menu clipped off-screen and unclickable at
+360px. Details in `handoff.md`.
+
+**Visual consistency ✅** — 74 colour literals replaced with tokens, five new
+tokens for foregrounds that must flip with the theme, and
+`app/theme-tokens.test.ts` holding the count at zero.
+**Responsive ✅** — no document overflow at 360px on any route; the two
+elements that exceed the viewport are the decorative glow gradients
+(`pointer-events: none`).
+**Broken flows and edge cases ✅** — the console is clean, the auth gate holds,
+and the demo fixture works end to end.
+
+### Still open in this phase
+
+- **Accessibility.** The `jsx-a11y` rules pass, `Modal` and the onboarding
+  wizard were fixed in Phase 1, and `ProfileMenu` gained an `aria-label` when
+  it collapses — but no full keyboard-traversal or screen-reader pass has been
+  done outside those. Passing lint is not an audit.
+- **Performance.** Not started. No bundle-size review per route, and no N+1
+  check under realistic row counts — the demo tenant has 2 invoices, which
+  proves nothing about 10,000. Seed a large tenant first, or the measurement
+  is theatre.
+
+If these are dispatched to parallel agents, **every agent needs
+`isolation: "worktree"` created from a branch that has the current work
 committed** — the 2026-07-20 `git stash` incident and the 2026-07-21 stale
-worktree problem both trace to ignoring this.
-
-1. **Visual consistency** — dark and light across every route; token usage vs
-   hardcoded colors; spacing and typography scale; empty, loading and error
-   states present on every data surface.
-2. **Responsive** — 360 / 768 / 1024 / 1440 on every page; the invoice table,
-   the wizard and the AI dock are the likely failures.
-3. **Accessibility** — beyond the wizard sweep in Task 1.2: focus order, skip
-   links, contrast ratios, `aria-live` on async regions, keyboard-only
-   traversal of the whole app.
-4. **Broken flows and edge cases** — every user journey end to end with an
-   empty tenant, a fully populated tenant, and an expired session. Includes
-   the known gap that the frontend does not detect a mid-session 401 and
-   prompt re-login; existing `.catch(() => {})` calls swallow it silently.
-5. **Performance** — bundle size per route, server response times, N+1s under
-   realistic row counts (the DB audit found none at seed scale, which proves
-   little).
-
-Each returns findings with file:line and a severity, not fixes. Triage
-centrally, then dispatch fix agents — one bug, one agent, one summary.
 
 ---
 
@@ -363,17 +372,26 @@ the operational layer around it:
    because nothing ships commercially without it, and the tier *boundaries* are
    cheap to move later (they are one table in `entitlements.ts`); only the
    price is genuinely research-dependent, and it is still a placeholder.
-3. **Phase 5 retest + Phase 4** — audit now, because plan gating just added a
-   second authorization axis to every check and that is exactly the kind of new
-   code that reintroduces a bypass. Start with the licensing surface itself.
+3. ~~**Phase 5 retest**~~ — done, plus the Next.js advisories.
+   **Phase 4** — 3 of 5 domains done; the accessibility sweep and the
+   performance work under realistic volume remain.
 4. **Phase 7** — market research, to settle pricing before checkout goes live.
 5. **Phase 3** — AI depth. Highest demo value, lowest launch risk.
 6. **Phase 8, then 9** — deployment simplicity first, then the provisioning
    layer on top of it.
 7. **Phase 6** — cosmetic, do it whenever.
 
-Phase 2's own open items (per-control affordances, client-side 402 handling,
-e2e coverage) are listed in that section and are smaller than a phase each.
+Phase 2's last open item — Pro-only controls refuse server-side but do not
+render disabled with an inline reason — is smaller than a phase and is the
+only missing piece of the licensing UX. Client-side 402 handling is done.
+
+**A note on method, earned the hard way.** Phases 1, 2 and 4 each turned up a
+defect that made a headline feature unusable — onboarding that could not be
+finished, a demo tenant that could not reach its dashboard, a service worker
+that had never registered — and none of them were visible in source review.
+Two were found by running the app, one by writing a test that derived its
+expectations from the schema instead of from the code under test. Prefer both
+over another reading pass.
 
 The owner-blocked items at the top gate the actual launch date regardless of
 where engineering gets to.
