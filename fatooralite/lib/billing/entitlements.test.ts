@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  checkLimit,
   FEATURE_LABELS,
   PLAN_LIMITS,
   TRIAL_DAYS,
@@ -163,5 +164,45 @@ describe("period helpers", () => {
 
   it("produces a trial that resolves as active immediately after creation", () => {
     expect(resolvePlan(sub({ trialEndsAt: trialEndFrom(NOW) }), NOW)).toBe("trial");
+  });
+});
+
+describe("checkLimit", () => {
+  it("allows below the limit", () => {
+    expect(checkLimit("trial", "invoices", { used: 24, limit: 25 })).toEqual({ allowed: true, reason: null });
+  });
+
+  it("blocks at the limit, not one past it", () => {
+    expect(checkLimit("trial", "invoices", { used: 25, limit: 25 }).allowed).toBe(false);
+  });
+
+  it("treats a null limit as unlimited", () => {
+    expect(checkLimit("pro", "invoices", { used: 10_000, limit: null })).toEqual({ allowed: true, reason: null });
+  });
+
+  // Failing closed here would lock a paying customer out of their own product
+  // because one request did not land. The server still returns 402 if they are
+  // genuinely over.
+  it("fails open on an unknown plan or missing usage", () => {
+    expect(checkLimit(null, "seats", { used: 9, limit: 2 })).toEqual({ allowed: true, reason: null });
+    expect(checkLimit("trial", "seats", null)).toEqual({ allowed: true, reason: null });
+  });
+
+  it("names the limit it hit", () => {
+    expect(checkLimit("trial", "branches", { used: 1, limit: 1 }).reason).toContain("1 branches");
+    expect(checkLimit("trial", "seats", { used: 2, limit: 2 }).reason).toContain("2 team members");
+  });
+
+  it("says the trial ended rather than quoting a limit of zero", () => {
+    const r = checkLimit("expired", "invoices", { used: 0, limit: 0 });
+    expect(r.allowed).toBe(false);
+    expect(r.reason).toContain("trial has ended");
+    expect(r.reason).not.toContain("0 invoices");
+  });
+
+  it("always offers a way forward when it blocks", () => {
+    (["invoices", "branches", "seats"] as const).forEach((kind) => {
+      expect(checkLimit("trial", kind, { used: 1, limit: 1 }).reason).toContain("Upgrade");
+    });
   });
 });

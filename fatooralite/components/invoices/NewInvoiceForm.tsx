@@ -6,6 +6,7 @@ import { invoiceTotals } from "@/lib/zatca/money";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import { useAuth } from "@/lib/useCompany";
 
 interface Company {
   id: string;
@@ -64,6 +65,8 @@ const L = {
 };
 
 export function NewInvoiceForm() {
+  // Issuing an invoice moves the monthly usage count that PlanGate reads.
+  const { refresh: refreshSession } = useAuth();
   const { lang } = useLang();
   const mobile = useMediaQuery(639);
   const grid2 = mobile ? "1fr" : "1fr 1fr";
@@ -156,6 +159,9 @@ export function NewInvoiceForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Request failed");
       setResult(data);
+      // Refresh plan usage so the create button reflects the new count without
+      // needing a full page load; the server is still the authority either way.
+      void refreshSession();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {

@@ -139,3 +139,43 @@ export function trialEndFrom(now: Date = new Date()): Date {
 export function proPeriodEndFrom(now: Date = new Date()): Date {
   return new Date(now.getTime() + PRO_PERIOD_DAYS * 86_400_000);
 }
+
+/** What a usage counter looks like to the client. `null` limit means unlimited. */
+export interface UsageCounter {
+  used: number;
+  limit: number | null;
+}
+
+export type LimitKind = "invoices" | "branches" | "seats";
+
+const LIMIT_NOUNS: Record<LimitKind, string> = {
+  invoices: "invoices this month",
+  branches: "branches",
+  seats: "team members",
+};
+
+/**
+ * Whether a tenant may consume one more of `kind`, and the sentence to show if
+ * not. Pure, so the UI gate and its tests share one implementation.
+ *
+ * Fails **open** on an unknown plan: the server returns 402 if the tenant is
+ * genuinely over the limit, so failing open costs a round trip, whereas
+ * failing closed would lock a paying customer out of their own product because
+ * one request did not land.
+ */
+export function checkLimit(
+  plan: PlanId | null,
+  kind: LimitKind,
+  usage: UsageCounter | null,
+): { allowed: boolean; reason: string | null } {
+  if (!plan || !usage) return { allowed: true, reason: null };
+  if (usage.limit === null || usage.used < usage.limit) return { allowed: true, reason: null };
+  const noun = LIMIT_NOUNS[kind];
+  return {
+    allowed: false,
+    reason:
+      plan === "expired"
+        ? `Your trial has ended. Upgrade to Pro to add more ${noun}.`
+        : `Trial limit reached — ${usage.limit} ${noun}. Upgrade to Pro for unlimited.`,
+  };
+}

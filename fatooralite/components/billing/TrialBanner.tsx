@@ -2,13 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useCompany } from "@/lib/useCompany";
-
-interface PlanStatus {
-  plan: "trial" | "pro" | "expired";
-  trialDaysLeft: number | null;
-  invoiceUsage: { used: number; limit: number | null };
-}
+import { usePlan } from "@/lib/useCompany";
 
 const DISMISS_KEY = "fl.trialBanner.dismissedOn";
 
@@ -27,28 +21,17 @@ function today(): string {
  * reporting a real change in what the app will do rather than advertising.
  */
 export function TrialBanner() {
-  const { company } = useCompany();
-  const [status, setStatus] = useState<PlanStatus | null>(null);
+  // Plan comes from the session context, which already fetches it once for
+  // the whole app — this used to make its own copy of the same request.
+  const { plan: status } = usePlan();
   const [dismissedOn, setDismissedOn] = useState<string | null>(null);
 
-  // The stored dismissal is read in the fetch callback rather than its own
-  // effect: reading localStorage during render would desync hydration, and a
-  // synchronous setState in an effect body causes a cascading re-render.
+  // Read after mount, not during render: localStorage during render desyncs
+  // hydration, and a synchronous setState in an effect body cascades.
   useEffect(() => {
-    if (!company?.id) return;
-    let cancelled = false;
-    fetch(`/api/companies/${company.id}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (cancelled || !d) return;
-        setDismissedOn(window.localStorage.getItem(DISMISS_KEY));
-        setStatus({ plan: d.plan, trialDaysLeft: d.trialDaysLeft, invoiceUsage: d.invoiceUsage });
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [company?.id]);
+    const id = window.setTimeout(() => setDismissedOn(window.localStorage.getItem(DISMISS_KEY)), 0);
+    return () => window.clearTimeout(id);
+  }, []);
 
   if (!status || status.plan === "pro") return null;
 
@@ -60,7 +43,7 @@ export function TrialBanner() {
   const dismissible = !urgent;
   if (dismissible && dismissedOn === today()) return null;
 
-  const { used, limit } = status.invoiceUsage;
+  const { used, limit } = status.invoices;
   const usageNote = limit === null ? null : `${used} of ${limit} invoices used this month`;
 
   const headline = expired

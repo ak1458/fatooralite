@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { PlanGate } from "@/components/billing/PlanGate";
 import { useCompany } from "@/lib/useCompany";
 import { useAsyncData } from "@/lib/async/useAsyncData";
 import { AsyncBoundary } from "@/components/common/AsyncBoundary";
@@ -70,10 +71,14 @@ export default function UsersPage() {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Users &amp; Roles</h1>
         {tab === "users" ? (
-          <button onClick={() => setOpen(true)} disabled={!company?.id}
-            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 11, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-            <Icon name="plus" size={15} sw={2.4} /> Invite user
-          </button>
+          <PlanGate limit="seats">
+            {({ disabled }) => (
+              <button onClick={() => setOpen(true)} disabled={disabled || !company?.id}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 11, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", fontSize: 13, fontWeight: 700, cursor: disabled || !company?.id ? "not-allowed" : "pointer", opacity: disabled || !company?.id ? 0.55 : 1 }}>
+                <Icon name="plus" size={15} sw={2.4} /> Invite user
+              </button>
+            )}
+          </PlanGate>
         ) : (
           <button onClick={() => setRoleModal("new")}
             style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 11, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>

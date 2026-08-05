@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { checkLimit, type LimitKind } from "@/lib/billing/entitlements";
 
 export interface SessionUser {
   userId: string;
@@ -53,6 +54,24 @@ export interface Branch {
   city: string | null;
 }
 
+/** Plan + usage, resolved server-side. The UI never infers entitlement from
+ *  the raw subscription row — lib/billing/entitlements.ts is the only
+ *  authority, and this is a read of what it decided. */
+export interface PlanUsage {
+  used: number;
+  /** null means unlimited. */
+  limit: number | null;
+}
+
+export interface PlanState {
+  plan: "trial" | "pro" | "expired";
+  trialDaysLeft: number | null;
+  trialEndsAt: string | null;
+  invoices: PlanUsage;
+  branches: PlanUsage;
+  seats: PlanUsage;
+}
+
 interface AppContextType {
   user: SessionUser | null;
   company: Company | null;
@@ -64,6 +83,8 @@ interface AppContextType {
   setActiveBranch: (id: string) => void;
   isLoading: boolean;
   refresh: () => Promise<void>;
+  /** null until loaded, or if the plan endpoint could not be reached. */
+  plan: PlanState | null;
 }
 
 const AppContext = createContext<AppContextType>({
@@ -76,6 +97,7 @@ const AppContext = createContext<AppContextType>({
   setActiveBranch: () => {},
   isLoading: true,
   refresh: async () => {},
+  plan: null,
 });
 
 /**
@@ -89,6 +111,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [plan, setPlan] = useState<PlanState | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -97,9 +120,30 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       setCompanyState(me?.company ?? null);
 
       if (me?.company?.id) {
-        const data = await fetch(`/api/branches?companyId=${me.company.id}`)
-          .then((r) => r.json())
-          .catch(() => ({ branches: [] }));
+        // Branches and plan are independent reads; fetching them together
+        // keeps this to one round trip and means every consumer of plan state
+        // (the trial banner, the gated buttons) shares a single request rather
+        // than each making its own.
+        const [data, planRes] = await Promise.all([
+          fetch(`/api/branches?companyId=${me.company.id}`)
+            .then((r) => r.json())
+            .catch(() => ({ branches: [] })),
+          fetch(`/api/companies/${me.company.id}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+        ]);
+        setPlan(
+          planRes?.plan
+            ? {
+                plan: planRes.plan,
+                trialDaysLeft: planRes.trialDaysLeft ?? null,
+                trialEndsAt: planRes.trialEndsAt ?? null,
+                invoices: planRes.invoiceUsage ?? { used: 0, limit: null },
+                branches: planRes.branchUsage ?? { used: 0, limit: null },
+                seats: planRes.seatUsage ?? { used: 0, limit: null },
+              }
+            : null,
+        );
         const list: Branch[] = data.branches ?? [];
         setBranches(list);
         const stored = typeof window !== "undefined" ? localStorage.getItem("fl-active-branch") : null;
@@ -108,11 +152,13 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       } else {
         setBranches([]);
         setActiveBranchId(null);
+        setPlan(null);
       }
     } catch {
       setUser(null);
       setCompanyState(null);
       setBranches([]);
+      setPlan(null);
     }
   }, []);
 
@@ -151,6 +197,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         setActiveBranch,
         isLoading,
         refresh,
+        plan,
       }}
     >
       {children}
@@ -168,6 +215,20 @@ export function useCompany() {
 export function useAuth() {
   const c = useContext(AppContext);
   return { user: c.user, company: c.company, isLoading: c.isLoading, refresh: c.refresh };
+}
+
+/**
+ * Plan and usage for the active company, plus a helper that answers "can this
+ * tenant do X right now, and if not, why".
+ *
+ * The server is still the only authority (lib/billing/plan.ts returns a 402);
+ * this exists so a control can say so *before* the click instead of after.
+ */
+export function usePlan() {
+  const { plan } = useContext(AppContext);
+  /** Delegates to lib/billing/entitlements.ts so the rule lives in one place. */
+  const check = (kind: LimitKind) => checkLimit(plan?.plan ?? null, kind, plan?.[kind] ?? null);
+  return { plan, check, isPro: plan?.plan === "pro" };
 }
 
 /** Branch (location) selection for the active company. */
