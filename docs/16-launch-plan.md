@@ -22,7 +22,7 @@ phase marked **needs a detailed plan**.
 | Deployment | Live at `fatooralite.vercel.app`, `AUTH_ENFORCE=true`, `ZATCA_MODE=sandbox`. |
 | Licensing | 7-day trial / Pro, enforced server-side at five points. No free tier. |
 | Tests | 267 passing / 43 skipped (DB-gated), `tsc` clean, `lint` 0, `zatca:validate` 7/7. |
-| Repo | 25 semantic commits, `v0.1.0`–`v0.3.0` tagged, release policy documented, attribution guard installed, stale branches cleaned. |
+| Repo | 28 semantic commits, `v0.1.0`–`v0.3.0` tagged, release policy documented, attribution guard installed, stale branches cleaned. |
 
 ### Blocked on the owner, not on engineering
 
@@ -223,7 +223,7 @@ Model choice must support tool calling; verify before demoing.
 
 ---
 
-## Phase 4 — Full product audit *(3 of 5 domains done)*
+## Phase 4 — Full product audit ✅ complete
 
 Done in a real browser against a production build, signed in as the demo
 tenant, at 1440 and 360 in both themes — commit `8cc51b2`. Running the app
@@ -243,16 +243,48 @@ elements that exceed the viewport are the decorative glow gradients
 **Broken flows and edge cases ✅** — the console is clean, the auth gate holds,
 and the demo fixture works end to end.
 
-### Still open in this phase
+**Accessibility ✅** (commit `4b2c7fc`) — driven with a keyboard and by
+computing accessible names in the page. One real finding: the invoice and
+credit/debit note line-item fields had a placeholder and no label, so a screen
+reader announced the product's core workflow as a row of unnamed edit boxes.
+`jsx-a11y` does not catch that — its rules cover labels that exist, not
+controls with none. Otherwise clean: 0 unnamed controls across the pages
+checked, the modal is a labelled `role="dialog"` with `aria-modal`, the skip
+link is the first Tab stop and focus rings are visible.
 
-- **Accessibility.** The `jsx-a11y` rules pass, `Modal` and the onboarding
-  wizard were fixed in Phase 1, and `ProfileMenu` gained an `aria-label` when
-  it collapses — but no full keyboard-traversal or screen-reader pass has been
-  done outside those. Passing lint is not an audit.
-- **Performance.** Not started. No bundle-size review per route, and no N+1
-  check under realistic row counts — the demo tenant has 2 invoices, which
-  proves nothing about 10,000. Seed a large tenant first, or the measurement
-  is theatre.
+**Performance ✅** (commit `1812ce8`) — measured against a synthetic
+20,000-invoice tenant, because timings against the 2-invoice demo fixture are
+meaningless. Prior audits recorded "no N+1 patterns", which was true and not
+the problem. Four queries awaited independent work in sequence against a
+remote database, and two loaded whole tables into Node to render a handful of
+numbers:
+
+| | before | after | |
+| --- | --- | --- | --- |
+| `getDashboardKpis` | 6086 ms | 1463 ms | 4.2× |
+| `getAnalyticsData` | 4336 ms | 1495 ms | 2.9×, 20,000 → ~25 rows |
+| `getInvoiceList` | 3199 ms | 1760 ms | 1.8× |
+| `getDashboardIntegration` | 2982 ms | 1402 ms | 2.1× |
+| `getDashboardVolume` | 1907 ms | 1603 ms | 329 → 13 rows |
+
+Every page query now sits at the single-round-trip floor (~1.45 s here, which
+is network latency to Neon, not the query). No index was added — each
+individual query already measured within ~100 ms of a `SELECT 1` baseline, so
+there was no evidence of index starvation and adding one would have been
+guessing. The new aggregates were checked against the in-memory implementation
+they replaced on the same 20,000 rows: total, cleared, rejected, VAT, distinct
+customers, the pending derivation and the top-5 revenue ranking including
+order all matched exactly.
+
+Reusable tooling: `scripts/seed-volume.ts` (creates and removes a synthetic
+tenant, marked by a reserved VAT number so cleanup cannot touch anything
+else), `scripts/bench-queries.ts`, `scripts/bench-shape.ts` (separates round
+trips from rows transferred — they fail differently and both matter).
+
+### Not covered
+
+Bundle size per route was not reviewed. Everything else in the original
+five domains was.
 
 If these are dispatched to parallel agents, **every agent needs
 `isolation: "worktree"` created from a branch that has the current work
@@ -373,8 +405,7 @@ the operational layer around it:
    cheap to move later (they are one table in `entitlements.ts`); only the
    price is genuinely research-dependent, and it is still a placeholder.
 3. ~~**Phase 5 retest**~~ — done, plus the Next.js advisories.
-   **Phase 4** — 3 of 5 domains done; the accessibility sweep and the
-   performance work under realistic volume remain.
+   ~~**Phase 4**~~ — done; only bundle-size review was left uncovered.
 4. **Phase 7** — market research, to settle pricing before checkout goes live.
 5. **Phase 3** — AI depth. Highest demo value, lowest launch risk.
 6. **Phase 8, then 9** — deployment simplicity first, then the provisioning

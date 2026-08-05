@@ -1422,3 +1422,78 @@ counts. The demo tenant has 2 invoices, which proves nothing about 10,000.
 (accessibility sweep, performance under volume), or Phase 2's last open item —
 Pro-only controls still refuse server-side rather than rendering disabled with
 an inline reason, which is now the only missing piece of the licensing UX.
+
+### 2026-08-05 (cont'd) — Phase 4 finished: performance and accessibility
+
+Still all local. 28 commits on `feature/production-readiness`.
+
+#### Performance (commit `1812ce8`)
+
+Measured against a **synthetic 20,000-invoice tenant**, because timings
+against the 2-invoice demo fixture are meaningless. Prior audits recorded "no
+N+1 patterns" — true, and not the problem.
+
+| query | before | after | |
+| --- | --- | --- | --- |
+| `getDashboardKpis` | 6086 ms | 1463 ms | 4.2× |
+| `getAnalyticsData` | 4336 ms | 1495 ms | 2.9×, 20,000 → ~25 rows |
+| `getInvoiceList` | 3199 ms | 1760 ms | 1.8× |
+| `getDashboardIntegration` | 2982 ms | 1402 ms | 2.1× |
+| `getDashboardVolume` | 1907 ms | 1603 ms | 329 → 13 rows |
+
+Two distinct problems, and they fail differently — **round trips make a page
+slow today at any data size; row transfer is fine today and breaks in a year.**
+Four queries awaited independent work sequentially against a remote database
+(now `Promise.all`). `getAnalyticsData` was `findMany({ where: { companyId } })`
+with no bound — every invoice the tenant had ever issued, pulled into Node,
+filtered five times, then bucketed by day in a loop that re-scanned the whole
+array each pass. Now `groupBy` plus a `GROUP BY` for the daily buckets.
+
+Everything is now at the single-round-trip floor (~1.45 s here — that is
+network latency to Neon, not query time). **No index was added**: every
+individual query already measured within ~100 ms of a `SELECT 1` baseline, so
+there was no evidence of index starvation and adding one would be guessing.
+
+**Correctness was verified, not assumed** — a throwaway script ran the old
+in-memory implementation against the new aggregates on the same 20,000 rows
+and compared total, cleared, rejected, VAT collected, distinct customers, the
+pending derivation, and the top-5 revenue ranking including its order. All
+seven matched exactly.
+
+Reusable tooling kept: `scripts/seed-volume.ts` (creates and removes a
+synthetic tenant, marked by a reserved VAT number so cleanup cannot touch
+anything else), `scripts/bench-queries.ts`, `scripts/bench-shape.ts`. The
+fixture was removed after measuring — the database is back to 1 company and
+2 invoices.
+
+#### Accessibility (commit `4b2c7fc`)
+
+Driven with a keyboard and by computing accessible names in the live page.
+One real finding: the **invoice and credit/debit note line-item fields had a
+placeholder and no label**, so a screen reader announced the product's core
+workflow as a row of unnamed edit boxes. `jsx-a11y` does not catch this — its
+rules cover labels that exist, not controls with none, which is why lint was
+green throughout. Each field now has an aria-label numbered by row.
+
+Adding the remove button's label surfaced a latent crash: `label()` indexes
+the bilingual map directly, so `label("remove")` on a missing key throws
+rather than returning undefined. Added the key.
+
+Verified clean and recorded so it is not re-audited: 0 unnamed interactive
+elements across dashboard, invoice creation and users (43 controls on that
+page including its invite modal); the modal is a labelled `role="dialog"`
+with `aria-modal`; the first Tab stop is the skip link targeting
+`#main-content` with a visible 2px accent focus ring; no images missing alt;
+one `h1` per page and no heading-level jumps.
+
+**Not covered:** bundle size per route. Everything else in Phase 4's five
+domains is done.
+
+**Verified:** tsc clean, lint 0, 267 passed / 43 skipped, zatca:validate 7/7,
+build succeeds.
+
+**Next session should start at:** Phase 2's last open item — Pro-only controls
+refuse server-side with a good message but do not render disabled with an
+inline reason, so users find out by clicking. After that the plan's order is
+Phase 7 (market research, to settle pricing before checkout goes live), then
+Phase 3 (AI depth), then 8 and 9.
