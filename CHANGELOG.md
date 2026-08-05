@@ -29,8 +29,43 @@ conventions: [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
   checklist, historical tags `v0.1.0`–`v0.3.0`, and a `commit-msg` hook that
   rejects assistant attribution trailers.
 
+### Security
+
+- **Next.js 16.2.9 → 16.3.0**, closing nine advisories. The one that matters
+  most here is a middleware/proxy bypass in App Router applications — this
+  app's entire authentication gate is `proxy.ts` — alongside SSRF in rewrites
+  and in Server Actions, cache confusion of response bodies (a cross-tenant
+  leak shape in a multi-tenant product), and unauthenticated disclosure of
+  internal Server Function endpoints. Also clears postcss (arbitrary `.map`
+  file read via attacker-controlled `sourceMappingURL`), undici,
+  brace-expansion and @tailwindcss/postcss. 9 advisories → 4, the remainder
+  being adm-zip and sharp via the optional local-embedding provider, with no
+  fix available at any version.
+- **Starting a checkout could end a live trial.** `POST /api/billing/checkout`
+  wrote `plan: "free"` when creating a subscription row; "free" is no longer a
+  recognised plan and resolves to expired. It now records the payment
+  processor's invoice id and touches nothing else — only a verified webhook
+  changes entitlement.
+- 28 adversarial tests against the plan resolver, covering the guard-fails-open
+  shape behind every previous Critical finding in this codebase, plus
+  structural checks that each creation route still calls its limit gate and
+  that tenant verification precedes plan resolution.
+
 ### Fixed
 
+- **CI's lint step was failing, so no later CI step had ever run.**
+  `npm run lint` exited non-zero on 16 pre-existing errors and runs before the
+  `zatca:validate` and `npm audit` gates in the same job. All 16 are fixed and
+  lint now exits 0.
+- **Validation failures returned an empty error body.** Four routes caught
+  errors as `any` and returned `error.errors`, which zod v4 renamed to
+  `.issues` — so a 400 arrived with `{ error: undefined }` and the caller had
+  no idea what was wrong. The `any` cast is what hid it.
+- **An expired session looked like a broken app.** Roughly 63 client `fetch`
+  calls swallowed errors, so a mid-session 401 stopped the page updating with
+  no explanation, and the 402 upgrade responses were read by nothing. A single
+  `window.fetch` wrapper now surfaces both: 401 redirects to sign-in with a
+  reason, 402 shows the server's message and an upgrade link.
 - **A fresh tenant could not finish onboarding.** `invoiceTypes` is required by
   the server-side completion guard but was collected by no wizard step,
   registration field or settings screen, so the last click of the wizard

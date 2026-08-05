@@ -35,12 +35,13 @@ jobs:
         run: npm run lint
 
       - name: Dependency audit (blocks on critical only)
-        # As of 2026-07-20 there are known high/moderate advisories in
-        # onnxruntime-node (via the optional local-embedding provider) and
-        # next's bundled postcss — both need a manual, tested major-version
-        # bump, not an autonomous force-fix; see handoff.md. --audit-level=critical
-        # keeps CI green for those known/tracked issues while still catching
-        # anything newly critical. Raise this once the known ones are cleared.
+        # As of 2026-08-05 the Next.js and postcss advisories are cleared (Next
+        # 16.3.0). What remains are 4 high-severity advisories in adm-zip and
+        # sharp, reachable only through @huggingface/transformers — the
+        # optional local-embedding provider — with no fix available at any
+        # version. --audit-level=critical keeps CI honest about those while
+        # still failing on anything newly critical. Raise this to `high` the
+        # moment those two have a fix, or if that provider is dropped.
         run: npm audit --audit-level=critical
 
       - name: Unit tests

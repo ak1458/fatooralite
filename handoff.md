@@ -1224,3 +1224,114 @@ a second authorization axis to every check, which is exactly where a bypass
 gets reintroduced), then the Phase 4 product audit. Phase 2's own leftovers
 (per-control disabled affordances, client-side 402/401 handling, e2e coverage
 of the trial cap) are each smaller than a phase and listed in that section.
+
+### 2026-08-05 — Security pass (launch plan order item 3), then the client refusal gap
+
+Owner: "secure the app then go for next." Nothing pushed, still all local.
+
+#### The two findings that mattered
+
+- [x] **FIXED — Critical in effect: CI's lint step has been failing, so no
+  other CI gate has ever run.** `npm run lint` exited 1 on 16 pre-existing
+  errors, and it runs *before* `zatca:validate` and `npm audit` in the same
+  job. Those two steps were added in earlier sessions specifically to catch a
+  shared-canonicalizer bug that unit tests structurally cannot, and to catch
+  new critical advisories — neither has ever executed. All 16 errors are now
+  fixed; `npm run lint` exits 0 with one warning. **This is the finding to
+  remember: a guard that cannot pass is not a guard.** If lint goes red again,
+  the ZATCA and audit gates go dark with it.
+- [x] **FIXED — Next.js 16.2.9 → 16.3.0, nine advisories.** `npm audit`'s
+  picture had changed since it was last assessed. It previously suggested a
+  *downgrade* (16.2.9 → 9.3.3, an artifact of how it read the canary range),
+  which is why it was deferred; a real forward fix now exists at a non-major
+  version. Among what it fixes: **middleware/proxy bypass in App Router** —
+  this application's entire auth gate is `proxy.ts`, so that is an
+  authentication bypass — plus SSRF in rewrites and Server Actions, cache
+  confusion of response bodies (a cross-tenant leak shape in a multi-tenant
+  product), and unauthenticated disclosure of internal Server Function
+  endpoints. Also cleared postcss (arbitrary `.map` read via
+  attacker-controlled `sourceMappingURL`), undici, brace-expansion,
+  @tailwindcss/postcss. **9 vulnerabilities (1 moderate, 8 high) → 4 high.**
+  The remaining 4 are adm-zip and sharp via `@huggingface/transformers` (the
+  optional local-embedding provider) with no fix at any version — unchanged
+  assessment, and the reason CI's audit gate stays at `--audit-level=critical`.
+  `package.json` keeps the **exact** Next pin, not the caret `npm install`
+  introduced: this project pins Next deliberately and `AGENTS.md` warns the
+  major has breaking changes relative to common knowledge.
+
+#### Licensing surface retest (what the plan actually asked for)
+
+- [x] **FIXED.** `POST /api/billing/checkout` wrote `plan: "free"` when
+  creating a Subscription row. "free" is no longer a recognised plan, so
+  `resolvePlan` reads it as expired — **starting a checkout could end a live
+  trial.** It now records the invoice id and nothing else. Starting a checkout
+  must never change entitlement in either direction; only a verified webhook
+  grants Pro.
+- [x] **DONE.** `lib/billing/entitlements.security.test.ts` — 28 adversarial
+  cases. Every Critical finding in this repository has been a guard that
+  short-circuits to *allow* on missing or unexpected data, so these push
+  malformed input at the resolver: null, absent fields, wrong types, case
+  variants, NaN dates, a trial row carrying a forged `currentPeriodEnd`. Plus
+  structural checks that each creation route still calls its limit gate, that
+  tenant verification precedes plan resolution (otherwise the 402 body leaks
+  another tenant's billing state), and that the checkout route writes no
+  entitlement-bearing field.
+
+**Verified clean, recorded so the next pass does not redo it:** no SSRF
+surface (every `fetch` base URL is env-derived); the one
+`dangerouslySetInnerHTML` is a static anti-flash constant with no
+interpolation; the nine routes without `requirePermission` are all
+intentional (auth endpoints, the webhook with its own shared-secret check,
+the cron with its bearer, health); `AUTH_ENFORCE` is consistently
+secure-by-default across all six call sites; rate limiting covers every route
+via `proxy.ts`, so the new billing endpoints inherit it; the AI agent's
+`confirmedAction` path runs through `executeTool`, so the entitlement gate
+applies there too.
+
+**Live-verified on the built app, not just by reading code** — the headline
+advisory is a proxy bypass, so the gate was actually exercised:
+unauthenticated `/api/*` → 401 JSON; unauthenticated page routes → 307 to
+`/login`; the gate holds under trailing-slash, double-slash, dot-segment and
+case-variant paths (each either 401 or redirected to a gated URL, never
+served); the reporting cron → 401 with no bearer, 401 with a wrong bearer,
+200 with the correct one; `/api/health` → 200, database connected.
+
+#### Client refusal handling (Phase 2 leftover, and it had grown teeth)
+
+- [x] **FIXED.** ~63 `fetch("/api/...")` call sites across ~30 files, most
+  ending in `.catch(() => {})`. An expired session surfaced as a silent
+  JSON-parse failure — the page simply stopped updating, which reads as the
+  app being broken — and the 402 bodies added with the trial/Pro work were
+  read by nothing at all. `lib/api/intercept.ts` wraps `window.fetch` **once**
+  rather than editing 63 call sites that the next person could forget. It is
+  deliberately narrow: reads status codes, `clone()`s to inspect the body so
+  the caller still gets an unconsumed stream (the assistant streams), returns
+  the original response untouched, and ignores 401s from `/api/auth/*` (a
+  wrong password is an ordinary 401 there). 17 tests.
+- [x] **FIXED — real bug found while clearing `no-explicit-any`.** Four routes
+  did `catch (error: any)` and returned `error.errors` on a validation
+  failure. **zod v4 renamed that to `.issues`**, so every one returned
+  `{ error: undefined }` — a 400 that told the caller nothing. The `any` cast
+  is exactly what hid it. `lib/validation/http.ts` now checks `instanceof
+  ZodError` and returns the first issue's message.
+
+**Verified after every step:** `tsc` clean; `npx vitest run` → **264 passed /
+43 skipped, 0 failing** (was 219 at the start of this pass); `zatca:validate`
+all 7 local checks; `npm run build` succeeds; `npm run lint` exits 0.
+
+**Not fixed, deliberately:** `checkInvoiceLimit` is read-then-write, so
+concurrent requests can exceed a monthly cap by a small margin. It bounds a
+billing allowance, not a security boundary, and a distributed lock costs more
+than the overage. Also still open from the plan: the non-invoice audit trail
+(no record of failed logins, permission denials, role changes), `branchId`
+scoping (PRD FR5), and the rate limiter's unvalidated `X-Forwarded-For`
+(mitigated on Vercel, a real issue for self-hosting).
+
+**Next session should start at:** launch plan Phase 4, the remaining product
+audit domains — visual consistency across dark/light, responsive behaviour at
+360/768/1024/1440, and the accessibility sweep outside the onboarding wizard.
+The wizard, `Modal`, and the licensing surfaces are done; the rest of the app
+has not had a pass. Phase 2's per-control disabled affordances (Pro-only
+buttons still refuse server-side rather than rendering disabled with a
+reason) are also still open and are now the only piece of the licensing UX
+missing.
