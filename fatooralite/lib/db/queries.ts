@@ -7,22 +7,18 @@ import type { AnalyticsKpi, FeedEvent, HealthBar, Invoice, Kpi, RevenueRow, Volu
  * Returns summary KPI data for the dashboard.
  */
 export async function getDashboardKpis(companyId: string, db: PrismaClient = defaultDb) {
-  // Aggregate data for counters
-  const totalInvoices = await db.invoice.count({ where: { companyId } });
-  const clearedInvoices = await db.invoice.count({ where: { companyId, status: "cleared" } });
-  
-  const vatResult = await db.invoice.aggregate({
-    where: { companyId, status: "cleared" },
-    _sum: { vatAmount: true },
-  });
+  // These four are independent, and the database is remote — awaiting them in
+  // sequence cost four round trips for no reason. Measured against a 20k-invoice
+  // tenant: 6236 ms sequential, 1440 ms in parallel (scripts/bench-shape.ts).
+  const [totalInvoices, clearedInvoices, vatResult, cert] = await Promise.all([
+    db.invoice.count({ where: { companyId } }),
+    db.invoice.count({ where: { companyId, status: "cleared" } }),
+    db.invoice.aggregate({ where: { companyId, status: "cleared" }, _sum: { vatAmount: true } }),
+    db.certificate.findFirst({ where: { companyId, kind: "production", status: "active" } }),
+  ]);
   const totalVat = num(vatResult._sum.vatAmount);
 
   const clearanceRate = totalInvoices > 0 ? (clearedInvoices / totalInvoices) * 100 : 100;
-
-  // ZATCA specific checks
-  const cert = await db.certificate.findFirst({
-    where: { companyId, kind: "production", status: "active" },
-  });
 
   const isReady = !!cert;
   let daysLeft = 0;
@@ -88,25 +84,37 @@ export async function getDashboardFeed(companyId: string, limit = 10, db: Prisma
 /**
  * Returns 12-day volume bar chart data.
  */
-export async function getDashboardVolume(companyId: string, db: PrismaClient = defaultDb): Promise<VolumeBar[]> {
-  // We'll approximate this by getting invoices from the last 12 days
-  const now = new Date();
-  const twelveDaysAgo = new Date(now.getTime() - 12 * 24 * 60 * 60 * 1000);
-  
-  const invoices = await db.invoice.findMany({
-    where: { 
-      companyId,
-      createdAt: { gte: twelveDaysAgo }
-    },
-    select: { createdAt: true },
-  });
+/**
+ * Invoices per UTC day for the last `days` days, counted in the database.
+ *
+ * Both the dashboard volume chart and the analytics daily bars previously
+ * pulled every invoice in the window back to Node just to bucket them. That is
+ * one row per invoice to render twelve bars — 329 rows for a tenant issuing a
+ * modest daily volume, and unbounded as that grows. Counting in Postgres
+ * returns one row per day instead (measured 329 → 13 rows, and the gap widens
+ * with volume; see scripts/bench-shape.ts).
+ *
+ * `date_trunc` on a `timestamp` column buckets by UTC, matching the
+ * `toISOString()` day keys this replaced.
+ */
+async function invoiceCountsByDay(
+  companyId: string,
+  days: number,
+  db: PrismaClient,
+): Promise<Map<string, number>> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const rows = await db.$queryRaw<{ day: Date; n: bigint }[]>`
+    SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS n
+    FROM "Invoice"
+    WHERE "companyId" = ${companyId} AND "createdAt" >= ${since}
+    GROUP BY 1
+  `;
+  return new Map(rows.map((r) => [r.day.toISOString().split("T")[0], Number(r.n)]));
+}
 
-  // Group by day string
-  const countsByDay = new Map<string, number>();
-  for (const inv of invoices) {
-    const day = inv.createdAt.toISOString().split('T')[0];
-    countsByDay.set(day, (countsByDay.get(day) ?? 0) + 1);
-  }
+export async function getDashboardVolume(companyId: string, db: PrismaClient = defaultDb): Promise<VolumeBar[]> {
+  const now = new Date();
+  const countsByDay = await invoiceCountsByDay(companyId, 12, db);
 
   // Create the last 12 days array
   const bars: VolumeBar[] = [];
@@ -144,13 +152,11 @@ export async function getDashboardVolume(companyId: string, db: PrismaClient = d
  * Returns integration service health based on real certificate/company state.
  */
 export async function getDashboardIntegration(companyId: string, db: PrismaClient = defaultDb) {
-  const cert = await db.certificate.findFirst({
-    where: { companyId, kind: "production", status: "active" },
-  });
-
-  const localCert = await db.certificate.findFirst({
-    where: { companyId, kind: "local", status: "active" },
-  });
+  // Independent lookups — one round trip instead of two.
+  const [cert, localCert] = await Promise.all([
+    db.certificate.findFirst({ where: { companyId, kind: "production", status: "active" } }),
+    db.certificate.findFirst({ where: { companyId, kind: "local", status: "active" } }),
+  ]);
 
   const hasCert = !!cert;
   const hasAnyCert = hasCert || !!localCert;
@@ -186,11 +192,29 @@ export async function getInvoiceList(
 ): Promise<{ invoices: Invoice[], tabs: { id: string, count: string }[] }> {
   // Aggregate counts for tabs (grouped in one query; statuses match the
   // invoice lifecycle: draft|signed|submitted|cleared|reported|rejected).
-  const grouped = await db.invoice.groupBy({
-    by: ["status"],
-    where: { companyId },
-    _count: { _all: true },
-  });
+  // Map UI tab ids onto lifecycle status sets so filtering matches the counts.
+  const statusSets: Record<string, string[]> = {
+    cleared: ["cleared", "reported"],
+    pending: ["signed", "submitted"],
+    rejected: ["rejected"],
+    draft: ["draft"],
+  };
+
+  // The tab counts and the page of rows are independent — one round trip
+  // rather than two against a remote database.
+  const [grouped, rawInvoices] = await Promise.all([
+    db.invoice.groupBy({ by: ["status"], where: { companyId }, _count: { _all: true } }),
+    db.invoice.findMany({
+      where: {
+        companyId,
+        ...(filter?.status && filter.status !== "all"
+          ? { status: { in: statusSets[filter.status] ?? [filter.status] } }
+          : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: 50, // limit for UI
+    }),
+  ]);
   const countOf = (...statuses: string[]) =>
     grouped.filter((g) => statuses.includes(g.status)).reduce((s, g) => s + g._count._all, 0);
   const allCount = grouped.reduce((s, g) => s + g._count._all, 0);
@@ -202,24 +226,6 @@ export async function getInvoiceList(
     { id: "rejected", count: countOf("rejected").toString() },
     { id: "draft", count: countOf("draft").toString() },
   ];
-
-  // Map UI tab ids onto lifecycle status sets so filtering matches the counts.
-  const statusSets: Record<string, string[]> = {
-    cleared: ["cleared", "reported"],
-    pending: ["signed", "submitted"],
-    rejected: ["rejected"],
-    draft: ["draft"],
-  };
-  const rawInvoices = await db.invoice.findMany({
-    where: {
-      companyId,
-      ...(filter?.status && filter.status !== "all"
-        ? { status: { in: statusSets[filter.status] ?? [filter.status] } }
-        : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take: 50, // limit for UI
-  });
 
   const formatted: Invoice[] = rawInvoices.map(inv => ({
     num: inv.invoiceNumber,
@@ -243,31 +249,62 @@ export async function getInvoiceList(
  * Returns analytics overview data
  */
 export async function getAnalyticsData(companyId: string, db: PrismaClient = defaultDb) {
-  const invs = await db.invoice.findMany({
-    where: { companyId },
-    select: { taxableAmount: true, vatAmount: true, status: true, buyerName: true, createdAt: true }
-  });
-  
-  const totalInvoices = invs.length;
-  const clearedCount = invs.filter(i => i.status === "cleared").length;
-  const rejectedCount = invs.filter(i => i.status === "rejected").length;
-  const vatCollected = invs.filter(i => i.status === "cleared").reduce((sum, i) => sum + num(i.vatAmount), 0);
-  
+  // This used to be `findMany({ where: { companyId } })` with no bound — every
+  // invoice the tenant had ever issued, pulled into Node on every page load,
+  // then filtered five times and bucketed by day inside a 12-iteration loop
+  // (O(12 × n) date-string conversions). At 20k invoices that is 20,000 rows
+  // transferred to render six counters and five bars; the aggregates below
+  // return 5, 5 and 13 rows respectively and the difference grows with volume.
+  //
+  // Everything here is independent, so the round trips overlap too.
+  const [byStatus, topCustomers, distinctCustomers, countsByDay, clearanceRecords] = await Promise.all([
+    db.invoice.groupBy({
+      by: ["status"],
+      where: { companyId },
+      _count: true,
+      _sum: { vatAmount: true },
+    }),
+    db.invoice.groupBy({
+      by: ["buyerName"],
+      where: { companyId, status: "cleared", buyerName: { not: null } },
+      _sum: { taxableAmount: true },
+      orderBy: { _sum: { taxableAmount: "desc" } },
+      take: 5,
+    }),
+    // groupBy rather than findMany+distinct: same result, and measured ~400 ms
+    // cheaper on a 20k-invoice tenant because it does not materialise a row
+    // per distinct value through Prisma's distinct path.
+    db.invoice.groupBy({
+      by: ["buyerName"],
+      where: { companyId, buyerName: { not: null } },
+      _count: true,
+    }),
+    invoiceCountsByDay(companyId, 12, db),
+    db.clearanceRecord
+      .findMany({
+        where: { invoice: { companyId }, status: "accepted" },
+        select: { createdAt: true, invoice: { select: { createdAt: true } } },
+        take: 100,
+        orderBy: { createdAt: "desc" },
+      })
+      // ClearanceRecord may not exist yet — fine.
+      .catch(() => [] as { createdAt: Date; invoice: { createdAt: Date } }[]),
+  ]);
+
+  const countFor = (status: string) => byStatus.find((r) => r.status === status)?._count ?? 0;
+  const totalInvoices = byStatus.reduce((sum, r) => sum + r._count, 0);
+  const clearedCount = countFor("cleared");
+  const rejectedCount = countFor("rejected");
+  const vatCollected = num(byStatus.find((r) => r.status === "cleared")?._sum.vatAmount);
+
   const clearanceSuccess = totalInvoices > 0 ? ((clearedCount / totalInvoices) * 100).toFixed(1) + "%" : "0%";
   const rejectionRate = totalInvoices > 0 ? ((rejectedCount / totalInvoices) * 100).toFixed(1) + "%" : "0%";
-  
-  // Calculate unique customers
-  const customers = new Set(invs.map(i => i.buyerName).filter(Boolean));
 
-  // Compute avg clearance time from clearance records (if available)
+  const customers = new Set(distinctCustomers.map((c) => c.buyerName).filter(Boolean));
+
   let avgClearanceLabel = "—";
-  try {
-    const records = await db.clearanceRecord.findMany({
-      where: { invoice: { companyId }, status: "accepted" },
-      select: { createdAt: true, invoice: { select: { createdAt: true } } },
-      take: 100,
-      orderBy: { createdAt: "desc" },
-    });
+  {
+    const records = clearanceRecords;
     if (records.length > 0) {
       const totalMs = records.reduce((sum, r) => {
         return sum + (r.createdAt.getTime() - r.invoice.createdAt.getTime());
@@ -275,8 +312,6 @@ export async function getAnalyticsData(companyId: string, db: PrismaClient = def
       const avgMs = totalMs / records.length;
       avgClearanceLabel = avgMs < 1000 ? `${Math.round(avgMs)}ms` : `${(avgMs / 1000).toFixed(1)}s`;
     }
-  } catch {
-    // ClearanceRecord may not exist yet — fine
   }
 
   const kpis: AnalyticsKpi[] = [
@@ -288,15 +323,11 @@ export async function getAnalyticsData(companyId: string, db: PrismaClient = def
     { label: { en: "Active customers", ar: "العملاء النشطون" }, value: customers.size.toString(), delta: "+0" },
   ];
 
-  // Group revenue by customer
-  const revByCust = new Map<string, number>();
-  invs.forEach(inv => {
-    if (inv.buyerName && inv.status === "cleared") {
-      revByCust.set(inv.buyerName, (revByCust.get(inv.buyerName) || 0) + num(inv.taxableAmount));
-    }
-  });
-
-  const sortedCust = Array.from(revByCust.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  // Top 5 by cleared revenue, ranked and truncated by the database.
+  const sortedCust: [string, number][] = topCustomers.map((c) => [
+    c.buyerName as string,
+    num(c._sum.taxableAmount),
+  ]);
   const maxRev = sortedCust.length > 0 ? sortedCust[0][1] : 1;
   
   const revenueByCustomer: RevenueRow[] = sortedCust.map(c => ({
@@ -305,14 +336,13 @@ export async function getAnalyticsData(companyId: string, db: PrismaClient = def
     pct: Math.round((c[1] / maxRev) * 100)
   }));
 
-  // Compute real daily invoice bars (last 12 days, same logic as dashboard volume)
+  // Daily invoice bars, from the same day-bucket aggregate the dashboard uses.
   const now = new Date();
   const dailyBars: number[] = [];
   let maxDay = 0;
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    const dayStr = d.toISOString().split("T")[0];
-    const count = invs.filter(inv => inv.createdAt.toISOString().split("T")[0] === dayStr).length;
+    const count = countsByDay.get(d.toISOString().split("T")[0]) ?? 0;
     dailyBars.push(count);
     if (count > maxDay) maxDay = count;
   }
