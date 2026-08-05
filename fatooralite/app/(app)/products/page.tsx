@@ -7,12 +7,14 @@ import { NoCompanyState } from "@/components/common/NoCompanyState";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Modal, modalInput, modalLabel, modalPrimary } from "@/components/common/Modal";
 import { Icon } from "@/components/ui/Icon";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 
 import type { Product } from "@prisma/client";
 
 export default function ProductsPage() {
   const { company, isLoading: companyLoading } = useCompany();
   const [open, setOpen] = useState(false);
+  const mobile = useMediaQuery(639);
   const { state, retry } = useAsyncData<Product[]>(
     async (signal) => {
       const res = await fetch(`/api/products?companyId=${company!.id}`, { signal });
@@ -26,7 +28,7 @@ export default function ProductsPage() {
 
   return (
     <div style={{ maxWidth: 1480, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Products</h1>
         <button
           onClick={() => setOpen(true)}
@@ -39,7 +41,7 @@ export default function ProductsPage() {
             borderRadius: 11,
             border: "none",
             background: "linear-gradient(150deg,var(--acb),var(--ac))",
-            color: "#04130d",
+            color: "var(--on-ac)",
             fontSize: 13,
             fontWeight: 700,
             cursor: "pointer",
@@ -64,28 +66,45 @@ export default function ProductsPage() {
           empty={<EmptyState icon="products" title="No products yet" hint="Add a product to use as an invoice line item." />}
           onRetry={retry}
         >
-          {(products) => (
-            <div style={{ background: "var(--s1)", borderRadius: 16, overflow: "hidden", border: "1px solid var(--bd)" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                <thead>
-                  <tr style={{ borderBottom: "1px solid var(--bd)", fontSize: 13, color: "var(--t3)" }}>
-                    <th style={{ padding: "16px 20px", fontWeight: 500 }}>Name</th>
-                    <th style={{ padding: "16px 20px", fontWeight: 500 }}>SKU</th>
-                    <th style={{ padding: "16px 20px", fontWeight: 500 }}>Unit Price</th>
-                    <th style={{ padding: "16px 20px", fontWeight: 500 }}>VAT Category</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.map((p) => (
-                    <tr key={p.id} style={{ borderBottom: "1px solid var(--bd)", fontSize: 14 }}>
-                      <td style={{ padding: "16px 20px", fontWeight: 500, color: "var(--tx)" }}>{p.name}</td>
-                      <td style={{ padding: "16px 20px", color: "var(--t2)" }}>{p.sku || "-"}</td>
-                      <td style={{ padding: "16px 20px", color: "var(--t2)" }}>{p.unitPrice.toFixed(2)} SAR</td>
-                      <td style={{ padding: "16px 20px", color: "var(--t2)" }}>{p.vatCategory}</td>
+          {(products) => mobile ? (
+            <div role="list" aria-label="Products" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {products.map((p) => (
+                <div key={p.id} role="listitem" style={{ background: "var(--s1)", border: "1px solid var(--bd)", borderRadius: 14, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{p.name}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+                    <div style={{ display: "flex", gap: 12 }}>
+                      {p.sku && <span style={{ fontSize: 12.5, color: "var(--t2)", fontFamily: "var(--fmono)" }}>{p.sku}</span>}
+                      <span style={{ fontSize: 12.5, color: "var(--t3)" }}>VAT {p.vatCategory}</span>
+                    </div>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, fontFamily: "var(--fmono)" }}>{p.unitPrice.toFixed(2)} SAR</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="table-scroll">
+              <div style={{ background: "var(--s1)", borderRadius: 16, overflow: "hidden", border: "1px solid var(--bd)", minWidth: 600 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid var(--bd)", fontSize: 13, color: "var(--t3)" }}>
+                      <th style={{ padding: "16px 20px", fontWeight: 500 }}>Name</th>
+                      <th style={{ padding: "16px 20px", fontWeight: 500 }}>SKU</th>
+                      <th style={{ padding: "16px 20px", fontWeight: 500 }}>Unit Price</th>
+                      <th style={{ padding: "16px 20px", fontWeight: 500 }}>VAT Category</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {products.map((p) => (
+                      <tr key={p.id} style={{ borderBottom: "1px solid var(--bd)", fontSize: 14 }}>
+                        <td style={{ padding: "16px 20px", fontWeight: 500, color: "var(--tx)" }}>{p.name}</td>
+                        <td style={{ padding: "16px 20px", color: "var(--t2)" }}>{p.sku || "-"}</td>
+                        <td style={{ padding: "16px 20px", color: "var(--t2)" }}>{p.unitPrice.toFixed(2)} SAR</td>
+                        <td style={{ padding: "16px 20px", color: "var(--t2)" }}>{p.vatCategory}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </AsyncBoundary>
@@ -126,21 +145,21 @@ function ProductForm({ companyId, onCreated }: { companyId: string; onCreated: (
   return (
     <form onSubmit={submit}>
       <div style={{ marginBottom: 12 }}>
-        <label style={modalLabel}>Name</label>
-        <input style={modalInput} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
+        <label htmlFor="prod-name" style={modalLabel}>Name</label>
+        <input id="prod-name" style={modalInput} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
         <div>
-          <label style={modalLabel}>SKU</label>
-          <input style={modalInput} value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} />
+          <label htmlFor="prod-sku" style={modalLabel}>SKU</label>
+          <input id="prod-sku" style={modalInput} value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} />
         </div>
         <div>
-          <label style={modalLabel}>Unit price</label>
-          <input style={modalInput} type="number" min="0" step="0.01" value={form.unitPrice} onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value }))} required />
+          <label htmlFor="prod-price" style={modalLabel}>Unit price</label>
+          <input id="prod-price" style={modalInput} type="number" min="0" step="0.01" value={form.unitPrice} onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value }))} required />
         </div>
         <div>
-          <label style={modalLabel}>VAT</label>
-          <select style={modalInput} value={form.vatCategory} onChange={(e) => setForm((f) => ({ ...f, vatCategory: e.target.value }))}>
+          <label htmlFor="prod-vat" style={modalLabel}>VAT</label>
+          <select id="prod-vat" style={modalInput} value={form.vatCategory} onChange={(e) => setForm((f) => ({ ...f, vatCategory: e.target.value }))}>
             <option value="S">Standard 15%</option>
             <option value="Z">Zero-rated</option>
             <option value="E">Exempt</option>

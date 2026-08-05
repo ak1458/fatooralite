@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
+import { appUrl } from "@/lib/appUrl";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://fatooralite.com";
+  const baseUrl = appUrl();
   const now = new Date();
 
   const publicRoutes = [

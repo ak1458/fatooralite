@@ -43,7 +43,7 @@ export function ChatInput({ onSend, isLoading }: { onSend: (text: string) => voi
           borderRadius: 11,
           border: "none",
           background: "linear-gradient(150deg,var(--acb),var(--ac))",
-          color: "#04130d",
+          color: "var(--on-ac)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

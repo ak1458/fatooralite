@@ -59,7 +59,7 @@ export function Modal({
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,.55)",
+            background: "var(--scrim)",
             backdropFilter: "blur(3px)",
             display: "flex",
             alignItems: "center",
@@ -111,7 +111,7 @@ export const modalInput: React.CSSProperties = {
 export const modalLabel: React.CSSProperties = { display: "block", fontSize: 12, color: "var(--t3)", marginBottom: 5 };
 export const modalPrimary: React.CSSProperties = {
   padding: "10px 18px", borderRadius: 10, border: "none",
-  background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d",
+  background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)",
   fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
 };
 

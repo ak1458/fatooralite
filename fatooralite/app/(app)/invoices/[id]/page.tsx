@@ -24,8 +24,8 @@ interface InvoiceDetail {
 }
 
 const STATUS_TONE: Record<string, string> = {
-  cleared: "var(--ac)", reported: "var(--ac)", signed: "var(--info,#3b82f6)",
-  submitted: "var(--warn,#f59e0b)", draft: "var(--t3)", rejected: "var(--dang,#ef4444)",
+  cleared: "var(--ac)", reported: "var(--ac)", signed: "var(--info)",
+  submitted: "var(--warn)", draft: "var(--t3)", rejected: "var(--dang)",
 };
 
 export default function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -91,7 +91,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   </a>
                   {(inv.status === "signed" || inv.status === "rejected") && (
                     <button onClick={submitToZatca} disabled={submitting}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 15px", borderRadius: 10, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d", fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: submitting ? 0.7 : 1 }}>
+                      style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 15px", borderRadius: 10, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: submitting ? 0.7 : 1 }}>
                       <Icon name="bolt" size={14} sw={2} /> {submitting ? "Submitting…" : "Submit to ZATCA"}
                     </button>
                   )}

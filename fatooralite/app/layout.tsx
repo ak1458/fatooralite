@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { appUrl } from "@/lib/appUrl";
 import {
   Space_Grotesk,
   Hanken_Grotesk,
@@ -43,7 +44,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Fatoora Lite Pro — ZATCA Phase-2 E-Invoicing Platform",
     description: "Enterprise ZATCA Phase-2 e-invoicing SaaS platform for Saudi Arabian businesses.",
-    url: "https://fatooralite.com",
+    url: appUrl(),
     siteName: "Fatoora Lite Pro",
     locale: "ar_SA",
     type: "website",
@@ -56,7 +57,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#07090b",
+  // Mobile browser chrome. A single value pinned the address bar to the dark
+  // palette even for a user in light mode. These are --bg from globals.css;
+  // they cannot read the CSS variable, so keep them in step with it.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#eef1ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#07090b" },
+  ],
   width: "device-width",
   initialScale: 1,
 };

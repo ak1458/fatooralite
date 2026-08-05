@@ -1,6 +1,6 @@
 const bannerStyle: React.CSSProperties = {
-  background: "var(--warn, #f59e0b)",
-  color: "#1a1200",
+  background: "var(--warn)",
+  color: "var(--on-warn)",
   fontWeight: 700,
   fontSize: 14,
   padding: "14px 18px",

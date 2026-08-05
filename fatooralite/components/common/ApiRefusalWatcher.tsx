@@ -64,7 +64,7 @@ export function ApiRefusalWatcher() {
           padding: "7px 14px",
           borderRadius: 9,
           background: "linear-gradient(150deg,var(--acb),var(--ac))",
-          color: "#04130d",
+          color: "var(--on-ac)",
           fontSize: 12.5,
           fontWeight: 700,
           textDecoration: "none",

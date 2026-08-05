@@ -13,6 +13,7 @@ import { VolumeChart } from "@/components/dashboard/VolumeChart";
 import { AsyncBoundary } from "@/components/common/AsyncBoundary";
 import { useCompany, useAuth } from "@/lib/useCompany";
 import { useAsyncData } from "@/lib/async/useAsyncData";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import type { Kpi, FeedEvent, VolumeBar, HealthBar, Service } from "@/types";
 import type { TrustBadge } from "@/components/dashboard/TrustBadges";
 
@@ -64,6 +65,8 @@ export default function DashboardPage() {
 
   const greeting = useMemo(() => greetingText(user?.name ?? "there", lang), [user?.name, lang]);
   const dateStr = useMemo(() => todayString(lang), [lang]);
+  const mobile = useMediaQuery(767);
+  const tablet = useMediaQuery(1023);
 
   return (
     <div style={{ maxWidth: 1480, margin: "0 auto" }}>
@@ -112,7 +115,7 @@ export default function DashboardPage() {
           <h1
             style={{
               margin: 0,
-              fontSize: 30,
+              fontSize: mobile ? 22 : 30,
               fontWeight: 700,
               letterSpacing: "-.025em",
               fontFamily: "var(--fdisp)",
@@ -151,7 +154,7 @@ export default function DashboardPage() {
               borderRadius: 12,
               border: "none",
               background: "linear-gradient(150deg,var(--acb),var(--ac))",
-              color: "#04130d",
+              color: "var(--on-ac)",
               fontSize: 13.5,
               fontWeight: 700,
               cursor: "pointer",
@@ -172,7 +175,7 @@ export default function DashboardPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1.15fr 1fr",
+          gridTemplateColumns: tablet ? "1fr" : "1.15fr 1fr",
           gap: 18,
           marginBottom: 18,
         }}
@@ -181,7 +184,7 @@ export default function DashboardPage() {
           score={dashboardCounters.score}
           healthBars={data?.kpis?.healthBars}
         />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 14 }}>
           <AsyncBoundary
             state={state}
             isEmpty={(d) => !d.kpis?.kpis?.length}
@@ -203,7 +206,7 @@ export default function DashboardPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1.15fr 1fr",
+          gridTemplateColumns: tablet ? "1fr" : "1.15fr 1fr",
           gap: 18,
           marginBottom: 18,
         }}
@@ -213,7 +216,7 @@ export default function DashboardPage() {
       </div>
 
       {/* row 3: live feed + volume */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: tablet ? "1fr" : "1.4fr 1fr", gap: 18 }}>
         <LiveFeed initialEvents={dashboardFeed} />
         <VolumeChart initialData={dashboardVolume} />
       </div>

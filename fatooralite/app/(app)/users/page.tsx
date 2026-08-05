@@ -6,6 +6,7 @@ import { AsyncBoundary } from "@/components/common/AsyncBoundary";
 import { NoCompanyState } from "@/components/common/NoCompanyState";
 import { Modal, modalInput, modalLabel, modalPrimary } from "@/components/common/Modal";
 import { Icon } from "@/components/ui/Icon";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 
 interface TeamUser {
   id: string; name: string; email: string; role: string;
@@ -17,13 +18,14 @@ interface CustomRole { id: string; name: string; description: string | null; per
 interface RolesResponse { roles: RoleRow[]; customRoles: CustomRole[]; allPermissions: string[] }
 const ROLES = ["owner", "manager", "accountant", "auditor", "employee"];
 
-const STATUS_TONE: Record<string, string> = { active: "var(--ac)", invited: "var(--warn,#f59e0b)", disabled: "var(--t3)" };
+const STATUS_TONE: Record<string, string> = { active: "var(--ac)", invited: "var(--warn)", disabled: "var(--t3)" };
 
 export default function UsersPage() {
   const { company, isLoading: companyLoading } = useCompany();
   const [tab, setTab] = useState<"users" | "roles">("users");
   const [open, setOpen] = useState(false);
   const [roleModal, setRoleModal] = useState<CustomRole | "new" | null>(null);
+  const mobile = useMediaQuery(639);
 
   const usersQ = useAsyncData<TeamUser[]>(
     async (signal) => {
@@ -65,16 +67,16 @@ export default function UsersPage() {
 
   return (
     <div style={{ maxWidth: 1480, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Users &amp; Roles</h1>
         {tab === "users" ? (
           <button onClick={() => setOpen(true)} disabled={!company?.id}
-            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 11, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 11, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
             <Icon name="plus" size={15} sw={2.4} /> Invite user
           </button>
         ) : (
           <button onClick={() => setRoleModal("new")}
-            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 11, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 11, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
             <Icon name="plus" size={15} sw={2.4} /> New role
           </button>
         )}
@@ -107,57 +109,83 @@ export default function UsersPage() {
 
       {tab === "users" ? (
         <AsyncBoundary state={usersQ.state} onRetry={usersQ.retry} isEmpty={(u) => u.length === 0} empty={<div style={{ padding: 32, color: "var(--t3)" }}>No team members yet.</div>}>
-          {(users) => (
-            <div style={{ background: "var(--s1)", border: "1px solid var(--bd)", borderRadius: 16, overflow: "hidden" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                <thead>
-                  <tr style={{ borderBottom: "1px solid var(--bd)", fontSize: 12.5, color: "var(--t3)" }}>
-                    <th style={{ padding: "14px 18px", fontWeight: 500 }}>Name</th>
-                    <th style={{ padding: "14px 18px", fontWeight: 500 }}>Designation</th>
-                    <th style={{ padding: "14px 18px", fontWeight: 500 }}>Role</th>
-                    <th style={{ padding: "14px 18px", fontWeight: 500 }}>Status</th>
-                    <th style={{ padding: "14px 18px", fontWeight: 500 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id} style={{ borderBottom: "1px solid var(--bd)", fontSize: 13.5 }}>
-                      <td style={{ padding: "14px 18px" }}>
-                        <div style={{ fontWeight: 600 }}>{u.name}</div>
-                        <div style={{ color: "var(--t3)", fontSize: 12 }}>{u.email}</div>
-                      </td>
-                      <td style={{ padding: "14px 18px", color: "var(--t2)" }}>{u.title || "—"}</td>
-                      <td style={{ padding: "14px 18px" }}>
-                        <select
-                          value={u.roleId ? `custom:${u.roleId}` : u.role}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            if (v.startsWith("custom:")) patchUser(u.id, { roleId: v.slice(7) });
-                            else patchUser(u.id, { role: v });
-                          }}
-                          style={{ ...modalInput, padding: "6px 8px", width: "auto", textTransform: "capitalize" }}>
-                          <optgroup label="System roles">
-                            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                          </optgroup>
-                          {customRoles.length > 0 && (
-                            <optgroup label="Custom roles">
-                              {customRoles.map((r) => <option key={r.id} value={`custom:${r.id}`}>{r.name}</option>)}
-                            </optgroup>
-                          )}
-                        </select>
-                      </td>
-                      <td style={{ padding: "14px 18px" }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: STATUS_TONE[u.status] ?? "var(--t2)", textTransform: "capitalize" }}>{u.status}</span>
-                      </td>
-                      <td style={{ padding: "14px 18px", textAlign: "right", whiteSpace: "nowrap" }}>
-                        <button onClick={() => patchUser(u.id, { status: u.status === "disabled" ? "active" : "disabled" })}
-                          style={linkBtn}>{u.status === "disabled" ? "Enable" : "Disable"}</button>
-                        <button onClick={() => removeUser(u.id)} style={{ ...linkBtn, color: "var(--dang)" }}>Remove</button>
-                      </td>
+          {(users) => mobile ? (
+            <div role="list" aria-label="Team members" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {users.map((u) => (
+                <div key={u.id} role="listitem" style={{ background: "var(--s1)", border: "1px solid var(--bd)", borderRadius: 14, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{u.name}</div>
+                      <div style={{ color: "var(--t3)", fontSize: 12 }}>{u.email}</div>
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: STATUS_TONE[u.status] ?? "var(--t2)", textTransform: "capitalize" }}>{u.status}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: "var(--t2)" }}>
+                    <span style={{ textTransform: "capitalize", fontWeight: 500, color: "var(--tx)" }}>{u.roleId ? `Custom: ${customRoles.find(r => r.id === u.roleId)?.name ?? 'Unknown'}` : u.role}</span>
+                    {u.title && <span> • {u.title}</span>}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 4 }}>
+                    <button onClick={() => patchUser(u.id, { status: u.status === "disabled" ? "active" : "disabled" })}
+                      style={{ ...linkBtn, marginInlineStart: 0 }}>{u.status === "disabled" ? "Enable" : "Disable"}</button>
+                    <button onClick={() => removeUser(u.id)} style={{ ...linkBtn, color: "var(--dang)", marginInlineStart: 0 }}>Remove</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="table-scroll">
+              <div style={{ background: "var(--s1)", border: "1px solid var(--bd)", borderRadius: 16, overflow: "hidden", minWidth: 600 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid var(--bd)", fontSize: 12.5, color: "var(--t3)" }}>
+                      <th style={{ padding: "14px 18px", fontWeight: 500 }}>Name</th>
+                      <th style={{ padding: "14px 18px", fontWeight: 500 }}>Designation</th>
+                      <th style={{ padding: "14px 18px", fontWeight: 500 }}>Role</th>
+                      <th style={{ padding: "14px 18px", fontWeight: 500 }}>Status</th>
+                      <th style={{ padding: "14px 18px", fontWeight: 500 }}></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => (
+                      <tr key={u.id} style={{ borderBottom: "1px solid var(--bd)", fontSize: 13.5 }}>
+                        <td style={{ padding: "14px 18px" }}>
+                          <div style={{ fontWeight: 600 }}>{u.name}</div>
+                          <div style={{ color: "var(--t3)", fontSize: 12 }}>{u.email}</div>
+                        </td>
+                        <td style={{ padding: "14px 18px", color: "var(--t2)" }}>{u.title || "—"}</td>
+                        <td style={{ padding: "14px 18px" }}>
+                          <select
+                            aria-label={`Role for ${u.name}`}
+                            value={u.roleId ? `custom:${u.roleId}` : u.role}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              if (v.startsWith("custom:")) patchUser(u.id, { roleId: v.slice(7) });
+                              else patchUser(u.id, { role: v });
+                            }}
+                            style={{ ...modalInput, padding: "6px 8px", width: "auto", textTransform: "capitalize" }}>
+                            <optgroup label="System roles">
+                              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                            </optgroup>
+                            {customRoles.length > 0 && (
+                              <optgroup label="Custom roles">
+                                {customRoles.map((r) => <option key={r.id} value={`custom:${r.id}`}>{r.name}</option>)}
+                              </optgroup>
+                            )}
+                          </select>
+                        </td>
+                        <td style={{ padding: "14px 18px" }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: STATUS_TONE[u.status] ?? "var(--t2)", textTransform: "capitalize" }}>{u.status}</span>
+                        </td>
+                        <td style={{ padding: "14px 18px", textAlign: "right", whiteSpace: "nowrap" }}>
+                          <button onClick={() => patchUser(u.id, { status: u.status === "disabled" ? "active" : "disabled" })}
+                            style={linkBtn}>{u.status === "disabled" ? "Enable" : "Disable"}</button>
+                          <button onClick={() => removeUser(u.id)} style={{ ...linkBtn, color: "var(--dang)" }}>Remove</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </AsyncBoundary>
@@ -253,16 +281,16 @@ function RoleForm({ role, allPermissions, onDone }: { role: CustomRole | null; a
   return (
     <form onSubmit={submit}>
       <div style={{ marginBottom: 12 }}>
-        <label style={modalLabel}>Role name</label>
-        <input style={modalInput} value={name} onChange={(e) => setName(e.target.value)} required maxLength={60} placeholder="e.g. Billing Clerk" />
+        <label htmlFor="role-name" style={modalLabel}>Role name</label>
+        <input id="role-name" style={modalInput} value={name} onChange={(e) => setName(e.target.value)} required maxLength={60} placeholder="e.g. Billing Clerk" />
       </div>
       <div style={{ marginBottom: 14 }}>
-        <label style={modalLabel}>Description (optional)</label>
-        <input style={modalInput} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={300} placeholder="What this role is for" />
+        <label htmlFor="role-desc" style={modalLabel}>Description (optional)</label>
+        <input id="role-desc" style={modalInput} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={300} placeholder="What this role is for" />
       </div>
       <div style={{ marginBottom: 16 }}>
-        <label style={modalLabel}>Permissions</label>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
+        <label id="role-perms-label" style={modalLabel}>Permissions</label>
+        <div role="group" aria-labelledby="role-perms-label" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
           {allPermissions.map((p) => (
             <label key={p} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontFamily: "var(--fmono)", color: perms.has(p) ? "var(--ac)" : "var(--t2)", cursor: "pointer" }}>
               <input type="checkbox" checked={perms.has(p)} onChange={() => toggle(p)} />
@@ -305,20 +333,20 @@ function InviteForm({ companyId, onDone }: { companyId: string; onDone: () => vo
   return (
     <form onSubmit={submit}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-        <div><label style={modalLabel}>Name</label><input style={modalInput} value={form.name} onChange={set("name")} required /></div>
-        <div><label style={modalLabel}>Email</label><input style={modalInput} type="email" value={form.email} onChange={set("email")} required /></div>
+        <div><label htmlFor="invite-name" style={modalLabel}>Name</label><input id="invite-name" style={modalInput} value={form.name} onChange={set("name")} required /></div>
+        <div><label htmlFor="invite-email" style={modalLabel}>Email</label><input id="invite-email" style={modalInput} type="email" value={form.email} onChange={set("email")} required /></div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-        <div><label style={modalLabel}>Role</label>
-          <select style={modalInput} value={form.role} onChange={set("role")}>
+        <div><label htmlFor="invite-role" style={modalLabel}>Role</label>
+          <select id="invite-role" style={modalInput} value={form.role} onChange={set("role")}>
             {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
-        <div><label style={modalLabel}>Designation (optional)</label><input style={modalInput} value={form.title} onChange={set("title")} placeholder="Chief Accountant" /></div>
+        <div><label htmlFor="invite-title" style={modalLabel}>Designation (optional)</label><input id="invite-title" style={modalInput} value={form.title} onChange={set("title")} placeholder="Chief Accountant" /></div>
       </div>
       <div style={{ marginBottom: 16 }}>
-        <label style={modalLabel}>Temporary password (optional)</label>
-        <input style={modalInput} type="text" value={form.password} onChange={set("password")} placeholder="Leave blank to send an invite" minLength={8} />
+        <label htmlFor="invite-password" style={modalLabel}>Temporary password (optional)</label>
+        <input id="invite-password" style={modalInput} type="text" value={form.password} onChange={set("password")} placeholder="Leave blank to send an invite" minLength={8} />
       </div>
       {error && <div style={{ color: "var(--dang)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
       <div style={{ display: "flex", justifyContent: "flex-end" }}>

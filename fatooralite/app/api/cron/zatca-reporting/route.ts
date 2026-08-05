@@ -61,7 +61,11 @@ export async function GET(req: Request) {
           where: { id: inv.id },
           data: { reportingState: ok ? "reported" : "failed" },
         });
-        ok ? reported++ : failed++;
+        if (ok) {
+          reported++;
+        } else {
+          failed++;
+        }
       } catch (err) {
         if (err instanceof AlreadySubmittedError) {
           // Already reported by a concurrent run or a manual clear in the

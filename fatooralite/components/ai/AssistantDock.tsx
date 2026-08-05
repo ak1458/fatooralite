@@ -100,7 +100,7 @@ export function AssistantDock() {
         style={{
           position: "fixed", insetInlineEnd: 24, bottom: 24, zIndex: 90,
           width: 54, height: 54, borderRadius: "50%", border: "none",
-          background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d",
+          background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)",
           display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
           boxShadow: "0 12px 30px -8px var(--ac)",
         }}
@@ -124,7 +124,7 @@ export function AssistantDock() {
           >
             <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                <span style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Icon name="ai" size={17} sw={1.8} />
                 </span>
                 <div style={{ fontSize: 13.5, fontWeight: 700 }}>Fatoora AI</div>
@@ -168,7 +168,7 @@ export function AssistantDock() {
                   <div style={{ fontSize: 12.5, lineHeight: 1.55 }}>{pending.summary}</div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => resolvePending(true)} disabled={busy}
-                      style={{ flex: 1, padding: "8px 0", borderRadius: 9, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d", fontWeight: 700, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>
+                      style={{ flex: 1, padding: "8px 0", borderRadius: 9, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", fontWeight: 700, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>
                       Confirm
                     </button>
                     <button onClick={() => resolvePending(false)} disabled={busy}
@@ -190,7 +190,7 @@ export function AssistantDock() {
                 style={{ flex: 1, fontSize: 13, padding: "9px 11px", borderRadius: 10, border: "1px solid var(--bd)", background: "var(--s2)", color: "var(--tx)", outline: "none", fontFamily: "inherit" }}
               />
               <button onClick={() => send(input)} disabled={busy || !input.trim()} aria-label="Send"
-                style={{ width: 38, height: 38, borderRadius: 10, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                style={{ width: 38, height: 38, borderRadius: 10, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                 <Icon name="bolt" size={16} sw={2} />
               </button>
             </div>

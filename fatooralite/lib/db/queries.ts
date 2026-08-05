@@ -80,7 +80,7 @@ export async function getDashboardFeed(companyId: string, limit = 10, db: Prisma
     time: r.createdAt.toISOString(),
     status: (r.status === "accepted" ? "cleared" : r.status === "rejected" ? "rejected" : "warning") as FeedEvent["status"],
     inv: r.invoice.invoiceNumber,
-    customer: { en: r.invoice.buyerName ?? "Unknown", ar: r.invoice.buyerName ?? "غير معروف" },
+    customer: { en: r.invoice.buyerName ?? "Walk-in customer", ar: r.invoice.buyerName ?? "عميل نقدي" },
     msg: r.responseCode ? { en: r.responseCode, ar: r.responseCode } : undefined,
   }));
 }
@@ -223,7 +223,7 @@ export async function getInvoiceList(
 
   const formatted: Invoice[] = rawInvoices.map(inv => ({
     num: inv.invoiceNumber,
-    customer: { en: inv.buyerName || "Unknown", ar: inv.buyerName || "غير معروف" },
+    customer: { en: inv.buyerName || "Walk-in customer", ar: inv.buyerName || "عميل نقدي" },
     amount: num(inv.taxableAmount),
     type: inv.kind as Invoice["type"],
     status: inv.status as Invoice["status"],

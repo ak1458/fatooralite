@@ -76,7 +76,7 @@ export default function IntegrationPage() {
 }
 
 function Card({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "ac" | "warn" | "dang" }) {
-  const color = tone === "ac" ? "var(--ac)" : tone === "warn" ? "var(--warn,#f59e0b)" : tone === "dang" ? "var(--dang)" : "var(--tx)";
+  const color = tone === "ac" ? "var(--ac)" : tone === "warn" ? "var(--warn)" : tone === "dang" ? "var(--dang)" : "var(--tx)";
   return (
     <div style={{ padding: 18, borderRadius: 14, background: "var(--s1)", border: "1px solid var(--bd)" }}>
       <div style={{ fontSize: 12, color: "var(--t3)", marginBottom: 8 }}>{label}</div>

@@ -9,23 +9,27 @@ export function NavItem({
   icon,
   label,
   badge,
+  collapsed = false,
 }: {
   href: string;
   icon: string;
   label: string;
   badge?: string;
+  collapsed?: boolean;
 }) {
   const active = usePathname() === href;
   return (
     <Link
       href={href}
       data-active={active}
+      title={collapsed ? label : undefined}
+      aria-label={collapsed ? label : undefined}
       style={{
         position: "relative",
         display: "flex",
         alignItems: "center",
-        gap: 11,
-        padding: "8px 11px",
+        gap: collapsed ? 0 : 11,
+        padding: collapsed ? "8px 0" : "8px 11px",
         borderRadius: 11,
         fontSize: 13.5,
         fontWeight: 500,
@@ -33,6 +37,7 @@ export function NavItem({
         marginBottom: 2,
         background: active ? "var(--acs)" : "transparent",
         color: active ? "var(--ac)" : "var(--t2)",
+        justifyContent: collapsed ? "center" : "flex-start",
       }}
     >
       {active && (
@@ -52,17 +57,19 @@ export function NavItem({
       <span style={{ display: "flex", flex: "none" }}>
         <Icon name={icon} size={18} />
       </span>
-      <span
-        style={{
-          flex: 1,
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}
-      >
-        {label}
-      </span>
-      {badge && (
+      {!collapsed && (
+        <span
+          style={{
+            flex: 1,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {label}
+        </span>
+      )}
+      {!collapsed && badge && (
         <span
           style={{
             fontSize: 10.5,
@@ -72,7 +79,7 @@ export function NavItem({
             padding: "0 5px",
             borderRadius: 9,
             background: "var(--ac)",
-            color: "#04130d",
+            color: "var(--on-ac)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

@@ -63,7 +63,7 @@ function ReportsContent() {
                   padding: "10px 16px",
                   borderRadius: 8,
                   background: "var(--ac)",
-                  color: "#04130d",
+                  color: "var(--on-ac)",
                   fontWeight: 600,
                   border: "none",
                   cursor: companyId ? "pointer" : "not-allowed",

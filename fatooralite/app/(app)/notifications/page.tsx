@@ -48,7 +48,7 @@ export default function Page() {
 
   return (
     <div style={{ padding: 40 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 600 }}>{title as string}</h1>
         <button
           onClick={scan}
@@ -57,7 +57,7 @@ export default function Page() {
             padding: "9px 16px",
             borderRadius: 8,
             background: "var(--ac)",
-            color: "#04130d",
+            color: "var(--on-ac)",
             fontWeight: 600,
             border: "none",
             cursor: scanning ? "wait" : "pointer",

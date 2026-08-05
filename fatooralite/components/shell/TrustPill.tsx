@@ -14,7 +14,7 @@ export function TrustPill() {
           padding: "9px 11px",
           borderRadius: 11,
           background: "var(--acs)",
-          border: "1px solid rgba(16,185,129,.22)",
+          border: "1px solid var(--acbd)",
         }}
       >
         <span

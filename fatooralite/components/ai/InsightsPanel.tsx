@@ -77,7 +77,7 @@ export function InsightsPanel() {
             padding: "12px 14px",
             borderRadius: 12,
             background: "var(--acs)",
-            border: "1px solid rgba(16,185,129,.22)",
+            border: "1px solid var(--acbd)",
           }}
         >
           {summary}

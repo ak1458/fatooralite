@@ -88,7 +88,7 @@ export default function RegisterPage() {
               boxShadow: "0 6px 16px -6px var(--ac)",
             }}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#04130d" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--on-ac)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3 5 6v5c0 4.5 3 8 7 9 4-1 7-4.5 7-9V6Z" />
               <path d="m9 12 2 2 4-4" />
             </svg>
@@ -162,7 +162,7 @@ export default function RegisterPage() {
               borderRadius: 11,
               border: "none",
               background: "linear-gradient(150deg,var(--acb),var(--ac))",
-              color: "#04130d",
+              color: "var(--on-ac)",
               fontSize: 14,
               fontWeight: 700,
               cursor: busy ? "wait" : !acceptedTerms ? "not-allowed" : "pointer",

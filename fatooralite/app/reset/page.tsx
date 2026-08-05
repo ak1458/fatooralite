@@ -108,7 +108,7 @@ function ResetForm() {
               boxShadow: "0 6px 16px -6px var(--ac)",
             }}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#04130d" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--on-ac)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               <path d="m9 11 2 2 4-4" />
             </svg>
@@ -162,7 +162,7 @@ function ResetForm() {
                 borderRadius: 11,
                 border: "none",
                 background: "linear-gradient(150deg,var(--acb),var(--ac))",
-                color: "#04130d",
+                color: "var(--on-ac)",
                 fontSize: 14,
                 fontWeight: 700,
                 cursor: "pointer",

@@ -9,7 +9,7 @@ export default function AcceptableUsePage() {
   return (
     <div style={{ maxWidth: 800, margin: "40px auto", padding: "0 24px", color: "var(--tx)", fontFamily: "sans-serif" }}>
       <Link href="/login" style={{ color: "var(--ac)", textDecoration: "none", fontSize: 14 }}>← Back to Application</Link>
-      <div style={{ background: "var(--warn, #f59e0b)", color: "#1a1200", fontWeight: 700, fontSize: 14, padding: "14px 18px", borderRadius: 12, margin: "20px 0" }}>
+      <div style={{ background: "var(--warn)", color: "var(--on-warn)", fontWeight: 700, fontSize: 14, padding: "14px 18px", borderRadius: 12, margin: "20px 0" }}>
         DRAFT — placeholder text, not reviewed by counsel. Replace before accepting real customers.
       </div>
       <h1 style={{ fontSize: 28, fontWeight: 700, margin: "20px 0 10px" }}>Acceptable Use Policy</h1>

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/useCompany";
 import { Icon } from "@/components/ui/Icon";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 
 /** Avatar + name/role with a dropdown (settings, sign out). */
 export function ProfileMenu() {
@@ -11,6 +12,8 @@ export function ProfileMenu() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  // Below this the avatar alone has to stand in for the whole control.
+  const compact = useMediaQuery(720);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -34,6 +37,8 @@ export function ProfileMenu() {
     <div ref={ref} style={{ position: "relative" }}>
       <button
         onClick={() => setOpen((o) => !o)}
+        aria-label={compact ? `Account menu — ${name}` : undefined}
+        aria-expanded={open}
         style={{
           display: "flex", alignItems: "center", gap: 9, padding: "4px 6px", borderRadius: 11,
           border: "1px solid transparent", background: open ? "var(--s2)" : "transparent",
@@ -42,16 +47,20 @@ export function ProfileMenu() {
       >
         <div style={{
           width: 32, height: 32, borderRadius: 9, background: "linear-gradient(150deg,var(--acb),var(--ac))",
-          color: "#04130d", display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--on-ac)", display: "flex", alignItems: "center", justifyContent: "center",
           fontWeight: 700, fontSize: 13, fontFamily: "var(--fdisp)",
         }}>
           {initial}
         </div>
-        <div style={{ lineHeight: 1.15, textAlign: "start" }}>
-          <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>{name}</div>
-          <div style={{ fontSize: 10.5, color: "var(--t3)", textTransform: "capitalize" }}>{role}</div>
-        </div>
-        <Icon name="chevron" size={14} sw={2} />
+        {!compact && (
+          <>
+            <div style={{ lineHeight: 1.15, textAlign: "start" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>{name}</div>
+              <div style={{ fontSize: 10.5, color: "var(--t3)", textTransform: "capitalize" }}>{role}</div>
+            </div>
+            <Icon name="chevron" size={14} sw={2} />
+          </>
+        )}
       </button>
 
       {open && (

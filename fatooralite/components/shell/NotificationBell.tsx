@@ -60,7 +60,7 @@ export function NotificationBell() {
       >
         <Icon name="notifications" size={18} sw={1.8} />
         {unread > 0 && (
-          <span style={{ position: "absolute", top: -4, insetInlineEnd: -4, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 8, background: "var(--dang)", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--bg)" }}>
+          <span style={{ position: "absolute", top: -4, insetInlineEnd: -4, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 8, background: "var(--dang)", color: "var(--on-dang)", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--bg)" }}>
             {unread}
           </span>
         )}

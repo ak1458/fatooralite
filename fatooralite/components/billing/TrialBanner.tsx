@@ -101,7 +101,7 @@ export function TrialBanner() {
           padding: "8px 16px",
           borderRadius: 10,
           background: "linear-gradient(150deg,var(--acb),var(--ac))",
-          color: "#04130d",
+          color: "var(--on-ac)",
           fontSize: 13,
           fontWeight: 700,
           textDecoration: "none",

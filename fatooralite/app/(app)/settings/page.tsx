@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/shell/ThemeToggle";
 import { LangToggle } from "@/components/shell/LangToggle";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { ONBOARDING_STEPS } from "@/lib/onboarding/steps";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 
 interface Usage {
   used: number;
@@ -162,23 +163,25 @@ export default function SettingsPage() {
   const plan = billing?.plan ?? "trial";
   const isPro = plan === "pro";
   const planLabel = { trial: "Trial", pro: "Pro", expired: "Trial ended" }[plan];
+  const mobile = useMediaQuery(639);
+  const gridCols = mobile ? "1fr" : "1fr 1fr";
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto" }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, margin: "0 0 22px" }}>Settings</h1>
 
       <Section title="Company" sub="Your legal business details used on every invoice.">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-          <div><label style={label}>Legal name</label><input style={input} value={form.name} onChange={set("name")} /></div>
-          <div><label style={label}>Name (Arabic)</label><input style={input} value={form.nameAr} onChange={set("nameAr")} dir="rtl" /></div>
+        <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 12, marginBottom: 12 }}>
+          <div><label htmlFor="settings-name" style={label}>Legal name</label><input id="settings-name" style={input} value={form.name} onChange={set("name")} /></div>
+          <div><label htmlFor="settings-nameAr" style={label}>Name (Arabic)</label><input id="settings-nameAr" style={input} value={form.nameAr} onChange={set("nameAr")} dir="rtl" /></div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-          <div><label style={label}>VAT number</label><input style={{ ...input, fontFamily: "var(--fmono)" }} value={form.vatNumber} onChange={set("vatNumber")} /></div>
-          <div><label style={label}>CR number</label><input style={input} value={form.crNumber} onChange={set("crNumber")} /></div>
+        <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 12, marginBottom: 12 }}>
+          <div><label htmlFor="settings-vat" style={label}>VAT number</label><input id="settings-vat" style={{ ...input, fontFamily: "var(--fmono)" }} value={form.vatNumber} onChange={set("vatNumber")} /></div>
+          <div><label htmlFor="settings-cr" style={label}>CR number</label><input id="settings-cr" style={input} value={form.crNumber} onChange={set("crNumber")} /></div>
         </div>
-        <div style={{ marginBottom: 14 }}><label style={label}>Address</label><input style={input} value={form.address} onChange={set("address")} /></div>
+        <div style={{ marginBottom: 14 }}><label htmlFor="settings-address" style={label}>Address</label><input id="settings-address" style={input} value={form.address} onChange={set("address")} /></div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={save} disabled={saving} style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>
+          <button onClick={save} disabled={saving} style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>
             {saving ? "Saving…" : "Save changes"}
           </button>
           {message && <span style={{ fontSize: 13, color: "var(--ac)" }}>{message}</span>}
@@ -231,7 +234,7 @@ export default function SettingsPage() {
             style={{
               fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 999,
               background: isPro ? "linear-gradient(150deg,var(--acb),var(--ac))" : "var(--s2)",
-              color: isPro ? "#04130d" : plan === "expired" ? "var(--dang)" : "var(--t2)",
+              color: isPro ? "var(--on-ac)" : plan === "expired" ? "var(--dang)" : "var(--t2)",
               border: isPro ? "none" : `1px solid ${plan === "expired" ? "var(--dang)" : "var(--bd)"}`,
             }}
           >
@@ -260,7 +263,7 @@ export default function SettingsPage() {
               disabled={checkoutBusy}
               style={{
                 padding: "10px 18px", borderRadius: 10, border: "none",
-                background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "#04130d",
+                background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)",
                 fontWeight: 700, fontSize: 13.5, cursor: "pointer", fontFamily: "inherit",
                 opacity: checkoutBusy ? 0.7 : 1,
               }}

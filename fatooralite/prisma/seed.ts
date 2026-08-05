@@ -28,6 +28,13 @@ async function main() {
     data: {
       name: "Almarai Company",
       nameAr: "شركة المراعي",
+      // The demo tenant supplies every ZATCA-mandatory field below, so it has
+      // effectively completed onboarding. Without this it defaults to
+      // "pending" and OnboardingGuard redirects it into the wizard — meaning
+      // the seeded dashboard, invoices and analytics this fixture exists to
+      // demonstrate were unreachable.
+      onboardingStatus: "complete",
+      onboardingStep: 6,
       vatNumber: "311122334400003",
       crNumber: "1010000001",
       address: "Riyadh, Saudi Arabia",

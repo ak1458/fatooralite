@@ -102,7 +102,7 @@ export function ChatThread() {
               height: 36,
               borderRadius: 11,
               background: "linear-gradient(150deg,var(--acb),var(--ac))",
-              color: "#04130d",
+              color: "var(--on-ac)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

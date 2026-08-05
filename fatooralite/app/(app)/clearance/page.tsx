@@ -23,8 +23,8 @@ interface ClearanceData {
 const STATUS_TONE: Record<string, { fg: string; bg: string }> = {
   cleared: { fg: "var(--ac)", bg: "var(--acs)" },
   reported: { fg: "var(--ac)", bg: "var(--acs)" },
-  rejected: { fg: "var(--dang)", bg: "rgba(239,68,68,.12)" },
-  signed: { fg: "var(--warn,#f59e0b)", bg: "rgba(245,158,11,.12)" },
+  rejected: { fg: "var(--dang)", bg: "var(--dangs)" },
+  signed: { fg: "var(--warn)", bg: "var(--warns)" },
   draft: { fg: "var(--t3)", bg: "var(--s2)" },
 };
 
@@ -74,12 +74,12 @@ export default function ClearancePage() {
               <div
                 style={{
                   display: "flex", gap: 10, alignItems: "center", padding: "12px 16px", borderRadius: 12,
-                  background: stats.overdue > 0 ? "rgba(239,68,68,.1)" : "rgba(245,158,11,.1)",
-                  border: `1px solid ${stats.overdue > 0 ? "rgba(239,68,68,.3)" : "rgba(245,158,11,.3)"}`,
+                  background: stats.overdue > 0 ? "var(--dangs)" : "var(--warns)",
+                  border: `1px solid ${stats.overdue > 0 ? "var(--dang)" : "var(--warn)"}`,
                   marginBottom: 18, fontSize: 13.5,
                 }}
               >
-                <span style={{ fontWeight: 700, color: stats.overdue > 0 ? "var(--dang)" : "var(--warn,#f59e0b)" }}>
+                <span style={{ fontWeight: 700, color: stats.overdue > 0 ? "var(--dang)" : "var(--warn)" }}>
                   {stats.overdue > 0 ? "Action required" : "Reporting deadline"}
                 </span>
                 <span style={{ color: "var(--t2)" }}>
@@ -134,7 +134,7 @@ export default function ClearancePage() {
 }
 
 function Stat({ label, value, tone, big }: { label: string; value: string | number; tone?: "ac" | "warn" | "dang"; big?: boolean }) {
-  const color = tone === "ac" ? "var(--ac)" : tone === "warn" ? "var(--warn,#f59e0b)" : tone === "dang" ? "var(--dang)" : "var(--tx)";
+  const color = tone === "ac" ? "var(--ac)" : tone === "warn" ? "var(--warn)" : tone === "dang" ? "var(--dang)" : "var(--tx)";
   return (
     <div style={{ padding: 18, borderRadius: 14, background: "var(--s1)", border: "1px solid var(--bd)" }}>
       <div style={{ fontSize: 12, color: "var(--t3)", marginBottom: 8 }}>{label}</div>

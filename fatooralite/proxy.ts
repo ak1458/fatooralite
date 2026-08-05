@@ -14,12 +14,20 @@ const MAX_REQUESTS = 100; // per minute per IP
 const MAX_AUTH_REQUESTS = Number(process.env.AUTH_RATE_LIMIT ?? 10);
 
 /** Baseline security headers applied to every response. */
-function withSecurityHeaders(res: NextResponse): NextResponse {
+function withSecurityHeaders(res: NextResponse, req?: NextRequest): NextResponse {
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+
+  // HSTS only over a secure connection. It does nothing on plain HTTP by
+  // spec, and `preload` with a one-year max-age is not something to emit from
+  // a localhost dev server — a browser that does honour it force-upgrades
+  // every other http://localhost project on that machine for a year.
+  const proto = req?.headers.get("x-forwarded-proto") ?? req?.nextUrl.protocol.replace(":", "");
+  if (proto === "https") {
+    res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  }
 
   // 'unsafe-eval' is removed in production to block eval-based XSS.
   // 'unsafe-inline' is required by Next.js for critical CSS injection.
@@ -46,6 +54,27 @@ function withSecurityHeaders(res: NextResponse): NextResponse {
       .join("; "),
   );
   return res;
+}
+
+/**
+ * Public, tenant-independent files. Exact paths and a small set of prefixes —
+ * never a bare extension check, which would also unlock any future
+ * authenticated route that happens to end in one.
+ */
+const PUBLIC_ASSET_PATHS = new Set([
+  "/manifest.webmanifest",
+  "/sw.js",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/favicon.ico",
+  "/apple-icon.png",
+  "/icon.png",
+  "/opengraph-image",
+  "/twitter-image",
+]);
+
+function isPublicAsset(pathname: string): boolean {
+  return PUBLIC_ASSET_PATHS.has(pathname) || pathname.startsWith("/icons/");
 }
 
 /**
@@ -88,7 +117,7 @@ export async function proxy(req: NextRequest) {
   }
 
   // Allow explicit disable ONLY if explicitly set to "false"
-  if (process.env.AUTH_ENFORCE === "false") return withSecurityHeaders(NextResponse.next());
+  if (process.env.AUTH_ENFORCE === "false") return withSecurityHeaders(NextResponse.next(), req);
 
   const { pathname } = req.nextUrl;
   const isPublicRoute =
@@ -116,10 +145,17 @@ export async function proxy(req: NextRequest) {
     // would otherwise redirect them to /login, which for a non-browser
     // caller (Vercel Cron, Moyasar's webhook) is an opaque, silent failure.
     pathname.startsWith("/api/cron") ||
-    pathname.startsWith("/api/billing/webhook");
+    pathname.startsWith("/api/billing/webhook") ||
+    // Static and PWA assets. These were gated, which broke three things
+    // silently: the service worker never registered at all (a browser refuses
+    // a worker script that arrives via a redirect), the manifest could not be
+    // read so there was no install prompt, and crawlers asking for robots.txt
+    // or sitemap.xml were handed the login page instead. None of them carry
+    // tenant data — they are the same bytes for every visitor.
+    isPublicAsset(pathname);
 
   if (isPublicRoute) {
-    return withSecurityHeaders(NextResponse.next());
+    return withSecurityHeaders(NextResponse.next(), req);
   }
 
   const token = req.cookies.get(SESSION_COOKIE)?.value;
@@ -131,14 +167,14 @@ export async function proxy(req: NextRequest) {
     // silently (this was undetected until the first real deployment — see
     // handoff.md). Page routes keep the redirect-to-/login UX.
     if (pathname.startsWith("/api/")) {
-      return withSecurityHeaders(NextResponse.json({ error: "Authentication required" }, { status: 401 }));
+      return withSecurityHeaders(NextResponse.json({ error: "Authentication required" }, { status: 401 }), req);
     }
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
-    return withSecurityHeaders(NextResponse.redirect(url));
+    return withSecurityHeaders(NextResponse.redirect(url), req);
   }
-  return withSecurityHeaders(NextResponse.next());
+  return withSecurityHeaders(NextResponse.next(), req);
 }
 
 export const config = {

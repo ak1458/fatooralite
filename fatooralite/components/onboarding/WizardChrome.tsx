@@ -64,7 +64,7 @@ export function Stepper({ currentStepKey }: { currentStepKey: OnboardingStepKey 
                   alignItems: "center",
                   justifyContent: "center",
                   background: i <= currentIdx ? "linear-gradient(150deg,var(--acb),var(--ac))" : "var(--s2)",
-                  color: i <= currentIdx ? "#04130d" : "var(--t3)",
+                  color: i <= currentIdx ? "var(--on-ac)" : "var(--t3)",
                   border: i <= currentIdx ? "none" : "1px solid var(--bd)",
                 }}
               >

@@ -31,7 +31,7 @@ export function NoCompanyState() {
           padding: "10px 18px",
           borderRadius: 11,
           background: "linear-gradient(150deg,var(--acb),var(--ac))",
-          color: "#04130d",
+          color: "var(--on-ac)",
           fontWeight: 700,
           fontSize: 13.5,
           textDecoration: "none",

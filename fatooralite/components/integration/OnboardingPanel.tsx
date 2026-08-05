@@ -76,7 +76,7 @@ export function OnboardingPanel() {
     borderRadius: 11,
     border: primary ? "none" : "1px solid var(--bd)",
     background: primary ? "linear-gradient(150deg,var(--acb),var(--ac))" : "var(--s1)",
-    color: primary ? "#04130d" : "var(--t2)",
+    color: primary ? "var(--on-ac)" : "var(--t2)",
     fontSize: 13,
     fontWeight: 700,
     cursor: "pointer",
