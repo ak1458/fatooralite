@@ -129,10 +129,14 @@ export function AssistantDock() {
                 </span>
                 <div style={{ fontSize: 13.5, fontWeight: 700 }}>Fatoora AI</div>
               </div>
-              <select value={model} onChange={(e) => setModel(e.target.value)}
-                style={{ fontSize: 11.5, padding: "5px 8px", borderRadius: 8, border: "1px solid var(--bd)", background: "var(--s2)", color: "var(--t2)", maxWidth: 150, fontFamily: "inherit" }}>
-                {models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-              </select>
+              {/* Providers that pick their model by env return no list — an
+                  empty picker is worse than none, so it is not rendered. */}
+              {models.length > 0 && (
+                <select value={model} onChange={(e) => setModel(e.target.value)} aria-label="Assistant model"
+                  style={{ fontSize: 11.5, padding: "5px 8px", borderRadius: 8, border: "1px solid var(--bd)", background: "var(--s2)", color: "var(--t2)", maxWidth: 150, fontFamily: "inherit" }}>
+                  {models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </select>
+              )}
             </div>
 
             <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>

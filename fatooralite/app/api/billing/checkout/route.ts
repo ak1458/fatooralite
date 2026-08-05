@@ -50,9 +50,15 @@ export async function POST(req: Request) {
     // "active"/"pro" here — only a verified webhook (lib/billing/moyasar.ts's
     // verifyWebhookSecret) grants Pro. The browser landing on success_url
     // proves nothing by itself (a user could navigate there without paying).
+    // Only the invoice id is recorded. The plan and status are untouched on
+    // update — starting a checkout must never change entitlement in either
+    // direction, and writing "free" here (as this did) would have downgraded
+    // a live trial to an unrecognised plan, which resolvePlan reads as
+    // expired. A company with no row at all is already expired, so the create
+    // branch records the attempt without pretending otherwise.
     await prisma.subscription.upsert({
       where: { companyId },
-      create: { companyId, plan: "free", status: "active", processorSubscriptionId: invoice.id },
+      create: { companyId, plan: "expired", status: "canceled", processorSubscriptionId: invoice.id },
       update: { processorSubscriptionId: invoice.id },
     });
 
