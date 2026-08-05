@@ -10,6 +10,7 @@ is detail:
 | `docs/16-launch-plan.md` | The phase plan, with full write-ups of what each phase did. |
 | `handoff.md` | Chronological diary, ~1500 lines. Search it; don't read it top to bottom. |
 | `CLAUDE.md` | Working agreement: two-agent convention, no tool attribution, progress tracking. |
+| `docs/18-production-checklist.md` | **Owner-facing:** blockers, env vars, deploy steps, demo notes. Read this before deploying or demoing. |
 | `docs/12-master-roadmap.md` | Original product vision behind the plan. |
 
 ---
@@ -35,7 +36,7 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
 
 ## Current state (2026-08-05)
 
-- Branch `feature/production-readiness`, **55 commits ahead of `main`.**
+- Branch `feature/production-readiness`, **59 commits ahead of `main`.**
 - **Nothing is pushed.** The owner asked to keep everything local until all
   planned work is finished and verified. Do not push or merge without asking.
 - Tags `v0.1.0`–`v0.3.0` exist; `package.json` is at `0.4.0`, unreleased.
@@ -48,7 +49,7 @@ All five CI gates pass, in the order CI runs them:
 cd fatooralite
 npm run lint                       # 0 errors — was failing for a long time; keep it green
 npm audit --audit-level=critical
-npx vitest run                     # 280 passed / 43 skipped (DB-gated)
+npx vitest run                     # 285 passed / 43 skipped (DB-gated)
 npx tsx scripts/validate-zatca.ts  # 7/7 local checks
 npm run build
 ```

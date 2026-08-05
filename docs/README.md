@@ -27,6 +27,7 @@ This folder is the **single source of truth** for what FatooraLite Pro is, how e
 | **14** | **[Business Administration & Operations Manual](./14-easy-business-setup-guide.md)** | **Non-Developer & Business Manual**: Step-by-step 5-minute setup guide, National Address rules, ZATCA OTP guide, RBAC, and AI commands. |
 | **15** | **[ZATCA Phase-2 Technical & Integration Guide](./15-zatca-e-invoicing-integration-guide.md)** | **Technical Compliance Spec**: UBL 2.1 XML schema, ECDSA secp256k1 keys, XAdES C14N-11, TLV QR code, and REST API clearance. |
 | **16** | **[Launch Plan](./16-launch-plan.md)** | Sequenced pre-launch phases: codebase organization, trial/Pro licensing, AI depth, product and security audits, deployment, tenant provisioning. |
+| **18** | **[Production Readiness & Deployment](./18-production-checklist.md)** | Owner-facing: blockers only you can clear, every environment variable, pre-deploy gates, deploy and rollback steps, and what not to claim. |
 
 ---
 
