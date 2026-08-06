@@ -1699,3 +1699,56 @@ running the new build).
 
 The pre-existing `Error` deployment visible in `vercel ls` is 16 days old, not
 from this push.
+
+### 2026-08-06 (cont'd) — Production-only 500 on the two list endpoints
+
+Owner said the deploy had not happened. It had — Vercel's API confirmed the
+latest deployment READY on production, and `robots.txt`/`sw.js` returning 200
+proved the live site was running the new build. But probing production as a
+real user found a genuine bug, which is almost certainly what they were
+actually seeing.
+
+- [x] **FIXED — `GET /api/invoices` and `GET /api/customers` returned 500 with
+  an empty body in production, on every request, while working locally.**
+  Vercel's runtime error log named it exactly:
+
+      Failed to load external module @huggingface/transformers:
+      libonnxruntime.so.1: cannot open shared object file
+      routes=/api/customers, /api/invoices
+
+  `lib/ai/embeddings.ts` imported `pipeline` from `@huggingface/transformers`
+  at the **top level**. That package pulls in `onnxruntime-node`, a native
+  binary, and `libonnxruntime.so.1` does not exist on Vercel's serverless
+  runtime — so merely *importing* the module killed the function.
+  `lib/ai/tenant-ingest.ts` imports embeddings, and the invoice and customer
+  routes import tenant-ingest, so a plain GET died at cold start **without
+  reaching a line of route code**. That is why the body was empty.
+
+  Now a dynamic import inside `getExtractor()`, so the native library is
+  touched only when local embeddings are actually computed. Neither route
+  embeds on a read, and `scheduleCompanyIngest` already swallows its own
+  failures.
+
+  **Why nothing caught this:** it works on a developer machine, where the
+  native library resolves, and vitest runs on that same machine. No unit test
+  can catch a serverless-runtime-only module-load failure. The lesson is the
+  one that has now repeated several times this project — probe the deployed
+  artifact, not the local one.
+
+#### Neon autosuspend — expect a cold-start failure
+
+Immediately after redeploying, `POST /api/auth/login` returned 500 with
+`PrismaClientInitializationError: Can't reach database server at
+ep-frosty-bar-ajlzdhux-pooler...`. That is Neon scaling the compute to zero
+after idle; the first connection while it wakes can fail. Three health checks
+four seconds apart all returned 200 and the error did not recur.
+
+**This matters for the demo:** if the database has been idle, the very first
+request in front of an audience can fail. Open the app a minute beforehand to
+wake it, or move the project off a scale-to-zero tier.
+
+#### Verified on production after the fix
+
+login 200, and `/api/invoices`, `/api/customers`, `/api/products`,
+`/api/dashboard`, `/api/analytics` all 200 with real data — invoices list
+returns `INV-2026-04415`, dashboard reports `inv: 2`.
