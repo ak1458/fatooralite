@@ -157,7 +157,15 @@ async function main() {
         invoiceNumber: input.invoiceNumber,
         uuid: signed.uuid,
         kind: input.kind,
-        status: "cleared",
+        // "signed", not "cleared". These invoices are genuinely signed — real
+        // XAdES, real hash chain, real QR — but they have never been submitted
+        // to ZATCA, and there is no ClearanceRecord for them. Marking them
+        // cleared made the dashboard report a 100% clearance rate and two
+        // accepted documents while the Live Clearance Activity feed (which
+        // reads ClearanceRecord) sat empty: a visible contradiction, and a
+        // claim that the tax authority accepted documents it never saw.
+        // They become "cleared" for real once ZATCA onboarding is completed.
+        status: "signed",
         issueDate: input.issueDate,
         issueTime: input.issueTime ?? "00:00:00",
         buyerName: input.buyer?.name,

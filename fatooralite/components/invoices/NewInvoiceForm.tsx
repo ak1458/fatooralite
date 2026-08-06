@@ -33,6 +33,7 @@ const L = {
   title: { en: "New Invoice", ar: "فاتورة جديدة" },
   company: { en: "Company", ar: "الشركة" },
   number: { en: "Invoice number", ar: "رقم الفاتورة" },
+  numberAuto: { en: "Assigned automatically", ar: "يُخصَّص تلقائيًا" },
   kind: { en: "Type", ar: "النوع" },
   standard: { en: "Standard", ar: "ضريبية" },
   simplified: { en: "Simplified", ar: "مبسطة" },
@@ -93,11 +94,11 @@ export function NewInvoiceForm() {
     null,
   );
 
-  // Suggest an invoice number on mount (client-only; random is impure in render).
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setNumber(genNumber());
-  }, []);
+  // Invoice numbers are assigned by the server from the per-company ICV chain
+  // counter (lib/services/invoice-service.ts). This form used to seed the field
+  // with `INV-2026-${random}` and send it, which overrode that counter — ZATCA
+  // requires sequential numbering without gaps, and a random number is neither
+  // sequential nor collision-free. Left blank, the server assigns the next one.
 
   useEffect(() => {
     fetch("/api/companies")
@@ -143,7 +144,8 @@ export function NewInvoiceForm() {
     try {
       const company = companies.find((c) => c.id === companyId);
       const input = {
-        invoiceNumber: number,
+        // Blank => omitted, so the server assigns the next sequential number.
+        invoiceNumber: number.trim() || undefined,
         kind,
         issueDate: new Date().toISOString().slice(0, 10),
         issueTime: new Date().toISOString().slice(11, 19),
@@ -283,7 +285,7 @@ export function NewInvoiceForm() {
                 setResult(null);
                 setShowXml(false);
                 setClearance(null);
-                setNumber(genNumber());
+                setNumber("");
                 setLines([{ description: "", quantity: 1, unitPrice: 0 }]);
               }}
               style={{ ...btnGhost }}
@@ -333,7 +335,12 @@ export function NewInvoiceForm() {
 
         <div style={{ display: "grid", gridTemplateColumns: grid2, gap: 12 }}>
           <Field label={label("number")}>
-            <input value={number} onChange={(e) => setNumber(e.target.value)} style={inputStyle} />
+            <input
+              value={number}
+              onChange={(e) => setNumber(e.target.value)}
+              style={inputStyle}
+              placeholder={label("numberAuto")}
+            />
           </Field>
           <Field label={label("kind")}>
             <select value={kind} onChange={(e) => setKind(e.target.value as "standard" | "simplified")} style={inputStyle}>
@@ -469,10 +476,6 @@ function Stat({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
       </div>
     </div>
   );
-}
-
-function genNumber(): string {
-  return `INV-2026-${Math.floor(10000 + Math.random() * 89999)}`;
 }
 
 const btnPrimary: React.CSSProperties = {
