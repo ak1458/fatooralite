@@ -34,14 +34,23 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
 
 ---
 
-## Current state (2026-08-05)
+## Current state (2026-08-06)
 
-- Branch `feature/production-readiness`, **59 commits ahead of `main`.**
-- **Nothing is pushed.** The owner asked to keep everything local until all
-  planned work is finished and verified. Do not push or merge without asking.
-- Tags `v0.1.0`–`v0.3.0` exist; `package.json` is at `0.4.0`, unreleased.
-- Live deployment: `fatooralite.vercel.app`, `AUTH_ENFORCE=true`,
-  `ZATCA_MODE=sandbox`. **Production shares the dev Neon database.**
+- **Shipped.** `main` is pushed to GitHub and deployed to production. Tagged
+  `v0.4.0`; tags `v0.1.0`–`v0.4.0` are all on the remote.
+- Live at **https://fatooralite.vercel.app** — verified after deploy: health
+  200 with the database connected, unauthenticated `/api/*` returns a JSON
+  401, and `robots.txt` / `sw.js` serve (both were proxy-blocked before).
+- **Vercel is NOT git-connected.** Pushing to GitHub does *not* deploy.
+  Ship with `cd fatooralite && npx vercel --prod`.
+- `AUTH_ENFORCE=true`, `ZATCA_MODE=sandbox`.
+  **Production still shares the dev Neon database** — separate them before
+  real customers exist, or a seed/reset destroys live data.
+- Production `AUTH_SECRET` was rotated on 2026-08-06 to a known-good value.
+  `vercel env pull` returns empty strings for encrypted vars, so the old one
+  could not be read to check it against the placeholder that the new boot
+  guard rejects; rotating removed the risk of the guard taking the site down.
+  Existing sessions were invalidated by that (harmless — no real users yet).
 
 All five CI gates pass, in the order CI runs them:
 

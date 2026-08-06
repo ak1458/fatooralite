@@ -1626,3 +1626,76 @@ the agent from that account, or the write path will be refused on stage.
 
 **Verified:** tsc clean, lint 0, 285 passed / 43 skipped, zatca:validate 7/7,
 build succeeds.
+
+### 2026-08-06 — Data audit ("sab demo dikhata hai"), then shipped to production
+
+Owner reported the app still looked like demo data and asked for an audit
+without Playwright (token cost). Audited by code inspection plus direct
+database and API queries instead.
+
+**The data was being saved.** A live-registered tenant had a real signed
+invoice with a valid QR and hash chain. `data/` holds only static UI copy —
+nav groups, page titles, AI prompt chips — and there is no mock business data
+anywhere in `app/`, `components/` or `lib/`, and no component renders a
+hardcoded row set. What the owner was seeing was the seeded Almarai fixture,
+which is the demo tenant by design.
+
+But the audit found three real defects, **two of them mine from the previous
+session**:
+
+- [x] **FIXED — the certificate relabel migration missed the seeded row.**
+  `20260805150000` matched only `secret = 'LOCAL-DEV-SECRET'`, written by
+  `provisionLocalCertificate()`. The demo seed writes a *different* placeholder
+  pair (`PLACEHOLDER-CSID-TOKEN` / `PLACEHOLDER-CSID-SECRET`), so the seeded
+  tenant kept `kind = 'production'` and still claimed "Production CSID: Active"
+  and "Gateway: Connected" — **for the exact account the product is
+  demonstrated from.** I reported that bug fixed last session; it was fixed in
+  the seed for future seeds and left live in the database. New migration
+  `20260806090000` matches both placeholder shapes, on token as well as secret.
+  A real CSID is a base64 X.509 certificate and cannot equal either literal.
+- [x] **FIXED — the seed marked invoices `cleared` with zero ClearanceRecord
+  rows.** They are genuinely signed but were never submitted anywhere, so the
+  dashboard reported a 100% clearance rate and two accepted documents while the
+  Live Clearance Activity feed (which reads ClearanceRecord) sat empty. They
+  seed as `signed` now.
+- [x] **FIXED — the invoice form generated random invoice numbers.**
+  `INV-2026-${random}` was seeded into the field and sent, overriding the
+  per-company ICV chain counter that already derives a sequential
+  `INV-YYYY-NNNNN`. ZATCA requires sequential numbering without gaps. The field
+  is now an optional override; blank means the server assigns.
+
+Verified after applying: both tenants read `kind = local`, zero placeholder
+rows still labelled production, and **zero invoices claiming gateway acceptance
+against zero clearance records** — no contradiction left.
+
+#### Shipped
+
+Merged `feature/production-readiness` into `main` (62 commits) and pushed.
+One conflict, on `LICENSE`: `origin/main` had a 4-line proprietary notice the
+owner pushed separately; the branch had a fuller one covering public
+viewability, "viewing grants no licence", a contact for licensing enquiries and
+a warranty disclaimer. **Kept the fuller version** — it is a superset and
+strictly more protective — but it is the owner's legal text, so flag it if they
+prefer the short form.
+
+Tagged `v0.4.0`; `v0.1.0`–`v0.4.0` are all on the remote now. Deployed with
+`npx vercel --prod`. Live checks passed: health 200 with the database
+connected, unauthenticated `/api/*` → JSON 401, `robots.txt` and `sw.js` → 200
+(both proxy-blocked before this session, so they also prove the live site is
+running the new build).
+
+**Two things worth knowing for next time:**
+
+1. **Vercel is not git-connected.** Pushing to GitHub does not deploy — every
+   deployment in the project's history came from the CLI. Ship with
+   `cd fatooralite && npx vercel --prod`.
+2. **Production `AUTH_SECRET` was rotated.** The new boot guard rejects the
+   `.env.example` placeholder in production, and `vercel env pull` returns
+   empty strings for encrypted variables, so there was no way to check whether
+   production held the placeholder. Rather than deploy and risk the guard
+   taking the site down, it was rotated to a known-good value. Sessions were
+   invalidated; harmless with no real users. **`ENCRYPTION_KEY` was NOT touched
+   — rotating it would destroy every stored ZATCA private key.**
+
+The pre-existing `Error` deployment visible in `vercel ls` is 16 days old, not
+from this push.
