@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "FatooraLite — ZATCA Compliance",
-    short_name: "FatooraLite",
+    name: "Fatoora Lite Pro — ZATCA Compliance",
+    short_name: "Fatoora Lite Pro",
     description: "ZATCA Phase 2 e-invoicing compliance for Saudi SMEs",
     start_url: "/dashboard",
     display: "standalone",

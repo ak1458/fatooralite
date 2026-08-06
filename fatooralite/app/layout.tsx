@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { appUrl } from "@/lib/appUrl";
 import {
   Space_Grotesk,
   Hanken_Grotesk,
@@ -32,14 +33,37 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FatooraLite — ZATCA Compliance",
-  description: "ZATCA Phase 2 e-invoicing compliance for Saudi SMEs",
+  title: {
+    default: "Fatoora Lite Pro — ZATCA Phase-2 E-Invoicing Platform",
+    template: "%s | Fatoora Lite Pro",
+  },
+  description: "Enterprise ZATCA Phase-2 e-invoicing SaaS platform for Saudi Arabian businesses. Compliant cryptographic clearance, reporting, and automated tax invoicing.",
+  keywords: ["ZATCA", "E-invoicing", "Saudi Arabia", "VAT", "Fatoora", "Phase-2", "CSID", "Tax Invoice"],
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "FatooraLite", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Fatoora Lite Pro", statusBarStyle: "black-translucent" },
+  openGraph: {
+    title: "Fatoora Lite Pro — ZATCA Phase-2 E-Invoicing Platform",
+    description: "Enterprise ZATCA Phase-2 e-invoicing SaaS platform for Saudi Arabian businesses.",
+    url: appUrl(),
+    siteName: "Fatoora Lite Pro",
+    locale: "ar_SA",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Fatoora Lite Pro — ZATCA Phase-2 E-Invoicing",
+    description: "ZATCA Phase-2 compliant e-invoicing platform for Saudi businesses.",
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#07090b",
+  // Mobile browser chrome. A single value pinned the address bar to the dark
+  // palette even for a user in light mode. These are --bg from globals.css;
+  // they cannot read the CSS variable, so keep them in step with it.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#eef1ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#07090b" },
+  ],
   width: "device-width",
   initialScale: 1,
 };
@@ -72,7 +96,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: ANTI_FLASH }} />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <ThemeProvider>
           <LangProvider>{children}</LangProvider>
         </ThemeProvider>

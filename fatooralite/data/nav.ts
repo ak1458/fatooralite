@@ -18,7 +18,7 @@ export const navGroups: NavGroupDef[] = [
   {
     label: "gOps",
     items: [
-      { id: "invoices", label: "nInvoices", icon: "invoices", href: "/invoices", badge: "12" },
+      { id: "invoices", label: "nInvoices", icon: "invoices", href: "/invoices" },
       { id: "creditNotes", label: "nCredit", icon: "creditNote", href: "/credit-notes" },
       { id: "debitNotes", label: "nDebit", icon: "debitNote", href: "/debit-notes" },
       { id: "customers", label: "nCustomers", icon: "customers", href: "/customers" },
@@ -44,7 +44,7 @@ export const navGroups: NavGroupDef[] = [
   {
     label: "gAdmin",
     items: [
-      { id: "notifications", label: "nNotifications", icon: "notifications", href: "/notifications", badge: "4" },
+      { id: "notifications", label: "nNotifications", icon: "notifications", href: "/notifications" },
       { id: "users", label: "nUsers", icon: "users", href: "/users" },
       { id: "settings", label: "nSettings", icon: "settings", href: "/settings" },
     ],

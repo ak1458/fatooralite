@@ -2,17 +2,35 @@ import crypto from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
-const TAG_LENGTH = 16;
+// The GCM auth tag is a fixed 16 bytes; node's cipher appends it for us.
 
 /**
- * Derives a 32-byte encryption key from the AUTH_SECRET environment variable.
+ * Returns the 32-byte AES-256-GCM encryption key from the ENCRYPTION_KEY
+ * environment variable.  The key is a base64-encoded 32-byte (256-bit) random
+ * value — generate one with:  openssl rand -base64 32
+ *
+ * We intentionally do NOT fall back to AUTH_SECRET here.  The two keys serve
+ * different purposes: AUTH_SECRET signs JWTs (rotatable without data loss),
+ * ENCRYPTION_KEY wraps ZATCA private keys at rest (rotating it requires
+ * re-encrypting every Certificate row first).  Mixing them would silently
+ * corrupt stored keys whenever AUTH_SECRET is rotated.
  */
 function getKey(): Buffer {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) {
-    throw new Error("AUTH_SECRET environment variable is not set. Cannot perform encryption.");
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key) {
+    throw new Error(
+      "ENCRYPTION_KEY environment variable is not set. " +
+      "Generate one with: openssl rand -base64 32"
+    );
   }
-  return crypto.createHash("sha256").update(secret).digest();
+  const decoded = Buffer.from(key, "base64");
+  if (decoded.length !== 32) {
+    throw new Error(
+      `ENCRYPTION_KEY must be a 32-byte (256-bit) base64-encoded key. ` +
+      `Got ${decoded.length} bytes. Generate with: openssl rand -base64 32`
+    );
+  }
+  return decoded;
 }
 
 export interface EncryptedData {

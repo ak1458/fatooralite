@@ -2,13 +2,14 @@
 import { useLang } from "@/lib/i18n/LangProvider";
 import { aiPrompts } from "@/data/ai";
 
-export function PromptChips() {
+export function PromptChips({ onSelect }: { onSelect?: (text: string) => void }) {
   const { lang } = useLang();
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
       {aiPrompts.map((p) => (
         <button
           key={p.en}
+          onClick={() => onSelect?.(p[lang])}
           style={{
             fontSize: 12.5,
             fontWeight: 500,

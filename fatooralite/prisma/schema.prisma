@@ -1,14 +1,24 @@
-// FatooraLite data model — PostgreSQL (Supabase in production).
-// Local dev: run `docker compose up -d` for a local Postgres, or point
-// DATABASE_URL/DIRECT_URL at a Supabase project. Migrations use DIRECT_URL.
+// Fatoora Lite Pro data model — PostgreSQL (Neon in production, pgvector enabled).
+// Local dev: run `docker compose up -d` (pgvector/pgvector image) or point
+// DATABASE_URL/DIRECT_URL at a Neon project. Migrations use DIRECT_URL.
+//
+// Conventions:
+// - Money columns are Decimal(14,2); the app converts to `number` at the read
+//   boundary (see lib/db/decimal.ts) so precision never drifts in storage.
+// - Every child of Company cascades on company deletion (tenant teardown).
+// - KnowledgeChunk.embedding is a pgvector column (dimension-agnostic) managed
+//   through raw SQL in lib/ai/vector-store.ts.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [vector]
 }
 
 model Company {
@@ -17,15 +27,84 @@ model Company {
   nameAr    String?
   vatNumber String   @unique
   crNumber  String?
-  address   String?
-  createdAt DateTime @default(now())
+  address   String? // deprecated: legacy free-text; superseded by the national-address fields below
 
-  branches     Branch[]
-  certificates Certificate[]
-  invoices     Invoice[]
-  users        User[]
-  customers    Customer[]
-  products     Product[]
+  // Business identity — drives the onboarding wizard's business-info step.
+  // businessCategory is a taxonomy code from lib/constants/business-categories.ts,
+  // not a DB enum, so new categories don't need a migration.
+  businessCategory      String?
+  businessCategoryOther String? // required (zod-level) when businessCategory = "other"
+  crType                String? // CRN | MOM | MLS | SAG | 700 | OTH — ZATCA seller PartyIdentification scheme
+  crIssueDate           String? // YYYY-MM-DD
+  crIssuePlace          String?
+
+  // Tax registration
+  vatRegistrationDate String? // YYYY-MM-DD
+  economicActivity    String? // ISIC/activity as printed on the VAT certificate
+
+  // Saudi national address — field names mirror the Saudi National Address
+  // format; see lib/zatca/types.ts PostalAddress for the ZATCA XML mapping
+  // (buildingNumber/streetName/district/city/postalCode line up 1:1).
+  buildingNumber   String? // 4 digits
+  streetName       String?
+  streetNameAr     String?
+  district         String?
+  districtAr       String?
+  city             String?
+  cityAr           String?
+  postalCode       String? // 5 digits
+  additionalNumber String? // 4 digits (secondary/unit number)
+  province         String?
+  countryCode      String? @default("SA")
+
+  // Contact & operations
+  contactName  String?
+  contactPhone String?
+  contactEmail String?
+  invoiceTypes String? // standard | simplified | both
+  iban         String? // SA + 22 digits
+  bankName     String?
+
+  // Onboarding lifecycle: pending -> in_progress -> complete. Drives the
+  // first-run wizard guard; new tenants start "pending".
+  onboardingStatus String   @default("pending")
+  onboardingStep   Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  branches       Branch[]
+  certificates   Certificate[]
+  invoices       Invoice[]
+  users          User[]
+  customers      Customer[]
+  products       Product[]
+  notifications  Notification[]
+  roles          Role[]
+  invoiceCounter InvoiceCounter?
+  subscription   Subscription?
+}
+
+/// One row per tenant. Plan limits are enforced in lib/billing/plan.ts, not
+/// read directly off this row, so limit numbers can change without a
+/// migration — this row only records which plan + processor state a company
+/// is in. processorCustomerId/processorSubscriptionId are nullable because
+/// the free plan has no payment processor involvement at all.
+model Subscription {
+  id                     String    @id @default(cuid())
+  companyId              String    @unique
+  // Paid-only product: a tenant is in a 7-day trial, on pro, or expired.
+  // There is no free tier. Plan resolution lives in lib/billing/entitlements.ts.
+  plan                   String    @default("trial") // trial | pro
+  status                 String    @default("active") // active | past_due | canceled
+  processorCustomerId    String?
+  processorSubscriptionId String?
+  /** End of the 7-day trial. Set at registration; null on a pro row. */
+  trialEndsAt            DateTime?
+  currentPeriodEnd       DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @default(now()) @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model Branch {
@@ -36,17 +115,19 @@ model Branch {
   city      String?
   createdAt DateTime @default(now())
 
-  company  Company   @relation(fields: [companyId], references: [id])
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   invoices Invoice[]
+
+  @@index([companyId])
 }
 
 model Certificate {
   id          String    @id @default(cuid())
   companyId   String
-  kind        String // "compliance" | "production"
+  kind        String // "compliance" | "production" | "local"
   serial      String?
   csrPem      String?
-  privateKey  String? // EC private key PEM (encrypt at rest in production)
+  privateKey  String? // EC private key PEM, encrypted at rest (lib/crypto/encrypt.ts)
   publicKey   String? // EC public key PEM (used for the QR public key)
   certificate String? // decoded issued certificate PEM, if available
   token       String? // ZATCA binarySecurityToken (CSID certificate, base64)
@@ -56,8 +137,11 @@ model Certificate {
   issuedAt    DateTime?
   expiresAt   DateTime?
   createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status])
 }
 
 model Invoice {
@@ -68,15 +152,15 @@ model Invoice {
   invoiceNumber String
   uuid          String   @unique
   kind          String // standard | simplified
-  documentType  String   @default("invoice")
+  documentType  String   @default("invoice") // invoice | credit | debit
   status        String   @default("draft") // draft|signed|submitted|cleared|reported|rejected
   issueDate     String
   issueTime     String   @default("00:00:00")
   buyerName     String?
   buyerVat      String?
-  taxableAmount Float    @default(0)
-  vatAmount     Float    @default(0)
-  grandTotal    Float    @default(0)
+  taxableAmount Decimal  @default(0) @db.Decimal(14, 2)
+  vatAmount     Decimal  @default(0) @db.Decimal(14, 2)
+  grandTotal    Decimal  @default(0) @db.Decimal(14, 2)
   xml           String?
   signedXml     String?
   hash          String?
@@ -84,16 +168,33 @@ model Invoice {
   signature     String?
   qr            String?
   resultCode    String? // e.g. BR-KSA-83 on rejection
+  // B2C 24h reporting queue: simplified invoices are "pending" until the cron
+  // reports them; standard invoices are "n/a" (cleared synchronously).
+  reportingState    String    @default("n/a") // n/a | pending | reported | failed
+  reportingDeadline DateTime?                  // issueTime + 24h for simplified
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
 
-  company  Company          @relation(fields: [companyId], references: [id])
-  branch   Branch?          @relation(fields: [branchId], references: [id])
-  customer Customer?        @relation(fields: [customerId], references: [id])
+  company  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch   Branch?           @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  customer Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
   lines    InvoiceLine[]
   records  ClearanceRecord[]
   audit    AuditEntry[]
 
   @@unique([companyId, invoiceNumber])
+  @@index([companyId, createdAt])
+  @@index([companyId, status])
+  // Drives the reporting cron's due-query (oldest deadline first).
+  @@index([kind, reportingState, reportingDeadline])
+  // Postgres does not auto-index foreign key columns. Neither is filtered on
+  // yet (branchId isn't queried anywhere in the app despite the PRD's FR5
+  // calling for branch-scoped invoice lists — the topbar branch selector
+  // doesn't actually filter data yet, a real functional gap, not just a
+  // missing index), but both are FKs that will be filtered on eventually and
+  // an index here is free.
+  @@index([customerId])
+  @@index([branchId])
 }
 
 model InvoiceLine {
@@ -101,12 +202,26 @@ model InvoiceLine {
   invoiceId   String
   description String
   quantity    Float
-  unitPrice   Float
+  unitPrice   Decimal @db.Decimal(14, 2)
   vatRate     Float   @default(0.15)
-  netAmount   Float
-  vatAmount   Float
+  netAmount   Decimal @db.Decimal(14, 2)
+  vatAmount   Decimal @db.Decimal(14, 2)
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+/// Per-company invoice chain ledger. `next` is the sequential ICV / invoice
+/// number; `lastHash` is the last committed invoice hash (the PIH source of
+/// truth). Both are advanced under a FOR UPDATE row lock so concurrent
+/// serverless issuers serialize instead of forking the cryptographic chain.
+model InvoiceCounter {
+  companyId String  @id
+  next      Int     @default(1)
+  lastHash  String? // last committed invoice hash → next invoice's PIH
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model ClearanceRecord {
@@ -120,6 +235,8 @@ model ClearanceRecord {
   createdAt    DateTime @default(now())
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, createdAt])
 }
 
 model AuditEntry {
@@ -130,18 +247,63 @@ model AuditEntry {
   createdAt DateTime @default(now())
 
   invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([createdAt])
 }
 
 model User {
-  id           String   @id @default(cuid())
-  companyId    String?
-  email        String   @unique
-  name         String
-  role         String   @default("employee") // owner|accountant|manager|auditor|employee
-  passwordHash String?
-  createdAt    DateTime @default(now())
+  id        String  @id @default(cuid())
+  companyId String?
+  email     String  @unique
+  name      String
+  // System role slug (owner|accountant|manager|auditor|employee). When roleId
+  // is set, the DB-backed custom role's permissions take precedence.
+  role      String  @default("employee")
+  roleId    String?
+  title     String? // job designation, e.g. "Chief Accountant"
+  status    String  @default("active") // active|invited|disabled
+  passwordHash       String?
+  passwordResetNonce String?
+  /// Incremented on every password reset. Embedded in session JWTs so that
+  /// old tokens are rejected after a reset — prevents session fixation attacks.
+  sessionVersion     Int       @default(0)
+  acceptedTermsAt    DateTime? // set at registration when the ToS/privacy checkbox is accepted
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
 
-  company Company? @relation(fields: [companyId], references: [id])
+  company    Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  customRole Role?    @relation(fields: [roleId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+}
+
+/// Custom, company-scoped roles composed from permissions. System roles stay in
+/// code (lib/auth/rbac.ts); these extend them per tenant.
+model Role {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  users       User[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model RolePermission {
+  id         String @id @default(cuid())
+  roleId     String
+  permission String // one of lib/auth/rbac.ts Permission values
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permission])
 }
 
 model Customer {
@@ -156,9 +318,12 @@ model Customer {
   phone     String?
   email     String?
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  company  Company   @relation(fields: [companyId], references: [id])
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   invoices Invoice[]
+
+  @@index([companyId])
 }
 
 model Product {
@@ -167,10 +332,46 @@ model Product {
   name        String
   nameAr      String?
   sku         String?
-  unitPrice   Float
+  unitPrice   Decimal  @db.Decimal(14, 2)
   vatCategory String   @default("S") // S, Z, E, O
   unitCode    String   @default("PCE")
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, sku])
+  @@index([companyId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  companyId String
+  title     String
+  message   String
+  type      String   @default("info") // info|warning|error
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, read, createdAt])
+}
+
+/// Vector store for the AI assistant's retrieval (RAG). `scope=global` rows hold
+/// ZATCA regulation knowledge shared by all tenants; `scope=company` rows hold a
+/// tenant's own data summaries. The embedding is a pgvector column (dimension
+/// left open so the embedding provider can change); similarity search runs in
+/// Postgres via `<=>` — see lib/ai/vector-store.ts.
+model KnowledgeChunk {
+  id        String                       @id @default(cuid())
+  scope     String                       @default("global") // global | company
+  companyId String?
+  source    String // e.g. "zatca-rules" | "invoice" | "customer"
+  text      String
+  embedding Unsupported("vector")?
+  createdAt DateTime                     @default(now())
+
+  @@index([scope, companyId])
+  @@index([companyId, source])
 }

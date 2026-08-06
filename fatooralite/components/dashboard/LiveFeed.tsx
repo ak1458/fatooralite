@@ -59,12 +59,13 @@ export function LiveFeed({ initialEvents }: { initialEvents?: FeedEvent[] }) {
             background: "var(--bd)",
           }}
         />
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        <div role="list" aria-live="polite" aria-atomic="true" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           {events.map((f, i) => {
             const m = statusMeta(f.status, t, lang);
             return (
               <div
                 key={i}
+                role="listitem"
                 style={{
                   position: "relative",
                   display: "flex",

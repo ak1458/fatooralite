@@ -4,10 +4,18 @@ import { SearchButton } from "./SearchButton";
 import { LangToggle } from "./LangToggle";
 import { ThemeToggle } from "./ThemeToggle";
 import { ProfileMenu } from "./ProfileMenu";
-import { Icon } from "@/components/ui/Icon";
+import { NotificationBell } from "./NotificationBell";
+import type { SidebarMode } from "@/lib/hooks/useSidebarState";
 
-export function Topbar() {
+export function Topbar({
+  sidebarMode,
+  onMenuClick,
+}: {
+  sidebarMode?: SidebarMode;
+  onMenuClick?: () => void;
+}) {
   const { title, sub } = usePageMeta();
+  const showMenu = sidebarMode === "drawer";
   return (
     <header
       style={{
@@ -21,14 +29,49 @@ export function Topbar() {
         zIndex: 20,
         display: "flex",
         alignItems: "center",
-        gap: 18,
-        padding: "0 22px",
+        gap: showMenu ? 12 : 18,
+        padding: showMenu ? "0 14px" : "0 22px",
       }}
     >
-      <div style={{ minWidth: 0, flex: "none", maxWidth: 280 }}>
+      {/* Hamburger for mobile drawer mode */}
+      {showMenu && (
+        <button
+          onClick={onMenuClick}
+          aria-label="Open navigation menu"
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 10,
+            border: "1px solid var(--bd)",
+            background: "var(--s1)",
+            color: "var(--t2)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flex: "none",
+            fontFamily: "inherit",
+          }}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      )}
+
+      <div style={{ minWidth: 0, flex: showMenu ? 1 : "none", maxWidth: showMenu ? 160 : 280 }}>
         <div
           style={{
-            fontSize: 15,
+            fontSize: showMenu ? 14 : 15,
             fontWeight: 700,
             letterSpacing: "-.01em",
             whiteSpace: "nowrap",
@@ -38,58 +81,32 @@ export function Topbar() {
         >
           {title}
         </div>
-        <div
-          style={{
-            fontSize: 11.5,
-            color: "var(--t3)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {sub}
-        </div>
+        {!showMenu && (
+          <div
+            style={{
+              fontSize: 11.5,
+              color: "var(--t3)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {sub}
+          </div>
+        )}
       </div>
 
       <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
-        <SearchButton />
+        {!showMenu && <SearchButton />}
       </div>
 
-      <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 9 }}>
-        <LangToggle />
+      <div style={{ flex: "none", display: "flex", alignItems: "center", gap: showMenu ? 6 : 9 }}>
+        {!showMenu && <LangToggle />}
         <ThemeToggle />
-        <button
-          title="Notifications"
-          aria-label="Notifications"
-          style={{
-            position: "relative",
-            width: 38,
-            height: 38,
-            borderRadius: 10,
-            border: "1px solid var(--bd)",
-            background: "var(--s1)",
-            color: "var(--t2)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-          }}
-        >
-          <Icon name="notifications" size={18} sw={1.8} />
-          <span
-            style={{
-              position: "absolute",
-              top: 8,
-              insetInlineEnd: 9,
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: "var(--dang)",
-              border: "2px solid var(--s1)",
-            }}
-          />
-        </button>
-        <div style={{ width: 1, height: 26, background: "var(--bd)", margin: "0 2px" }} />
+        <NotificationBell />
+        {!showMenu && (
+          <div style={{ width: 1, height: 26, background: "var(--bd)", margin: "0 2px" }} />
+        )}
         <ProfileMenu />
       </div>
     </header>

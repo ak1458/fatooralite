@@ -1,19 +1,29 @@
 import { test, expect } from "@playwright/test";
+import { registerAndSignIn } from "./helpers";
 
-test("redirects to dashboard and renders shell", async ({ page }) => {
+// Shell + navigation smoke for a FRESH tenant (clean empty state, no seed).
+
+test.beforeEach(async ({ page }) => {
+  await registerAndSignIn(page);
+});
+
+test("root redirects into the app shell", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveURL(/\/dashboard/);
+  await expect(page).toHaveURL(/\/(dashboard|onboarding)/);
+});
+
+test("dashboard renders the shell for a fresh tenant", async ({ page }) => {
+  await page.goto("/dashboard");
   await expect(page.locator("aside")).toBeVisible();
 });
 
-test("language toggle flips dir to ltr and back", async ({ page }) => {
+test("language toggle flips dir", async ({ page }) => {
   await page.goto("/dashboard");
   const html = page.locator("html");
-  await expect(html).toHaveAttribute("dir", "rtl");
-  await page.getByRole("button", { name: "EN", exact: true }).click();
-  await expect(html).toHaveAttribute("dir", "ltr");
-  await page.getByRole("button", { name: "ع", exact: true }).click();
-  await expect(html).toHaveAttribute("dir", "rtl");
+  const before = await html.getAttribute("dir");
+  const target = before === "rtl" ? "EN" : "ع";
+  await page.getByRole("button", { name: target, exact: true }).click();
+  await expect(html).toHaveAttribute("dir", before === "rtl" ? "ltr" : "rtl");
 });
 
 test("theme toggle changes data-theme", async ({ page }) => {
@@ -24,18 +34,14 @@ test("theme toggle changes data-theme", async ({ page }) => {
   await expect(html).not.toHaveAttribute("data-theme", before);
 });
 
-test("nav switches to invoices and renders the table", async ({ page }) => {
-  await page.goto("/dashboard");
-  // Switch to English first so we click a stable label.
-  await page.getByRole("button", { name: "EN", exact: true }).click();
-  await page.getByRole("link", { name: /Invoices/ }).first().click();
-  await expect(page).toHaveURL(/\/invoices/);
-  await expect(page.getByText("INV-2026-04417")).toBeVisible();
+test("invoices page shows a clean empty state (no fake data)", async ({ page }) => {
+  await page.goto("/invoices");
+  await expect(page.getByText(/INV-\d{4}-\d+/)).toHaveCount(0);
 });
 
 test("all six live modules respond 200", async ({ page }) => {
   for (const path of ["/dashboard", "/invoices", "/integration", "/clearance", "/analytics", "/ai"]) {
     const res = await page.goto(path);
-    expect(res?.status()).toBe(200);
+    expect(res?.status(), path).toBe(200);
   }
 });

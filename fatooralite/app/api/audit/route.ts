@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { searchInvoices } from "@/lib/db/repo";
+import { num } from "@/lib/db/decimal";
+import { requirePermission } from "@/lib/auth/server";
 
 export const runtime = "nodejs";
 
@@ -11,6 +13,15 @@ export async function GET(req: Request) {
   if (!companyId) {
     return NextResponse.json({ error: "companyId is required" }, { status: 400 });
   }
-  const invoices = await searchInvoices(companyId, q);
+
+  const { deny } = await requirePermission(req, "audit:view", companyId);
+  if (deny) return deny;
+
+  const invoices = (await searchInvoices(companyId, q)).map((inv) => ({
+    ...inv,
+    taxableAmount: num(inv.taxableAmount),
+    vatAmount: num(inv.vatAmount),
+    grandTotal: num(inv.grandTotal),
+  }));
   return NextResponse.json({ invoices });
 }

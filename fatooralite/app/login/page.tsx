@@ -1,10 +1,10 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLang } from "@/lib/i18n/LangProvider";
 
 const L = {
-  title: { en: "Sign in to FatooraLite", ar: "تسجيل الدخول إلى فاتورة لايت" },
+  title: { en: "Sign in to Fatoora Lite Pro", ar: "تسجيل الدخول إلى فاتورة لايت برو" },
   sub: { en: "ZATCA Phase 2 compliance", ar: "الامتثال للمرحلة الثانية للهيئة" },
   email: { en: "Email", ar: "البريد الإلكتروني" },
   password: { en: "Password", ar: "كلمة المرور" },
@@ -13,13 +13,21 @@ const L = {
   demo: { en: "Demo: khalid@almarai.example / owner1234", ar: "تجريبي: khalid@almarai.example / owner1234" },
 };
 
-export default function LoginPage() {
+function LoginForm() {
   const { lang } = useLang();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // ApiRefusalWatcher appends ?expired=1 when a request 401s mid-session.
+  // Derived during render rather than stored, so it costs no extra render
+  // pass; without it the user is dropped on a blank login form with no idea
+  // why they were signed out, which reads as the app losing their work.
+  const params = useSearchParams();
+  const expired = params.get("expired") === "1";
+  // Set when registration created the account but could not issue a session.
+  const justRegistered = params.get("registered") === "1";
   const t = (k: keyof typeof L) => L[k][lang];
 
   async function submit(e: React.FormEvent) {
@@ -90,7 +98,7 @@ export default function LoginPage() {
               boxShadow: "0 6px 16px -6px var(--ac)",
             }}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#04130d" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--on-ac)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3 5 6v5c0 4.5 3 8 7 9 4-1 7-4.5 7-9V6Z" />
               <path d="m9 12 2 2 4-4" />
             </svg>
@@ -107,9 +115,30 @@ export default function LoginPage() {
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
           </label>
           <label style={{ display: "block", marginBottom: 14 }}>
-            <span style={{ display: "block", fontSize: 12, color: "var(--t3)", marginBottom: 5 }}>{t("password")}</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+              <span style={{ fontSize: 12, color: "var(--t3)" }}>{t("password")}</span>
+              <a href="/forgot" style={{ fontSize: 11.5, color: "var(--ac)", textDecoration: "none", fontWeight: 500 }}>
+                {lang === "ar" ? "نسيت كلمة المرور؟" : "Forgot password?"}
+              </a>
+            </div>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} required />
           </label>
+
+          {justRegistered && !error && (
+            <div role="status" style={{ color: "var(--ac)", fontSize: 12.5, marginBottom: 12 }}>
+              {lang === "ar"
+                ? "تم إنشاء حسابك. الرجاء تسجيل الدخول للمتابعة."
+                : "Your account was created. Sign in to continue."}
+            </div>
+          )}
+
+          {expired && !error && (
+            <div role="status" style={{ color: "var(--t2)", fontSize: 12.5, marginBottom: 12 }}>
+              {lang === "ar"
+                ? "انتهت صلاحية جلستك. الرجاء تسجيل الدخول مرة أخرى."
+                : "Your session expired. Please sign in again."}
+            </div>
+          )}
 
           {error && <div style={{ color: "var(--dang)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
@@ -122,7 +151,7 @@ export default function LoginPage() {
               borderRadius: 11,
               border: "none",
               background: "linear-gradient(150deg,var(--acb),var(--ac))",
-              color: "#04130d",
+              color: "var(--on-ac)",
               fontSize: 14,
               fontWeight: 700,
               cursor: "pointer",
@@ -134,10 +163,21 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div style={{ marginTop: 16, fontSize: 11.5, color: "var(--t3)", textAlign: "center", fontFamily: "var(--fmono)" }}>
-          {t("demo")}
+        <div style={{ marginTop: 16, fontSize: 13, color: "var(--t3)", textAlign: "center" }}>
+          {lang === "ar" ? "ليس لديك حساب؟ " : "Don't have an account? "}
+          <a href="/register" style={{ color: "var(--ac)", fontWeight: 600, textDecoration: "none" }}>
+            {lang === "ar" ? "أنشئ شركتك" : "Create your company"}
+          </a>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

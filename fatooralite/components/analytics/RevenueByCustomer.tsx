@@ -8,6 +8,11 @@ export function RevenueByCustomer({ data }: { data: RevenueRow[] }) {
   return (
     <Card>
       <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 18 }}>{t.revTitle}</div>
+      {data.length === 0 && (
+        <div style={{ fontSize: 12.5, color: "var(--t3)", padding: "18px 0", textAlign: "center" }}>
+          {lang === "ar" ? "لا توجد إيرادات مُجازة بعد." : "No cleared revenue yet — issue and clear invoices to see your top customers."}
+        </div>
+      )}
       <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
         {data.map((r) => (
           <div key={r.name.en}>

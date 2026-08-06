@@ -5,7 +5,8 @@ import { sar } from "@/lib/format";
 import { invoiceTotals } from "@/lib/zatca/money";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
-import type { Invoice } from "@prisma/client";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import type { Invoice } from "@/types";
 
 interface Company {
   id: string;
@@ -46,6 +47,7 @@ const L = {
   desc: { en: "Description", ar: "الوصف" },
   qty: { en: "Qty", ar: "الكمية" },
   price: { en: "Unit price", ar: "سعر الوحدة" },
+  remove: { en: "Remove line", ar: "حذف السطر" },
   addLine: { en: "Add line", ar: "إضافة بند" },
   taxable: { en: "Taxable", ar: "الخاضع للضريبة" },
   vat: { en: "VAT (15%)", ar: "الضريبة (١٥٪)" },
@@ -67,6 +69,8 @@ const L = {
 
 export function NewNoteForm({ type }: { type: "credit" | "debit" }) {
   const { lang } = useLang();
+  const mobile = useMediaQuery(639);
+  const grid2 = mobile ? "1fr" : "1fr 1fr";
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyId, setCompanyId] = useState("");
   const [number, setNumber] = useState("");
@@ -339,7 +343,7 @@ export function NewNoteForm({ type }: { type: "credit" | "debit" }) {
           </select>
         </Field>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: grid2, gap: 12 }}>
           <Field label={label("number")}>
             <input value={number} onChange={(e) => setNumber(e.target.value)} style={inputStyle} />
           </Field>
@@ -351,7 +355,7 @@ export function NewNoteForm({ type }: { type: "credit" | "debit" }) {
           </Field>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: grid2, gap: 12 }}>
           <Field label={label("origInv")}>
             <select 
               value={billingReferenceId}
@@ -360,7 +364,7 @@ export function NewNoteForm({ type }: { type: "credit" | "debit" }) {
             >
               <option value="">-- Select Original Invoice --</option>
               {invoices.filter(i => i.documentType === "invoice").map((inv) => (
-                <option key={inv.id} value={inv.invoiceNumber}>{inv.invoiceNumber} ({sar(inv.grandTotal, lang)})</option>
+                <option key={inv.id ?? inv.num} value={inv.invoiceNumber}>{inv.invoiceNumber} ({sar(inv.grandTotal ?? 0, lang)})</option>
               ))}
             </select>
           </Field>
@@ -369,7 +373,7 @@ export function NewNoteForm({ type }: { type: "credit" | "debit" }) {
           </Field>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: grid2, gap: 12 }}>
           <Field label={label("customer")}>
             <select 
               value={selectedCustomerId} 
@@ -391,7 +395,7 @@ export function NewNoteForm({ type }: { type: "credit" | "debit" }) {
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: grid2, gap: 12 }}>
             <Field label={label("buyer")}>
               <input value={buyerName} onChange={(e) => setBuyerName(e.target.value)} style={inputStyle} />
             </Field>
@@ -405,12 +409,13 @@ export function NewNoteForm({ type }: { type: "credit" | "debit" }) {
           {label("lines")}
         </div>
         {lines.map((l, i) => (
-          <div key={i} style={{ display: "grid", gridTemplateColumns: "150px 1fr 80px 110px 36px", gap: 8, marginBottom: 8 }}>
-            <select onChange={(e) => handleProductSelect(i, e.target.value)} style={inputStyle}>
+          <div key={i} style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "150px 1fr 80px 110px 36px", gap: 8, marginBottom: mobile ? 16 : 8, paddingBottom: mobile ? 16 : 0, borderBottom: mobile ? "1px dashed var(--bd)" : "none" }}>
+            <select aria-label={`${label("product")} — ${label("lines")} ${i + 1}`} onChange={(e) => handleProductSelect(i, e.target.value)} style={inputStyle}>
               <option value="">{label("product")}...</option>
               {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             <input
+              aria-label={`${label("desc")} — ${label("lines")} ${i + 1}`}
               placeholder={label("desc")}
               value={l.description}
               onChange={(e) => updateLine(i, { description: e.target.value })}
@@ -418,6 +423,7 @@ export function NewNoteForm({ type }: { type: "credit" | "debit" }) {
             />
             <input
               type="number"
+              aria-label={`${label("qty")} — ${label("lines")} ${i + 1}`}
               placeholder={label("qty")}
               value={l.quantity}
               onChange={(e) => updateLine(i, { quantity: Number(e.target.value) })}
@@ -425,12 +431,13 @@ export function NewNoteForm({ type }: { type: "credit" | "debit" }) {
             />
             <input
               type="number"
+              aria-label={`${label("price")} — ${label("lines")} ${i + 1}`}
               placeholder={label("price")}
               value={l.unitPrice}
               onChange={(e) => updateLine(i, { unitPrice: Number(e.target.value) })}
               style={inputStyle}
             />
-            <button onClick={() => removeLine(i)} style={{ ...btnGhost, padding: 0 }} aria-label="remove">
+            <button onClick={() => removeLine(i)} style={{ ...btnGhost, padding: 0 }} aria-label={`${label("remove")} ${i + 1}`}>
               ×
             </button>
           </div>
@@ -504,7 +511,7 @@ const btnPrimary: React.CSSProperties = {
   borderRadius: 11,
   border: "none",
   background: "linear-gradient(150deg,var(--acb),var(--ac))",
-  color: "#04130d",
+  color: "var(--on-ac)",
   fontSize: 13.5,
   fontWeight: 700,
   cursor: "pointer",

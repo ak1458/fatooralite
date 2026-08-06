@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deployment Guide · Fatoora Lite Pro Docs</title>
+<style>
+:root{
+  --bg:#0b1210;--s1:#101a17;--s2:#16211d;--bd:#223129;--tx:#e8f0ec;--t2:#b7c6bf;
+  --t3:#7d8f86;--ac:#34d399;--acs:rgba(52,211,153,.12);--code:#0d1614;
+  --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{--bg:#f6f8f7;--s1:#ffffff;--s2:#eef2f0;--bd:#d9e2dd;--tx:#15211c;--t2:#3d4d46;
+  --t3:#6b7c74;--ac:#0d9668;--acs:rgba(13,150,104,.1);--code:#f0f4f2;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.65 var(--sans)}
+.layout{display:flex;min-height:100vh}
+nav{width:260px;flex:none;background:var(--s1);border-inline-end:1px solid var(--bd);
+  padding:22px 16px;position:sticky;top:0;height:100vh;overflow-y:auto}
+nav .brand{font-weight:800;font-size:16px;margin-bottom:4px}
+nav .brand span{color:var(--ac)}
+nav .sub{font-size:11.5px;color:var(--t3);margin-bottom:18px}
+nav .group{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--t3);margin:16px 8px 6px}
+nav a{display:block;padding:7px 10px;border-radius:8px;color:var(--t2);text-decoration:none;
+  font-size:13px;font-weight:500}
+nav a:hover{background:var(--s2);color:var(--tx)}
+nav a.active{background:var(--acs);color:var(--ac);font-weight:700}
+main{flex:1;min-width:0;padding:40px 48px 80px;max-width:960px}
+main h1{font-size:28px;line-height:1.25;margin:0 0 4px;letter-spacing:-.02em}
+main h2{font-size:20px;margin:34px 0 10px;padding-top:14px;border-top:1px solid var(--bd)}
+main h3{font-size:16px;margin:24px 0 8px}
+main a{color:var(--ac)}
+main p, main li{color:var(--t2)}
+main strong{color:var(--tx)}
+main code{font-family:var(--mono);font-size:12.5px;background:var(--code);
+  border:1px solid var(--bd);border-radius:5px;padding:1px 5px}
+main pre{background:var(--code);border:1px solid var(--bd);border-radius:10px;
+  padding:14px 16px;overflow-x:auto}
+main pre code{border:none;background:transparent;padding:0;font-size:12.5px;line-height:1.6}
+main table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+main th,main td{border:1px solid var(--bd);padding:8px 12px;text-align:left;vertical-align:top}
+main th{background:var(--s2);font-weight:700}
+main blockquote{margin:14px 0;padding:10px 16px;border-inline-start:3px solid var(--ac);
+  background:var(--acs);border-radius:0 10px 10px 0}
+main blockquote p{margin:4px 0}
+main hr{border:none;border-top:1px solid var(--bd);margin:28px 0}
+main input[type=checkbox]{accent-color:var(--ac)}
+.footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--bd);
+  font-size:12px;color:var(--t3)}
+@media(max-width:860px){.layout{flex-direction:column}nav{width:auto;height:auto;position:static}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
+<div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html" class="active">Deployment Guide</a><a href="10-ai-architecture.html">AI Architecture</a></nav>
+<main>
+<h1>Fatoora Lite Pro — Deployment Guide</h1>
+<p><strong>Audience:</strong> anyone deploying Fatoora Lite Pro to production, start to finish. No prior
+knowledge of the codebase assumed. Follow the steps in order; each has a verification.</p>
+<p>The reference stack is <strong>Vercel (app) + Neon (Postgres with pgvector)</strong>. Any Node 20+
+host and any Postgres 15+ with the <code>vector</code> extension works the same way — only the
+platform-specific steps differ.</p>
+<hr>
+<h2>0. What you are deploying</h2>
+<ul>
+<li>A <strong>Next.js 16</strong> application (<code>fatooralite/</code>) — UI + API routes in one deployable.</li>
+<li>A <strong>PostgreSQL</strong> database (Prisma-managed schema, migrations in
+<code>fatooralite/prisma/migrations/</code>), with the <strong>pgvector</strong> extension for AI retrieval.</li>
+<li>Optional <strong>AI provider</strong> (OpenRouter / Anthropic / OpenAI) — the app runs without a
+key (AI features enter mock mode), but production should have one.</li>
+</ul>
+<p>No other services are required. Local embeddings (default) run in-process.</p>
+<hr>
+<h2>1. Prerequisites</h2>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Node.js 20+ and npm</td>
+<td>build and run the app</td>
+</tr>
+<tr>
+<td>A Postgres 15+ database with <code>vector</code> extension available</td>
+<td>Neon has it built in; for self-hosted use the <code>pgvector/pgvector</code> image</td>
+</tr>
+<tr>
+<td>Git access to this repository</td>
+<td>deploy source</td>
+</tr>
+<tr>
+<td>(Optional) OpenRouter / Anthropic / OpenAI API key</td>
+<td>live AI assistant</td>
+</tr>
+<tr>
+<td>(Production ZATCA) Fatoora portal account + OTP</td>
+<td>real CSID onboarding</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>2. Create the database (Neon)</h2>
+<ol>
+<li>Create a project at <a href="https://neon.tech">https://neon.tech</a> (region close to your users; for Gulf
+deployments choose the nearest available region).</li>
+<li>From the project dashboard copy <strong>two</strong> connection strings:<ul>
+<li>the <strong>pooled</strong> connection string (host contains <code>-pooler</code>) → <code>DATABASE_URL</code></li>
+<li>the <strong>direct</strong> connection string (no <code>-pooler</code>) → <code>DIRECT_URL</code></li>
+</ul>
+</li>
+<li>Both must end with <code>?sslmode=require</code>.</li>
+</ol>
+<blockquote>
+<p>pgvector: the migration runs <code>CREATE EXTENSION IF NOT EXISTS &quot;vector&quot;</code> — Neon
+allows this without any manual step. On self-hosted Postgres make sure the
+extension is installed (use the <code>pgvector/pgvector:pg16</code> image, as in
+<code>fatooralite/docker-compose.yml</code>).</p>
+</blockquote>
+<p><strong>Verify:</strong> <code>psql &quot;&lt;DIRECT_URL&gt;&quot; -c &quot;select 1&quot;</code> connects.</p>
+<hr>
+<h2>3. Generate secrets</h2>
+<pre><code class="language-bash"># Session-signing secret (JWT HS256)
+openssl rand -base64 48     # -&gt; AUTH_SECRET
+
+# At-rest encryption key for ZATCA private keys (32 bytes, base64)
+openssl rand -base64 32     # -&gt; ENCRYPTION_KEY
+</code></pre>
+<p>Store these in a password manager. <strong>Rotating <code>ENCRYPTION_KEY</code> invalidates stored
+certificate private keys</strong> (companies must re-onboard), so treat it as durable.</p>
+<hr>
+<h2>4. Environment variables</h2>
+<p>Set these on the platform (Vercel → Project → Settings → Environment Variables).
+Never commit them.</p>
+<h3>Required</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>DATABASE_URL</code></td>
+<td>pooled Neon URL</td>
+</tr>
+<tr>
+<td><code>DIRECT_URL</code></td>
+<td>direct Neon URL (used by migrations)</td>
+</tr>
+<tr>
+<td><code>AUTH_SECRET</code></td>
+<td>from step 3</td>
+</tr>
+<tr>
+<td><code>AUTH_ENFORCE</code></td>
+<td><code>true</code> — <strong>mandatory in production</strong> (login + RBAC enforced)</td>
+</tr>
+<tr>
+<td><code>ENCRYPTION_KEY</code></td>
+<td>from step 3</td>
+</tr>
+<tr>
+<td><code>CRON_SECRET</code></td>
+<td><strong>mandatory in production</strong> — <code>openssl rand -base64 32</code>. Protects <code>/api/cron/zatca-reporting</code>, which is otherwise a public, unauthenticated path (it&#39;s committed in <code>vercel.json</code>) that drives real ZATCA gateway submissions; the route fails closed (401) if this is unset, so the cron job itself won&#39;t run without it either — set it before relying on the 24h B2C reporting cron.</td>
+</tr>
+<tr>
+<td><code>APP_URL</code></td>
+<td>your canonical URL, e.g. <code>https://app.example.com</code></td>
+</tr>
+</tbody></table>
+<h3>ZATCA</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ZATCA_MODE</code></td>
+<td><code>sandbox</code> | <code>simulation</code> | <code>production</code></td>
+</tr>
+</tbody></table>
+<p>Start with <code>sandbox</code>. Switch to <code>production</code> only after real onboarding succeeds there.</p>
+<h3>AI (choose ONE provider)</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>AI_PROVIDER</code></td>
+<td><code>openrouter</code> (default) | <code>anthropic</code> | <code>openai</code></td>
+</tr>
+<tr>
+<td><code>OPENROUTER_API_KEY</code></td>
+<td>when provider is openrouter</td>
+</tr>
+<tr>
+<td><code>ANTHROPIC_API_KEY</code></td>
+<td>when provider is anthropic</td>
+</tr>
+<tr>
+<td><code>OPENAI_API_KEY</code></td>
+<td>when provider is openai</td>
+</tr>
+<tr>
+<td><code>AI_MODEL</code></td>
+<td>optional model override (e.g. <code>claude-opus-4-8</code>, <code>gpt-4o-mini</code>)</td>
+</tr>
+<tr>
+<td><code>AI_FALLBACK_MODEL</code></td>
+<td>optional (OpenRouter only — routed fallback)</td>
+</tr>
+</tbody></table>
+<h3>Embeddings (RAG)</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>EMBEDDING_PROVIDER</code></td>
+<td><code>local</code> (default, no key) | <code>openai</code> | <code>voyage</code></td>
+</tr>
+<tr>
+<td><code>OPENAI_EMBEDDING_MODEL</code> / <code>VOYAGE_EMBEDDING_MODEL</code></td>
+<td>optional overrides</td>
+</tr>
+<tr>
+<td><code>VOYAGE_API_KEY</code></td>
+<td>when provider is voyage</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><code>local</code> downloads the MiniLM model (~90 MB) on first use. On serverless this
+means a cold-start delay on the first AI request per instance; hosted embeddings
+(<code>openai</code>/<code>voyage</code>) avoid it. <strong>After switching embedding providers, re-ingest</strong>
+(step 8) — vectors from different models are not comparable.</p>
+</blockquote>
+<h3>Optional</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>SEED_DEMO</code></td>
+<td>leave <strong>unset</strong> in production (demo seed is opt-in for local dev only)</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>5. Run migrations</h2>
+<p>Migrations run against <code>DIRECT_URL</code>. From your machine (or a CI step):</p>
+<pre><code class="language-bash">cd fatooralite
+npm ci
+# put DATABASE_URL + DIRECT_URL in the environment for this command
+npx prisma migrate deploy
+</code></pre>
+<p><strong>Verify:</strong> <code>npx prisma migrate status</code> prints &quot;Database schema is up to date&quot;.</p>
+<hr>
+<h2>6. Deploy the app (Vercel)</h2>
+<ol>
+<li>Import the Git repository in Vercel. Set <strong>Root Directory = <code>fatooralite</code></strong>.</li>
+<li>Framework preset: Next.js (defaults are fine — <code>npm run build</code>).</li>
+<li>Add all environment variables from step 4 (Production scope).</li>
+<li>Deploy.</li>
+</ol>
+<p>Self-hosted equivalent:</p>
+<pre><code class="language-bash">cd fatooralite
+npm ci
+npm run build
+npm run start        # serves on :3000 — put a TLS-terminating proxy in front
+</code></pre>
+<p><strong>Verify:</strong> open the deployment URL → the login page renders. <code>GET /api/companies</code>
+without a session returns 401 (proves <code>AUTH_ENFORCE</code> is active).</p>
+<hr>
+<h2>7. First-run bootstrap</h2>
+<ol>
+<li>Open the app → <strong>Register</strong>: creates your user (owner) + company (VAT number).</li>
+<li>Complete the <strong>onboarding wizard</strong>:<ul>
+<li><strong>Local certificate</strong> (default): instant self-managed signing key — the app can
+issue/sign/QR/PDF immediately; gateway clearance stays disabled until real
+onboarding.</li>
+<li><strong>Connect ZATCA</strong> (production path): enter the OTP from the
+<a href="https://fatoora.zatca.gov.sa">Fatoora portal</a> → the app requests a compliance
+CSID, runs the four mandatory compliance checks (standard, simplified, credit,
+debit samples), then obtains the production CSID.</li>
+</ul>
+</li>
+<li>Add a customer and a product; issue a test invoice; download its PDF.</li>
+</ol>
+<p><strong>Verify:</strong> the invoice appears under Invoices with status <code>signed</code>, and its detail
+page (<code>/invoices/&lt;id&gt;</code>) shows hash + QR + XML.</p>
+<hr>
+<h2>8. Build the AI knowledge base</h2>
+<p>Once logged in as the owner:</p>
+<pre><code>POST /api/ai/ingest              # global ZATCA regulation corpus
+POST /api/ai/ingest {&quot;scope&quot;:&quot;company&quot;}   # your tenant&#39;s own data summaries
+</code></pre>
+<p>(Both are also triggered from the app; tenant data re-ingests automatically after
+invoice/customer/product changes, debounced.)</p>
+<p><strong>Verify:</strong> <code>GET /api/ai/ingest</code> returns non-zero <code>totalGlobal</code>; asking the
+assistant a ZATCA question returns a grounded, cited answer.</p>
+<hr>
+<h2>9. Production hardening checklist</h2>
+<ul>
+<li><input disabled="" type="checkbox"> <code>AUTH_ENFORCE=true</code> and a strong, unique <code>AUTH_SECRET</code></li>
+<li><input disabled="" type="checkbox"> <code>ENCRYPTION_KEY</code> set (certificate private keys encrypted at rest)</li>
+<li><input disabled="" type="checkbox"> <code>CRON_SECRET</code> set (protects the ZATCA reporting cron endpoint)</li>
+<li><input disabled="" type="checkbox"> <code>SEED_DEMO</code> unset</li>
+<li><input disabled="" type="checkbox"> HTTPS enforced end-to-end (Vercel does this; self-hosted needs a proxy)</li>
+<li><input disabled="" type="checkbox"> Neon: enable branch protection / PITR backups</li>
+<li><input disabled="" type="checkbox"> Vercel: enable &quot;Protect Preview Deployments&quot; so previews aren&#39;t public</li>
+<li><input disabled="" type="checkbox"> GitHub: enable branch protection on <code>main</code> (require the CI check to pass before merge — CI running is not itself a merge gate without this)</li>
+<li><input disabled="" type="checkbox"> Set <code>ZATCA_MODE=production</code> only after sandbox onboarding passes</li>
+<li><input disabled="" type="checkbox"> Confirm no secrets in the repo: <code>git grep -iE &quot;sk-or-|sk-ant-|postgres://&quot; -- &#39;:!*.md&#39;</code> returns nothing</li>
+<li><input disabled="" type="checkbox"> Rate limits: <code>fatooralite/proxy.ts</code> calls <code>lib/ratelimit/limiter.ts</code>, which uses
+shared Upstash Redis when <code>UPSTASH_REDIS_REST_URL</code>/<code>UPSTASH_REDIS_REST_TOKEN</code>
+are set — <strong>set these on Vercel</strong>, or the fallback in-memory limiter is
+per-instance only and a multi-instance deploy under load effectively
+multiplies the intended per-IP budget</li>
+</ul>
+<hr>
+<h2>9b. Disaster recovery</h2>
+<p>No RPO/RTO target is committed yet — <strong>the owner needs to pick one</strong>; the
+mechanics below are ready to use once that&#39;s decided.</p>
+<ul>
+<li><strong>Database</strong>: Neon supports point-in-time recovery (PITR) on paid plans —
+confirm the plan&#39;s retention window (varies by tier) and enable it in the
+Neon dashboard. Restoring: create a new branch from a timestamp
+(<code>neonctl branches create --parent &lt;branch&gt; --timestamp &lt;ISO8601&gt;</code> or via
+the dashboard), verify it, then repoint <code>DATABASE_URL</code>/<code>DIRECT_URL</code>.</li>
+<li><strong>Secrets are not covered by database PITR.</strong> <code>ENCRYPTION_KEY</code> and
+<code>AUTH_SECRET</code> must be backed up separately (password manager / secrets
+vault), out-of-band from the database. A restored database is useless for
+decrypting stored certificate private keys without the <code>ENCRYPTION_KEY</code>
+that was in effect when they were encrypted — losing that key is
+equivalent to losing every tenant&#39;s ZATCA signing key.</li>
+<li><strong>Test the restore path before you need it.</strong> An untested backup is not a
+backup. Run a restore drill on a schedule (quarterly is a reasonable
+starting point) against a scratch Neon branch, and confirm a real
+application boot + login against the restored data.</li>
+<li><strong>Application code/config</strong>: stateless on Vercel — redeploying from git is
+the recovery path; no separate application-layer backup needed.</li>
+</ul>
+<hr>
+<h2>10. Upgrades</h2>
+<pre><code class="language-bash">git pull
+cd fatooralite &amp;&amp; npm ci
+npx prisma migrate deploy   # applies any new migrations
+# redeploy (Vercel does this automatically on push)
+</code></pre>
+<p>Schema changes always ship as migrations — never run <code>prisma db push</code> against
+production.</p>
+<h2>11. Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Cause / fix</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Environment validation failed</code> at boot</td>
+<td>missing <code>DATABASE_URL</code>/<code>AUTH_SECRET</code> — check step 4</td>
+</tr>
+<tr>
+<td>First AI request very slow</td>
+<td>local embedding model cold start — use <code>EMBEDDING_PROVIDER=openai</code>/<code>voyage</code>, or accept the one-time delay per instance</td>
+</tr>
+<tr>
+<td>AI answers &quot;mock mode&quot;</td>
+<td>no provider key set for the selected <code>AI_PROVIDER</code></td>
+</tr>
+<tr>
+<td>ZATCA submit fails with 401 from gateway</td>
+<td>company still on the local dev certificate — run real onboarding (step 7.2)</td>
+</tr>
+<tr>
+<td><code>relation &quot;KnowledgeChunk&quot; ... vector</code> errors</td>
+<td>migrations not applied to this database — step 5</td>
+</tr>
+<tr>
+<td>Retrieval returns nothing after switching <code>EMBEDDING_PROVIDER</code></td>
+<td>re-ingest both scopes (step 8)</td>
+</tr>
+</tbody></table>
+
+<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/09-deployment.md</div>
+</main>
+</div>
+</body>
+</html>

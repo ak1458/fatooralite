@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Feature Docs · Fatoora Lite Pro Docs</title>
+<style>
+:root{
+  --bg:#0b1210;--s1:#101a17;--s2:#16211d;--bd:#223129;--tx:#e8f0ec;--t2:#b7c6bf;
+  --t3:#7d8f86;--ac:#34d399;--acs:rgba(52,211,153,.12);--code:#0d1614;
+  --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{--bg:#f6f8f7;--s1:#ffffff;--s2:#eef2f0;--bd:#d9e2dd;--tx:#15211c;--t2:#3d4d46;
+  --t3:#6b7c74;--ac:#0d9668;--acs:rgba(13,150,104,.1);--code:#f0f4f2;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.65 var(--sans)}
+.layout{display:flex;min-height:100vh}
+nav{width:260px;flex:none;background:var(--s1);border-inline-end:1px solid var(--bd);
+  padding:22px 16px;position:sticky;top:0;height:100vh;overflow-y:auto}
+nav .brand{font-weight:800;font-size:16px;margin-bottom:4px}
+nav .brand span{color:var(--ac)}
+nav .sub{font-size:11.5px;color:var(--t3);margin-bottom:18px}
+nav .group{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--t3);margin:16px 8px 6px}
+nav a{display:block;padding:7px 10px;border-radius:8px;color:var(--t2);text-decoration:none;
+  font-size:13px;font-weight:500}
+nav a:hover{background:var(--s2);color:var(--tx)}
+nav a.active{background:var(--acs);color:var(--ac);font-weight:700}
+main{flex:1;min-width:0;padding:40px 48px 80px;max-width:960px}
+main h1{font-size:28px;line-height:1.25;margin:0 0 4px;letter-spacing:-.02em}
+main h2{font-size:20px;margin:34px 0 10px;padding-top:14px;border-top:1px solid var(--bd)}
+main h3{font-size:16px;margin:24px 0 8px}
+main a{color:var(--ac)}
+main p, main li{color:var(--t2)}
+main strong{color:var(--tx)}
+main code{font-family:var(--mono);font-size:12.5px;background:var(--code);
+  border:1px solid var(--bd);border-radius:5px;padding:1px 5px}
+main pre{background:var(--code);border:1px solid var(--bd);border-radius:10px;
+  padding:14px 16px;overflow-x:auto}
+main pre code{border:none;background:transparent;padding:0;font-size:12.5px;line-height:1.6}
+main table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+main th,main td{border:1px solid var(--bd);padding:8px 12px;text-align:left;vertical-align:top}
+main th{background:var(--s2);font-weight:700}
+main blockquote{margin:14px 0;padding:10px 16px;border-inline-start:3px solid var(--ac);
+  background:var(--acs);border-radius:0 10px 10px 0}
+main blockquote p{margin:4px 0}
+main hr{border:none;border-top:1px solid var(--bd);margin:28px 0}
+main input[type=checkbox]{accent-color:var(--ac)}
+.footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--bd);
+  font-size:12px;color:var(--t3)}
+@media(max-width:860px){.layout{flex-direction:column}nav{width:auto;height:auto;position:static}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
+<div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html" class="active">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html">Deployment Guide</a><a href="10-ai-architecture.html">AI Architecture</a></nav>
+<main>
+<h1>Fatoora Lite Pro — Feature Documentation</h1>
+<p>Plain-language explanation of every module: <strong>what it is, why a user needs it, what
+problem it solves, how it works.</strong> This directly answers the &quot;I don&#39;t understand what this
+is for&quot; questions.</p>
+<hr>
+<h2>Authentication &amp; Accounts</h2>
+<p><strong>What:</strong> Login, sign up, sessions. <strong>Why:</strong> A commercial SaaS needs each business to have
+its own secure account. <strong>Problem solved:</strong> Today there&#39;s a login form but no way to create
+an account, and a fake user (Khalid) is pre-seeded. <strong>How:</strong> <code>/register</code> creates a company +
+owner; <code>/login</code> authenticates; sessions are signed JWT cookies; passwords are hashed.</p>
+<h2>Onboarding</h2>
+<p><strong>What:</strong> A guided first-run wizard. <strong>Why:</strong> Issuing a legal e-invoice in Saudi Arabia
+requires ZATCA credentials; a new user can&#39;t just start. <strong>Problem solved:</strong> Right now the
+app drops you into a dashboard for a pre-made company. Instead, the <strong>first</strong> thing a new
+user does is create <em>their</em> company and connect it to ZATCA. <strong>How:</strong> company profile →
+ZATCA connection (CSID) → branches → finish → dashboard.</p>
+<h2>Dashboard</h2>
+<p><strong>What:</strong> The command center after onboarding. <strong>Why:</strong> Owners want an at-a-glance compliance
+posture. <strong>Problem solved:</strong> Current KPIs are stuck &quot;Loading…&quot; and numbers are fake. <strong>How:</strong>
+real KPIs (VAT collected, invoices, clearance success, certificate health), live clearance
+feed, and 7-day volume — all from the tenant&#39;s data.</p>
+<h2>Invoices</h2>
+<p><strong>What:</strong> Create and manage e-invoices (standard B2B + simplified B2C). <strong>Why:</strong> This is the
+core job. <strong>Problem solved:</strong> &quot;Loading invoices…&quot; forever; create doesn&#39;t really submit.
+<strong>How:</strong> a form builds line items, the engine computes VAT, the document is signed and (per
+type) cleared or reported to ZATCA, and a QR-stamped PDF is produced.</p>
+<h2>Credit / Debit Notes</h2>
+<p><strong>What:</strong> Corrections to issued invoices (refunds, adjustments). <strong>Why:</strong> ZATCA requires
+formal credit/debit notes, not edited invoices. <strong>Problem solved:</strong> the note form looks real
+but does nothing. <strong>How:</strong> select the original invoice, give a reason (mandatory), and issue
+through the same signing/submission pipeline, referencing the original.</p>
+<h2>Customers</h2>
+<p><strong>What:</strong> Your buyers&#39; directory. <strong>Why:</strong> Standard invoices need full buyer identity; reuse
+saves typing. <strong>Problem solved:</strong> stuck on infinite loading. <strong>How:</strong> CRUD; customers appear
+in the invoice buyer picker.</p>
+<h2>Products</h2>
+<p><strong>What:</strong> Your catalog of goods/services with price + VAT category. <strong>Why:</strong> Fast, consistent
+invoice lines. <strong>Problem solved:</strong> &quot;Loading Products…&quot; forever. <strong>How:</strong> CRUD; products
+appear as selectable invoice line items.</p>
+<h2>ZATCA Integration — <em>explained in full</em></h2>
+<p><strong>What it is:</strong> The bridge between Fatoora Lite Pro and the Saudi government&#39;s <strong>Fatoora</strong>
+platform. To issue legal e-invoices, your billing device (an &quot;EGS unit&quot;) must be
+<strong>onboarded</strong>: it generates a cryptographic key, requests a certificate (<strong>CSID</strong>) from
+ZATCA, passes compliance checks, and receives a <strong>production certificate</strong>. After that, the
+app uses that certificate to <strong>clear</strong> standard invoices and <strong>report</strong> simplified ones.</p>
+<p><strong>Why you need it:</strong> Without a valid CSID and a working connection, your invoices are <strong>not
+legally valid</strong> and standard invoices <strong>cannot be shared with buyers</strong> (they must be cleared
+first). This module is what makes the whole product legal.</p>
+<p><strong>What problem it solves:</strong> ZATCA onboarding is a multi-step cryptographic process (CSR,
+compliance CSID, sample-invoice checks, production CSID, environment switching). Fatoora Lite Pro
+does it for you and then monitors the connection.</p>
+<p><strong>How it works / what the controls mean (replacing the confusing tiles):</strong></p>
+<ul>
+<li><strong>Environment (Sandbox vs Production):</strong> sandbox is ZATCA&#39;s test gateway for setup and
+trials; production is live. You start in sandbox, then promote.</li>
+<li><strong>CSID status &amp; expiry:</strong> your certificate&#39;s health; renew before it expires or clearance stops.</li>
+<li><strong>Compliance test (&quot;Create Test&quot;):</strong> sends sample invoices to ZATCA&#39;s sandbox to prove your
+setup is correct before going live.</li>
+<li><strong>Connection health / latency:</strong> is the gateway reachable and how fast.</li>
+<li>(&quot;ERP&quot; tile, etc. were decorative — removed unless we add a real ERP import later.)</li>
+</ul>
+<h2>Compliance Center</h2>
+<p><strong>What:</strong> A real-time monitor of your invoices&#39; legal status. <strong>Why:</strong> You must know what was
+accepted, what&#39;s pending, what was rejected, and what&#39;s about to miss its <strong>24-hour reporting
+deadline</strong>. <strong>Problem solved:</strong> the screen shows fake numbers (99.2%, 3 rejected, 14 pending,
+87 clear). <strong>How:</strong> real aggregates from your invoices and ZATCA responses, a deadline tracker
+for simplified invoices, the integrity of the <strong>PIH hash chain</strong>, and a live event feed.</p>
+<h2>Audit Vault</h2>
+<p><strong>What:</strong> A tamper-evident archive of every artifact exchanged with ZATCA (XML, signed XML,
+QR, gateway responses). <strong>Why:</strong> Auditors and ZATCA can demand proof. <strong>How:</strong> every issued
+invoice stores its artifacts; the vault lets you search and inspect them.</p>
+<h2>Analytics</h2>
+<p><strong>What:</strong> Business intelligence on your invoicing (revenue, VAT, top customers, clearance
+rate). <strong>Why:</strong> Owners want trends, not just compliance. <strong>Problem solved:</strong> mock charts.
+<strong>How:</strong> aggregates over real invoices; empty states when there&#39;s no data yet.</p>
+<h2>Reports</h2>
+<p><strong>What:</strong> VAT-return summaries and exports for a chosen period. <strong>Why:</strong> You file VAT with
+ZATCA and your accountant needs CSVs. <strong>How:</strong> period/range selection, totals, CSV export.
+This is also where the AI&#39;s &quot;make a 7-day report&quot; command lands.</p>
+<h2>AI Assistant</h2>
+<p><strong>What:</strong> An embedded expert that answers ZATCA questions and <strong>does things for you</strong>. <strong>Why:</strong>
+The rules are complex; users want answers grounded in the actual regulations and the ability
+to act by typing. <strong>Problem solved:</strong> today it&#39;s a non-working box with no model, no chatbot,
+no real AI. <strong>How:</strong></p>
+<ul>
+<li><strong>RAG (real retrieval):</strong> ZATCA regulations + your own data are embedded into a <strong>vector
+database</strong>; your question retrieves the most relevant passages and the model answers from
+them, with citations — not guesses.</li>
+<li><strong>Agentic actions:</strong> a safe server-side registry lets the assistant create invoices,
+generate reports, add users, etc., validated and permission-checked.</li>
+<li><strong>Model selection + streaming</strong>, available on every page via a floating dock.
+<strong>Why a vector DB:</strong> a relational database is great for structured records but can&#39;t do
+semantic search (&quot;find the rule about exempt categories&quot;). A vector store enables real
+meaning-based retrieval so the AI stops hallucinating.</li>
+</ul>
+<h2>Notifications</h2>
+<p><strong>What:</strong> Alerts for compliance-relevant events. <strong>Why:</strong> You must act before deadlines and
+fix rejections fast. <strong>Problem solved:</strong> badge says &quot;4&quot; but the panel is empty and the bell is
+dead. <strong>How:</strong> a generator turns real events (rejections, near-deadline, expiring CSID) into
+notifications; the bell opens a working panel; the badge equals the unread count.</p>
+<h2>Users &amp; Roles</h2>
+<p><strong>What:</strong> Team management with access control. <strong>Why:</strong> A business has an owner, accountants,
+auditors — each needing different access. <strong>Problem solved:</strong> the section is empty. <strong>How:</strong>
+invite users with a role/designation; manage 5 system roles plus custom roles built from
+permission checkboxes; permissions gate both API and UI.</p>
+<h2>Settings</h2>
+<p><strong>What:</strong> Central administration. <strong>Why:</strong> Every aspect of the app should be configurable.
+<strong>Problem solved:</strong> only a few placeholder options exist. <strong>How:</strong> sections for Company,
+ZATCA, Users &amp; Roles, AI, Appearance (theme/language), Notifications, Security, and Billing —
+each control persisting and taking effect.</p>
+<h2>Appearance (Theme &amp; Language)</h2>
+<p><strong>What:</strong> Dark/light themes and Arabic/English (RTL). <strong>Why:</strong> Saudi users expect polished
+Arabic-first UX. <strong>Problem solved:</strong> theming is inconsistent and rough. <strong>How:</strong> a single
+CSS-variable theme system, consistent across every screen, with standardized motion tokens
+for smooth, premium animations.</p>
+
+<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/05-features.md</div>
+</main>
+</div>
+</body>
+</html>

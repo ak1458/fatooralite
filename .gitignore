@@ -11,13 +11,17 @@
 **/.env.*
 !**/.env.example
 
+# secrets — LOCAL ONLY, never commit, never ship to live
+creds.md
+**/creds.md
+/archive/
+**/*.secret
+
 # test
 **/coverage/
 **/playwright-report/
 **/test-results/
 
-# internal artifacts — NOT deployed to GitHub
-/doc/
 
 # os / editor
 .DS_Store
@@ -30,3 +34,10 @@ Thumbs.db
 # prisma local db
 *.db
 *.db-journal
+
+# build caches
+**/tsconfig.tsbuildinfo
+
+# agent worktrees — full repo copies created by parallel-agent runs.
+# Never commit these; `git worktree prune` + `git branch -D worktree-*` cleans up.
+.claude/worktrees/

@@ -1,6 +1,6 @@
 <div align="center">
 
-# FatooraLite
+# Fatoora Lite Pro
 
 ### ZATCA Phase 2 e-invoicing compliance for Saudi SMEs
 
@@ -11,10 +11,10 @@ Compliance-first. Bilingual (Arabic-RTL / English). Dark & light. Installable PW
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19-149eca?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-3ecf8e?logo=supabase)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon%20%2B%20pgvector-3ecf8e?logo=postgresql)
 ![PWA](https://img.shields.io/badge/PWA-installable-5a0fc8?logo=pwa)
 
-<img src=".github/screenshots/01-dashboard-dark-ar.png" alt="FatooraLite Compliance Command Center" width="900" />
+<img src=".github/screenshots/01-dashboard-dark-ar.png" alt="Fatoora Lite Pro Compliance Command Center" width="900" />
 
 </div>
 
@@ -22,7 +22,7 @@ Compliance-first. Bilingual (Arabic-RTL / English). Dark & light. Installable PW
 
 ## Overview
 
-**FatooraLite** turns an invoice into a ZATCA Phase-2 compliant, cryptographically
+**Fatoora Lite Pro** turns an invoice into a ZATCA Phase-2 compliant, cryptographically
 stamped document, clears/reports it through the Fatoora gateway, and keeps an
 auditable archive — through a clean, Arabic-first interface. It is built for
 owner-operated Saudi SMEs and the accountants who serve them: people pulled into
@@ -42,8 +42,9 @@ accounting suite.
 - 🗄️ **Audit vault** — searchable archive of signed XML, QR, and gateway responses.
 - 📊 **Command center & analytics** — compliance health, clearance success, VAT
   trends, revenue by customer.
-- 🤖 **AI assistant (UI)** — a ZATCA-tuned copilot surface for rejection
-  explanations and guidance.
+- 🤖 **AI agent** — provider-agnostic (OpenRouter / Anthropic / OpenAI via env),
+  RAG-grounded on pgvector (global ZATCA corpus + per-tenant data), app-wide
+  tool calling with confirm-before-write for financial actions.
 - 🌐 **Bilingual & themed** — Arabic-RTL default + English, dark/light, all via
   design tokens.
 - 🔐 **Auth + RBAC** — scrypt passwords, role→permission matrix, jose sessions,
@@ -77,9 +78,9 @@ accounting suite.
 | Framework | Next.js 16 (App Router) · React 19 |
 | Language | TypeScript (strict) |
 | Styling | Tailwind v4 + CSS variables, `next/font` |
-| Database | Prisma 6 + PostgreSQL (Supabase) |
+| Database | Prisma 6 + PostgreSQL (Neon) + pgvector |
 | Crypto / XML | `node:crypto` (secp256k1, scrypt) · node-forge · xmlbuilder2 |
-| Auth | jose (JWT cookies) + scrypt + `proxy.ts` guard |
+| Auth | jose (JWT cookies) + scrypt + custom DB roles + `proxy.ts` guard |
 | Tests | Vitest + Testing Library · Playwright |
 | Hosting | Vercel (Node runtime) · PWA |
 
@@ -90,14 +91,13 @@ cd fatooralite
 npm install                 # also runs `prisma generate`
 cp .env.example .env
 
-docker compose up -d        # local Postgres (or point .env at Supabase)
+docker compose up -d        # local Postgres with pgvector (or point .env at Neon)
 npm run db:migrate          # apply migrations
-npm run db:seed             # demo company, users, sample invoices
 npm run dev                 # http://localhost:3000
 ```
 
-**Demo logins** (after seed): `khalid@almarai.example / owner1234` (owner) ·
-`accountant@almarai.example / account1234` · `auditor@almarai.example / auditor1234`.
+A fresh install starts **empty** — register your own company on /register.
+(An optional demo tenant exists for local development only: `SEED_DEMO=true npm run db:seed`.)
 
 ### Scripts
 
@@ -115,15 +115,16 @@ Real clearance needs *your* certificate. Register the entity on the ZATCA Fatoor
 portal, get the OTP, then in the app go to **ZATCA Integration → Onboarding**:
 request the **Compliance CSID** (CSR + OTP), then the **Production CSID**. After
 that, issued invoices clear/report for real. Until then, signing works locally but
-the gateway rejects (no valid CSID). Full steps in [`doc/DEPLOY.md`](doc/DEPLOY.md).
+the gateway rejects (no valid CSID). Full steps in [`docs/09-deployment.md`](docs/09-deployment.md).
 
 ## Deploy (free tier)
 
-**Supabase (Postgres) + Vercel (Node host).** Set `DATABASE_URL`/`DIRECT_URL`
-from Supabase, import the repo on Vercel with **Root Directory = `fatooralite`**,
-add env vars, deploy, and run `npm run db:migrate` once. See
-[`doc/DEPLOY.md`](doc/DEPLOY.md). (Cloudflare Workers is unsuitable — the
-`node:crypto` engine needs a Node runtime.)
+**Neon (Postgres + pgvector) + Vercel (Node host).** Set `DATABASE_URL`/`DIRECT_URL`
+from Neon, import the repo on Vercel with **Root Directory = `fatooralite`**,
+add env vars, deploy, and run `npm run db:migrate` once. The complete
+step-by-step guide (secrets, env matrix, hardening checklist) is
+[`docs/09-deployment.md`](docs/09-deployment.md). (Cloudflare Workers is
+unsuitable — the `node:crypto` engine needs a Node runtime.)
 
 ## Architecture
 
@@ -149,19 +150,29 @@ app/(app)      UI: app shell + module screens
 
 | Env | Purpose |
 | --- | --- |
-| `DATABASE_URL` / `DIRECT_URL` | Postgres (Supabase pooled + direct) |
+| `DATABASE_URL` / `DIRECT_URL` | Postgres (Neon pooled + direct) |
 | `AUTH_SECRET` | session signing secret (required in production) |
 | `AUTH_ENFORCE` | `true` to require login + RBAC on every page |
 | `ZATCA_MODE` | `sandbox` \| `production` |
 | `ZATCA_SANDBOX_BASE_URL` / `ZATCA_PRODUCTION_BASE_URL` | gateway URLs |
+| `ENCRYPTION_KEY` | at-rest encryption for certificate private keys (required in production) |
+| `AI_PROVIDER` (+ key) | `openrouter` (default) | `anthropic` | `openai` |
+| `EMBEDDING_PROVIDER` | `local` (default) | `openai` | `voyage` — RAG embeddings |
+
+## Documentation
+
+The full documentation suite lives in [`docs/`](docs/README.md) — PRD,
+architecture, functional spec, deployment guide, and AI architecture. Build the
+browsable HTML portal with `npm run docs:build` (inside `fatooralite/`) and open
+`docs/portal/index.html`.
 
 ## Roadmap
 
 - [x] UI · compliance engine · data model · invoice creation · clearance · audit · auth
-- [x] Real ZATCA gateway + CSID onboarding · PostgreSQL · PWA
-- [ ] Wire dashboard screens to live DB queries
-- [ ] AI backend (rejection-explainer, receipt OCR)
-- [ ] Notifications, billing, multi-entity accountant view
+- [x] Real ZATCA gateway + CSID onboarding · PostgreSQL (Neon) · PWA
+- [x] Live dashboard/analytics from the DB · notifications · users & custom roles
+- [x] AI agent: provider-agnostic layer, RAG (pgvector), app-wide tool calling
+- [ ] Billing · multi-entity accountant view · receipt OCR
 
 ## License
 

@@ -33,13 +33,13 @@ describe("rbac", () => {
 
 describe("session token", () => {
   it("round-trips a payload", async () => {
-    const token = await createSessionToken({ userId: "u1", email: "a@b.c", name: "A", role: "owner" });
+    const token = await createSessionToken({ userId: "u1", email: "a@b.c", name: "A", role: "owner", sessionVersion: 0 });
     const payload = await verifySessionToken(token);
     expect(payload?.userId).toBe("u1");
     expect(payload?.role).toBe("owner");
   });
   it("rejects a tampered token", async () => {
-    const token = await createSessionToken({ userId: "u1", email: "a@b.c", name: "A", role: "owner" });
+    const token = await createSessionToken({ userId: "u1", email: "a@b.c", name: "A", role: "owner", sessionVersion: 0 });
     expect(await verifySessionToken(token + "x")).toBeNull();
     expect(await verifySessionToken("garbage")).toBeNull();
   });

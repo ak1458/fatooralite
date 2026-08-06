@@ -9,8 +9,10 @@ export function VolumeChart({ initialData }: { initialData?: VolumeBar[] }) {
   const { t, lang } = useLang();
   const volumeData = initialData ?? [];
 
-  // Calculate total volume for today (assuming highlight is today)
-  const todayCount = volumeData.find(v => v.highlight)?.pct || 0;
+  // `pct` is the normalised bar height (0-100), not a count — reading it
+  // here printed "100 invoices today" for any tenant whose busiest day in the
+  // window was today, which for a new tenant means their very first invoice.
+  const todayCount = volumeData.find((v) => v.highlight)?.count ?? 0;
 
   return (
     <Card style={{ display: "flex", flexDirection: "column" }}>

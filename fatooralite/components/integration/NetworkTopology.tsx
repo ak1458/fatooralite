@@ -49,7 +49,7 @@ export function NetworkTopology() {
         <g>
           <rect x="250" y="112" width="150" height="76" rx="18" fill="var(--s2)" stroke="var(--ac)" strokeWidth="1.5" />
           <text x="325" y="146" fill="var(--tx)" fontSize="15" fontWeight="700" textAnchor="middle">
-            FatooraLite
+            Fatoora Lite Pro
           </text>
           <text x="325" y="166" fill="var(--ac)" fontSize="11" fontWeight="600" textAnchor="middle">
             Compliance Engine

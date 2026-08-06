@@ -11,8 +11,9 @@
  */
 import { createHash, sign as cryptoSign } from "node:crypto";
 import { create } from "xmlbuilder2";
+import { DOMParser } from "@xmldom/xmldom";
 import { rawHash } from "./hash";
-import { getInvoiceBodyForHashing } from "./canonicalize";
+import { getInvoiceBodyForHashing, canonicalizeNodeInContext, canonicalizeXml } from "./canonicalize";
 
 export interface XadesSigningInfo {
   /** The full invoice XML (before signature injection). */
@@ -43,26 +44,38 @@ export function buildXadesSignature(info: XadesSigningInfo): string {
   const invoiceBodyCanonical = getInvoiceBodyForHashing(info.invoiceXml);
   const invoiceBodyDigest = rawHash(invoiceBodyCanonical);
 
-  // 2. Build SignedProperties and compute its digest
+  // 2. Build SignedProperties and compute its digest over the CANONICALIZED
+  //    form, not the raw xmlbuilder2 serialization — SignedProperties
+  //    declares its own namespaces (self-contained, no ancestor-namespace
+  //    dependency), but different XML serializers can still disagree on
+  //    attribute order/quoting/whitespace for "the same" logical XML.
+  //    Canonicalizing removes that ambiguity and matches Reference 1's
+  //    treatment (see the c14n11 Transform added on Reference 2 below).
   const signedPropertiesXml = buildSignedProperties({
     signingTime: now,
     certDigest: computeCertDigest(certB64),
     certIssuer,
     certSerial,
   });
-  const signedPropertiesDigest = rawHash(signedPropertiesXml);
+  const signedPropertiesDigest = rawHash(canonicalizeXml(signedPropertiesXml));
 
   // 3. Build SignedInfo
   const signedInfoXml = buildSignedInfo(invoiceBodyDigest, signedPropertiesDigest);
 
-  // 4. Compute SignatureValue = ECDSA-SHA256(SignedInfo canonical)
-  const signatureValue = computeSignatureValue(signedInfoXml, info.privateKeyPem);
+  // 4. SignatureValue is filled in by finalizeSignatureValue() AFTER this
+  //    signature is injected into the invoice — the SignedInfo must be
+  //    canonicalized in its final in-document namespace context (inclusive C14N
+  //    renders the Invoice's inherited namespaces onto SignedInfo), which does
+  //    not exist yet. Placeholder for now.
+  const signatureValue = "";
 
-  // 5. Assemble the complete ds:Signature
+  // 5. Assemble the complete ds:Signature.
+  //    ZATCA declares ONLY xmlns:ds on the Signature element. A default xmlns
+  //    or an xmlns:xades here would be inherited into SignedInfo under inclusive
+  //    C14N and change its canonical bytes — breaking the SignatureValue check.
+  //    The xades namespace is declared where it is used (SignedProperties).
   const sig = create().ele("ds:Signature", {
-    xmlns: "urn:oasis:names:specification:ubl:dsig:enveloped:xades",
     "xmlns:ds": "http://www.w3.org/2000/09/xmldsig#",
-    "xmlns:xades": "http://uri.etsi.org/01903/v1.3.2#",
     Id: "signature",
   });
 
@@ -82,9 +95,13 @@ export function buildXadesSignature(info: XadesSigningInfo): string {
     .up();
   keyInfo.up();
 
-  // Object with QualifyingProperties
+  // Object with QualifyingProperties. Declare xmlns:xades HERE (not on
+  // ds:Signature) so the xades prefix resolves without leaking into the
+  // SignedInfo namespace context — QualifyingProperties is under ds:Object,
+  // a sibling of SignedInfo, so it never affects the signed canonical bytes.
   const obj = sig.ele("ds:Object");
   const qp = obj.ele("xades:QualifyingProperties", {
+    "xmlns:xades": "http://uri.etsi.org/01903/v1.3.2#",
     Target: "#signature",
   });
 
@@ -95,7 +112,9 @@ export function buildXadesSignature(info: XadesSigningInfo): string {
   obj.up();
   sig.up();
 
-  return sig.end({ prettyPrint: true });
+  // headless: no <?xml?> declaration — this fragment is injected INTO the
+  // invoice's UBLExtensions, and a second declaration mid-document is invalid.
+  return sig.end({ prettyPrint: false, headless: true });
 }
 
 /** Build the SignedProperties XML for the XAdES signature. */
@@ -129,7 +148,7 @@ function buildSignedProperties(params: {
 
   sp.up();
 
-  return sp.end({ prettyPrint: false });
+  return sp.end({ prettyPrint: false, headless: true });
 }
 
 /** Build the SignedInfo block with two references. */
@@ -146,7 +165,10 @@ function buildSignedInfo(invoiceDigest: string, propsDigest: string): string {
     Algorithm: "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256",
   }).up();
 
-  // Reference 1: invoice body
+  // Reference 1: invoice body. ZATCA's transform set excludes UBLExtensions,
+  // cac:Signature, and the QR AdditionalDocumentReference, THEN canonicalizes
+  // with c14n11. The digest must be computed over exactly this node-set (see
+  // getInvoiceBodyForHashing) or the gateway recomputes a different digest.
   const ref1 = si.ele("ds:Reference", {
     Id: "invoiceSignedData",
     URI: "",
@@ -155,24 +177,37 @@ function buildSignedInfo(invoiceDigest: string, propsDigest: string): string {
     .ele("ds:Transform", { Algorithm: "http://www.w3.org/TR/1999/REC-xpath-19991116" })
     .ele("ds:XPath").txt("not(//ancestor-or-self::ext:UBLExtensions)").up()
     .up()
+    .ele("ds:Transform", { Algorithm: "http://www.w3.org/TR/1999/REC-xpath-19991116" })
+    .ele("ds:XPath").txt("not(//ancestor-or-self::cac:Signature)").up()
+    .up()
+    .ele("ds:Transform", { Algorithm: "http://www.w3.org/TR/1999/REC-xpath-19991116" })
+    .ele("ds:XPath").txt("not(//ancestor-or-self::cac:AdditionalDocumentReference[cbc:ID='QR'])").up()
+    .up()
     .ele("ds:Transform", { Algorithm: "http://www.w3.org/2006/12/xml-c14n11" }).up()
     .up();
   ref1.ele("ds:DigestMethod", { Algorithm: "http://www.w3.org/2001/04/xmlenc#sha256" }).up();
   ref1.ele("ds:DigestValue").txt(invoiceDigest).up();
   ref1.up();
 
-  // Reference 2: signed properties
+  // Reference 2: signed properties. Declares the same c14n11 Transform used
+  // to produce signedPropertiesDigest above, so a verifier applies the same
+  // canonicalization before comparing digests (an un-declared Transform is
+  // exactly the class of mismatch the SignedInfo ancestor-namespace fix
+  // above addresses for Reference 1 — don't reintroduce it here).
   const ref2 = si.ele("ds:Reference", {
     Type: "http://www.w3.org/2000/09/xmldsig#SignatureProperties",
     URI: "#xadesSignedProperties",
   });
+  ref2.ele("ds:Transforms")
+    .ele("ds:Transform", { Algorithm: "http://www.w3.org/2006/12/xml-c14n11" }).up()
+    .up();
   ref2.ele("ds:DigestMethod", { Algorithm: "http://www.w3.org/2001/04/xmlenc#sha256" }).up();
   ref2.ele("ds:DigestValue").txt(propsDigest).up();
   ref2.up();
 
   si.up();
 
-  return si.end({ prettyPrint: false });
+  return si.end({ prettyPrint: false, headless: true });
 }
 
 /** SHA-256 digest of the certificate bytes. */
@@ -182,10 +217,38 @@ function computeCertDigest(certBase64: string): string {
   return createHash("sha256").update(certBytes).digest("base64");
 }
 
-/** ECDSA-SHA256 sign the SignedInfo XML. */
-function computeSignatureValue(signedInfoXml: string, privateKeyPem: string): string {
-  const sig = cryptoSign("sha256", Buffer.from(signedInfoXml, "utf8"), privateKeyPem);
-  return sig.toString("base64");
+/**
+ * Fill in ds:SignatureValue after the signature has been injected into the
+ * invoice. Canonicalizes the SignedInfo *in its final document context* (so
+ * inclusive C14N-11 renders exactly the inherited namespaces ZATCA will see),
+ * ECDSA-SHA256 signs those bytes, and writes the result into the empty
+ * SignatureValue element. This is the step that makes the stamp verify on the
+ * gateway. Call once, on the fully-assembled signed XML, before hashing/QR.
+ */
+export function finalizeSignatureValue(signedXml: string, privateKeyPem: string): string {
+  const doc = new DOMParser().parseFromString(signedXml, "text/xml");
+  const signedInfo = doc.getElementsByTagName("ds:SignedInfo")[0];
+  if (!signedInfo) throw new Error("finalizeSignatureValue: no ds:SignedInfo in document");
+
+  // SignedInfo declares only xmlns:ds on itself — the Invoice root's 4
+  // namespaces (default, cac, cbc, ext) are inherited from many levels up.
+  // Inclusive C14N-11 (what SignedInfo's own CanonicalizationMethod
+  // declares) must render those inherited namespaces onto the canonicalized
+  // apex regardless — canonicalizeNode() alone doesn't do this (see its
+  // sibling canonicalizeNodeInContext for why), which silently produced
+  // signed bytes ZATCA's verifier would never reproduce from the same
+  // document. Use the context-aware canonicalizer here specifically.
+  const canonical = canonicalizeNodeInContext(signedInfo as unknown as Node);
+  const signatureValue = cryptoSign("sha256", Buffer.from(canonical, "utf8"), privateKeyPem)
+    .toString("base64");
+
+  // Replace the empty SignatureValue element (self-closing or empty pair).
+  return signedXml
+    .replace(/<ds:SignatureValue\s*\/>/, `<ds:SignatureValue>${signatureValue}</ds:SignatureValue>`)
+    .replace(
+      /<ds:SignatureValue>\s*<\/ds:SignatureValue>/,
+      `<ds:SignatureValue>${signatureValue}</ds:SignatureValue>`,
+    );
 }
 
 /**

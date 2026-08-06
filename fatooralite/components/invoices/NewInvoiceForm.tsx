@@ -5,6 +5,8 @@ import { sar } from "@/lib/format";
 import { invoiceTotals } from "@/lib/zatca/money";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import { useAuth } from "@/lib/useCompany";
 
 interface Company {
   id: string;
@@ -31,6 +33,7 @@ const L = {
   title: { en: "New Invoice", ar: "فاتورة جديدة" },
   company: { en: "Company", ar: "الشركة" },
   number: { en: "Invoice number", ar: "رقم الفاتورة" },
+  numberAuto: { en: "Assigned automatically", ar: "يُخصَّص تلقائيًا" },
   kind: { en: "Type", ar: "النوع" },
   standard: { en: "Standard", ar: "ضريبية" },
   simplified: { en: "Simplified", ar: "مبسطة" },
@@ -42,6 +45,7 @@ const L = {
   desc: { en: "Description", ar: "الوصف" },
   qty: { en: "Qty", ar: "الكمية" },
   price: { en: "Unit price", ar: "سعر الوحدة" },
+  remove: { en: "Remove line", ar: "حذف السطر" },
   addLine: { en: "Add line", ar: "إضافة بند" },
   taxable: { en: "Taxable", ar: "الخاضع للضريبة" },
   vat: { en: "VAT (15%)", ar: "الضريبة (١٥٪)" },
@@ -62,7 +66,11 @@ const L = {
 };
 
 export function NewInvoiceForm() {
+  // Issuing an invoice moves the monthly usage count that PlanGate reads.
+  const { refresh: refreshSession } = useAuth();
   const { lang } = useLang();
+  const mobile = useMediaQuery(639);
+  const grid2 = mobile ? "1fr" : "1fr 1fr";
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyId, setCompanyId] = useState("");
   const [number, setNumber] = useState("");
@@ -86,11 +94,11 @@ export function NewInvoiceForm() {
     null,
   );
 
-  // Suggest an invoice number on mount (client-only; random is impure in render).
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setNumber(genNumber());
-  }, []);
+  // Invoice numbers are assigned by the server from the per-company ICV chain
+  // counter (lib/services/invoice-service.ts). This form used to seed the field
+  // with `INV-2026-${random}` and send it, which overrode that counter — ZATCA
+  // requires sequential numbering without gaps, and a random number is neither
+  // sequential nor collision-free. Left blank, the server assigns the next one.
 
   useEffect(() => {
     fetch("/api/companies")
@@ -136,7 +144,8 @@ export function NewInvoiceForm() {
     try {
       const company = companies.find((c) => c.id === companyId);
       const input = {
-        invoiceNumber: number,
+        // Blank => omitted, so the server assigns the next sequential number.
+        invoiceNumber: number.trim() || undefined,
         kind,
         issueDate: new Date().toISOString().slice(0, 10),
         issueTime: new Date().toISOString().slice(11, 19),
@@ -152,6 +161,9 @@ export function NewInvoiceForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Request failed");
       setResult(data);
+      // Refresh plan usage so the create button reflects the new count without
+      // needing a full page load; the server is still the authority either way.
+      void refreshSession();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -273,7 +285,7 @@ export function NewInvoiceForm() {
                 setResult(null);
                 setShowXml(false);
                 setClearance(null);
-                setNumber(genNumber());
+                setNumber("");
                 setLines([{ description: "", quantity: 1, unitPrice: 0 }]);
               }}
               style={{ ...btnGhost }}
@@ -321,9 +333,14 @@ export function NewInvoiceForm() {
           </select>
         </Field>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: grid2, gap: 12 }}>
           <Field label={label("number")}>
-            <input value={number} onChange={(e) => setNumber(e.target.value)} style={inputStyle} />
+            <input
+              value={number}
+              onChange={(e) => setNumber(e.target.value)}
+              style={inputStyle}
+              placeholder={label("numberAuto")}
+            />
           </Field>
           <Field label={label("kind")}>
             <select value={kind} onChange={(e) => setKind(e.target.value as "standard" | "simplified")} style={inputStyle}>
@@ -333,7 +350,7 @@ export function NewInvoiceForm() {
           </Field>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: grid2, gap: 12 }}>
           <Field label={label("customer")}>
             <select 
               value={selectedCustomerId} 
@@ -355,7 +372,7 @@ export function NewInvoiceForm() {
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: grid2, gap: 12 }}>
             <Field label={label("buyer")}>
               <input value={buyerName} onChange={(e) => setBuyerName(e.target.value)} style={inputStyle} />
             </Field>
@@ -369,12 +386,13 @@ export function NewInvoiceForm() {
           {label("lines")}
         </div>
         {lines.map((l, i) => (
-          <div key={i} style={{ display: "grid", gridTemplateColumns: "150px 1fr 80px 110px 36px", gap: 8, marginBottom: 8 }}>
-            <select onChange={(e) => handleProductSelect(i, e.target.value)} style={inputStyle}>
+          <div key={i} style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "150px 1fr 80px 110px 36px", gap: 8, marginBottom: mobile ? 16 : 8, paddingBottom: mobile ? 16 : 0, borderBottom: mobile ? "1px dashed var(--bd)" : "none" }}>
+            <select aria-label={`${label("product")} — ${label("lines")} ${i + 1}`} onChange={(e) => handleProductSelect(i, e.target.value)} style={inputStyle}>
               <option value="">{label("product")}...</option>
               {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             <input
+              aria-label={`${label("desc")} — ${label("lines")} ${i + 1}`}
               placeholder={label("desc")}
               value={l.description}
               onChange={(e) => updateLine(i, { description: e.target.value })}
@@ -382,6 +400,7 @@ export function NewInvoiceForm() {
             />
             <input
               type="number"
+              aria-label={`${label("qty")} — ${label("lines")} ${i + 1}`}
               placeholder={label("qty")}
               value={l.quantity}
               onChange={(e) => updateLine(i, { quantity: Number(e.target.value) })}
@@ -389,12 +408,13 @@ export function NewInvoiceForm() {
             />
             <input
               type="number"
+              aria-label={`${label("price")} — ${label("lines")} ${i + 1}`}
               placeholder={label("price")}
               value={l.unitPrice}
               onChange={(e) => updateLine(i, { unitPrice: Number(e.target.value) })}
               style={inputStyle}
             />
-            <button onClick={() => removeLine(i)} style={{ ...btnGhost, padding: 0 }} aria-label="remove">
+            <button onClick={() => removeLine(i)} style={{ ...btnGhost, padding: 0 }} aria-label={`${label("remove")} ${i + 1}`}>
               ×
             </button>
           </div>
@@ -458,16 +478,12 @@ function Stat({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
   );
 }
 
-function genNumber(): string {
-  return `INV-2026-${Math.floor(10000 + Math.random() * 89999)}`;
-}
-
 const btnPrimary: React.CSSProperties = {
   padding: "11px 18px",
   borderRadius: 11,
   border: "none",
   background: "linear-gradient(150deg,var(--acb),var(--ac))",
-  color: "#04130d",
+  color: "var(--on-ac)",
   fontSize: 13.5,
   fontWeight: 700,
   cursor: "pointer",

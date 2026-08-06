@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useMemo } from "react";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Icon } from "@/components/ui/Icon";
 import { HealthRing } from "@/components/dashboard/HealthRing";
@@ -10,27 +10,63 @@ import { ApiSparkline } from "@/components/dashboard/ApiSparkline";
 import { IntegrationStatus } from "@/components/dashboard/IntegrationStatus";
 import { LiveFeed } from "@/components/dashboard/LiveFeed";
 import { VolumeChart } from "@/components/dashboard/VolumeChart";
-import { useCompany } from "@/lib/useCompany";
-import type { Kpi, FeedEvent, VolumeBar } from "@/types";
+import { AsyncBoundary } from "@/components/common/AsyncBoundary";
+import { useCompany, useAuth } from "@/lib/useCompany";
+import { useAsyncData } from "@/lib/async/useAsyncData";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import type { Kpi, FeedEvent, VolumeBar, HealthBar, Service } from "@/types";
+import type { TrustBadge } from "@/components/dashboard/TrustBadges";
+
+interface DashboardData {
+  kpis: { counters: Record<string, number>; healthBars: HealthBar[]; kpis: Kpi[] };
+  feed: FeedEvent[];
+  volume: VolumeBar[];
+  integration: { services: Service[]; badges: TrustBadge[]; hasCert: boolean; isLocal: boolean };
+}
+
+/** Time-of-day greeting in both languages. */
+function greetingText(name: string, lang: "en" | "ar"): string {
+  const h = new Date().getHours();
+  if (lang === "ar") {
+    const period = h < 12 ? "صباح الخير" : h < 18 ? "مساء الخير" : "مساء الخير";
+    return `${period}، ${name}`;
+  }
+  const period = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  return `${period}, ${name}`;
+}
+
+/** Real formatted date string. */
+function todayString(lang: "en" | "ar"): string {
+  const now = new Date();
+  if (lang === "ar") {
+    return now.toLocaleDateString("ar-SA", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  }
+  return now.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
 
 export default function DashboardPage() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { company } = useCompany();
-  const [data, setData] = useState<{ kpis: { counters: Record<string, number>, kpis: Kpi[] }; feed: FeedEvent[]; volume: VolumeBar[] } | null>(null);
+  const { user } = useAuth();
+  const { state, retry } = useAsyncData<DashboardData>(
+    async (signal) => {
+      const res = await fetch(`/api/dashboard?companyId=${company!.id}`, { signal });
+      if (!res.ok) throw new Error(`Failed to load dashboard (${res.status})`);
+      return (await res.json()) as DashboardData;
+    },
+    [company?.id],
+    { enabled: !!company?.id },
+  );
 
-  useEffect(() => {
-    if (!company?.id) return;
-    fetch(`/api/dashboard?companyId=${company.id}`)
-      .then((res) => res.json())
-      .then(setData)
-      .catch(console.error);
-  }, [company?.id]);
-
-  // Use real data if loaded, otherwise fallback structure (handled by components internally or pass nulls)
+  const data = state.status === "success" ? state.data : null;
   const dashboardCounters = data?.kpis?.counters ?? { score: 0, vat: 0, inv: 0, succ: 0 };
-  const dashboardKpis = data?.kpis?.kpis ?? [];
   const dashboardFeed = data?.feed ?? [];
   const dashboardVolume = data?.volume ?? [];
+
+  const greeting = useMemo(() => greetingText(user?.name ?? "there", lang), [user?.name, lang]);
+  const dateStr = useMemo(() => todayString(lang), [lang]);
+  const mobile = useMediaQuery(767);
+  const tablet = useMediaQuery(1023);
 
   return (
     <div style={{ maxWidth: 1480, margin: "0 auto" }}>
@@ -74,18 +110,18 @@ export default function DashboardPage() {
               </span>
               {t.live}
             </span>
-            <span style={{ fontSize: 12, color: "var(--t3)" }}>{t.date}</span>
+            <span style={{ fontSize: 12, color: "var(--t3)" }}>{dateStr}</span>
           </div>
           <h1
             style={{
               margin: 0,
-              fontSize: 30,
+              fontSize: mobile ? 22 : 30,
               fontWeight: 700,
               letterSpacing: "-.025em",
               fontFamily: "var(--fdisp)",
             }}
           >
-            {t.greeting}
+            {greeting}
           </h1>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -118,7 +154,7 @@ export default function DashboardPage() {
               borderRadius: 12,
               border: "none",
               background: "linear-gradient(150deg,var(--acb),var(--ac))",
-              color: "#04130d",
+              color: "var(--on-ac)",
               fontSize: 13.5,
               fontWeight: 700,
               cursor: "pointer",
@@ -133,22 +169,36 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <TrustBadges />
+      <TrustBadges badges={data?.integration?.badges} />
 
       {/* hero: health ring + 2x2 KPIs */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1.15fr 1fr",
+          gridTemplateColumns: tablet ? "1fr" : "1.15fr 1fr",
           gap: 18,
           marginBottom: 18,
         }}
       >
-        <HealthRing score={dashboardCounters.score} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          {dashboardKpis.length > 0 ? dashboardKpis.map((k: Kpi) => (
-            <KpiCard key={k.label.en} kpi={k} />
-          )) : <div style={{ color: "var(--t3)" }}>Loading KPIs...</div>}
+        <HealthRing
+          score={dashboardCounters.score}
+          healthBars={data?.kpis?.healthBars}
+        />
+        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 14 }}>
+          <AsyncBoundary
+            state={state}
+            isEmpty={(d) => !d.kpis?.kpis?.length}
+            empty={<div style={{ gridColumn: "1 / -1", color: "var(--t3)", fontSize: 13 }}>No KPIs yet.</div>}
+            onRetry={retry}
+          >
+            {(d) => (
+              <>
+                {d.kpis.kpis.map((k: Kpi) => (
+                  <KpiCard key={k.label.en} kpi={k} />
+                ))}
+              </>
+            )}
+          </AsyncBoundary>
         </div>
       </div>
 
@@ -156,20 +206,21 @@ export default function DashboardPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1.15fr 1fr",
+          gridTemplateColumns: tablet ? "1fr" : "1.15fr 1fr",
           gap: 18,
           marginBottom: 18,
         }}
       >
         <ApiSparkline />
-        <IntegrationStatus />
+        <IntegrationStatus services={data?.integration?.services} />
       </div>
 
       {/* row 3: live feed + volume */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: tablet ? "1fr" : "1.4fr 1fr", gap: 18 }}>
         <LiveFeed initialEvents={dashboardFeed} />
         <VolumeChart initialData={dashboardVolume} />
       </div>
     </div>
   );
 }
+

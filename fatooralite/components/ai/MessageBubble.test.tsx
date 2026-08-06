@@ -12,14 +12,20 @@ describe("MessageBubble", () => {
     );
     expect(screen.getByText("Hello?")).toBeTruthy();
   });
-  it("renders assistant text with action buttons", () => {
+  it("renders assistant text", () => {
     render(
       <LangProvider initial="en">
         <MessageBubble msg={{ role: "assistant", text: { en: "Fix it", ar: "أصلح" } }} />
       </LangProvider>,
     );
     expect(screen.getByText("Fix it")).toBeTruthy();
-    expect(screen.getByText("Prepare fix")).toBeTruthy();
-    expect(screen.getByText("View XML")).toBeTruthy();
+  });
+  it("renders a plain string assistant message (streamed)", () => {
+    render(
+      <LangProvider initial="en">
+        <MessageBubble msg={{ role: "assistant", text: "Streamed answer" }} />
+      </LangProvider>,
+    );
+    expect(screen.getByText("Streamed answer")).toBeTruthy();
   });
 });

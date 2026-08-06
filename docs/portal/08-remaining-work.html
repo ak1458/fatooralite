@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Final Build Plan · Fatoora Lite Pro Docs</title>
+<style>
+:root{
+  --bg:#0b1210;--s1:#101a17;--s2:#16211d;--bd:#223129;--tx:#e8f0ec;--t2:#b7c6bf;
+  --t3:#7d8f86;--ac:#34d399;--acs:rgba(52,211,153,.12);--code:#0d1614;
+  --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{--bg:#f6f8f7;--s1:#ffffff;--s2:#eef2f0;--bd:#d9e2dd;--tx:#15211c;--t2:#3d4d46;
+  --t3:#6b7c74;--ac:#0d9668;--acs:rgba(13,150,104,.1);--code:#f0f4f2;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.65 var(--sans)}
+.layout{display:flex;min-height:100vh}
+nav{width:260px;flex:none;background:var(--s1);border-inline-end:1px solid var(--bd);
+  padding:22px 16px;position:sticky;top:0;height:100vh;overflow-y:auto}
+nav .brand{font-weight:800;font-size:16px;margin-bottom:4px}
+nav .brand span{color:var(--ac)}
+nav .sub{font-size:11.5px;color:var(--t3);margin-bottom:18px}
+nav .group{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--t3);margin:16px 8px 6px}
+nav a{display:block;padding:7px 10px;border-radius:8px;color:var(--t2);text-decoration:none;
+  font-size:13px;font-weight:500}
+nav a:hover{background:var(--s2);color:var(--tx)}
+nav a.active{background:var(--acs);color:var(--ac);font-weight:700}
+main{flex:1;min-width:0;padding:40px 48px 80px;max-width:960px}
+main h1{font-size:28px;line-height:1.25;margin:0 0 4px;letter-spacing:-.02em}
+main h2{font-size:20px;margin:34px 0 10px;padding-top:14px;border-top:1px solid var(--bd)}
+main h3{font-size:16px;margin:24px 0 8px}
+main a{color:var(--ac)}
+main p, main li{color:var(--t2)}
+main strong{color:var(--tx)}
+main code{font-family:var(--mono);font-size:12.5px;background:var(--code);
+  border:1px solid var(--bd);border-radius:5px;padding:1px 5px}
+main pre{background:var(--code);border:1px solid var(--bd);border-radius:10px;
+  padding:14px 16px;overflow-x:auto}
+main pre code{border:none;background:transparent;padding:0;font-size:12.5px;line-height:1.6}
+main table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+main th,main td{border:1px solid var(--bd);padding:8px 12px;text-align:left;vertical-align:top}
+main th{background:var(--s2);font-weight:700}
+main blockquote{margin:14px 0;padding:10px 16px;border-inline-start:3px solid var(--ac);
+  background:var(--acs);border-radius:0 10px 10px 0}
+main blockquote p{margin:4px 0}
+main hr{border:none;border-top:1px solid var(--bd);margin:28px 0}
+main input[type=checkbox]{accent-color:var(--ac)}
+.footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--bd);
+  font-size:12px;color:var(--t3)}
+@media(max-width:860px){.layout{flex-direction:column}nav{width:auto;height:auto;position:static}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
+<div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html" class="active">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html">Deployment Guide</a><a href="10-ai-architecture.html">AI Architecture</a></nav>
+<main>
+<h1>Fatoora Lite Pro — Remaining Work (Technical Plan)</h1>
+<blockquote>
+<p><strong>STATUS: COMPLETED (2026-07-03).</strong> Everything below has been implemented and
+committed on <code>feature/production-readiness</code>, including the production DB
+hardening (Decimal money, pgvector, indexes, cascades, InvoiceCounter),
+the provider-agnostic AI layer, tenant RAG ingestion, confirm-before-write
+agent actions, custom DB roles, the invoice detail view, and real ZATCA
+compliance checks. Kept for historical context; see
+<a href="09-deployment.html">09-deployment.md</a> and
+<a href="10-ai-architecture.html">10-ai-architecture.md</a> for the current state.
+One deliberate deferral: agent-dock token streaming (rationale in 10-ai-architecture §3).</p>
+</blockquote>
+<p><strong>Audience:</strong> the engineer continuing this build. <strong>Status:</strong> Phases 0–5 done and committed on
+<code>feature/production-readiness</code>. This document is the precise to-do for everything left:
+<em>what</em> is required, <em>why</em>, <em>how</em>, <em>which files/paths</em>, and <em>acceptance criteria</em>.</p>
+<p>Read <a href="06-gap-analysis.html">06-gap-analysis.md</a> and <a href="07-roadmap.html">07-roadmap.md</a> first for context.</p>
+<hr>
+<h2>0. Where we are</h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Delivered</th>
+<th>Commit</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Docs</td>
+<td>PRD/architecture/specs/roadmap</td>
+<td><code>f63fa72</code></td>
+</tr>
+<tr>
+<td>0</td>
+<td>Truth pass: async pattern, no infinite spinners, seed gated, hydration fix</td>
+<td><code>242f242</code></td>
+</tr>
+<tr>
+<td>1</td>
+<td>Real auth, self-serve registration, ZATCA onboarding wizard, providers, guard</td>
+<td><code>8717331</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Real invoicing (sign), customers/products CRUD, local signing cert</td>
+<td><code>63ded2f</code></td>
+</tr>
+<tr>
+<td>3+4</td>
+<td>Compliance Center + Integration real; AI RAG + tool-calling agent + dock</td>
+<td><code>210d20e</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td>Users &amp; Roles, notification bell, full Settings</td>
+<td><code>986f0a4</code></td>
+</tr>
+</tbody></table>
+<p><strong>Foundation already real:</strong> ZATCA crypto (<code>lib/zatca/*</code>), Neon Postgres + Prisma, OpenRouter
+chat + tool-calling, local embeddings RAG (<code>lib/ai/*</code>), PDF+QR, signing pipeline
+(<code>lib/services/invoice-service.ts</code>).</p>
+<h2>1. Conventions to follow (do not reinvent)</h2>
+<ul>
+<li><strong>Async UI:</strong> <code>useAsyncData</code> + <code>&lt;AsyncBoundary&gt;</code> (<code>lib/async/</code>, <code>components/common/AsyncBoundary.tsx</code>).
+Never a bare <code>loading</code> boolean. Empty state via <code>&lt;EmptyState&gt;</code>; no-company via <code>&lt;NoCompanyState&gt;</code>.</li>
+<li><strong>Modals/forms:</strong> <code>components/common/Modal.tsx</code> (<code>modalInput/modalLabel/modalPrimary</code>).</li>
+<li><strong>API routes:</strong> authenticate → <code>requirePermission(req, perm, companyId)</code> → tenant-scope → zod-validate.</li>
+<li><strong>AI tools:</strong> add to <code>lib/ai/tools.ts</code> (zod + <code>permission</code> + handler). Never bypass RBAC.</li>
+<li><strong>TDD:</strong> pure logic gets a <code>*.test.ts</code> first. DB-integration tests run against the <strong>Neon test
+branch</strong> (see <code>archive/credentials.local.md</code>, <code>TEST_DATABASE_URL</code>), self-cleaning fixtures (not
+<code>pushTestSchema</code> — Prisma blocks <code>--force-reset</code> for AI agents). After any schema change, push to
+<strong>both</strong> main and the test branch.</li>
+<li><strong>Secrets:</strong> only in <code>fatooralite/.env</code> and <code>archive/</code> (gitignored). Never commit; set platform
+env vars in prod.</li>
+<li><strong>Next 16:</strong> middleware is <code>proxy.ts</code>; after adding a route directory, clear <code>.next/dev</code> if it
+404s (stale manifest). Every route <code>ReadableStream.pull</code> must enqueue-or-close.</li>
+</ul>
+<hr>
+<h2>2. Phase 6 — Polish &amp; hardening</h2>
+<h3>2.1 Dark / light theme consistency  ·  Priority: HIGH</h3>
+<p><strong>Why:</strong> User reports theme is inconsistent/rough. Many components hardcode colors instead of CSS vars.
+<strong>How:</strong></p>
+<ol>
+<li>Audit <code>app/globals.css</code> — confirm every token (<code>--bg --s1 --s2 --bd --tx --t2 --t3 --ac --acb --acs --warn --dang --info</code>) is defined for <strong>both</strong> <code>:root[data-theme=&quot;dark&quot;]</code> and <code>[data-theme=&quot;light&quot;]</code>. Add any missing light values (notably <code>--warn/--dang/--info</code> which several components reference with inline fallbacks like <code>var(--dang,#ef4444)</code>).</li>
+<li>Grep for hardcoded hex: <code>grep -rnE &quot;#[0-9a-fA-F]{6}&quot; components app | grep -v globals.css</code>. Replace literals with tokens (keep <code>#04130d</code> on accent buttons — that&#39;s intentional dark-on-green).</li>
+<li>Verify the toggle: <code>lib/theme/ThemeProvider.tsx</code> + <code>components/shell/ThemeToggle.tsx</code> set <code>data-theme</code> and persist; anti-flash script is in <code>app/layout.tsx</code>.
+<strong>Files:</strong> <code>app/globals.css</code>, <code>components/dashboard/*</code>, <code>components/clearance/*</code> (if kept), any inline-color component.
+<strong>Acceptance:</strong> toggle light/dark on every route — no unreadable text, no dark-only panels, no flash.</li>
+</ol>
+<h3>2.2 Premium animations (Framer Motion)  ·  Priority: HIGH</h3>
+<p><strong>Why:</strong> Decision locked (PRD §11). User wants premium feel.
+<strong>How:</strong></p>
+<ol>
+<li><code>npm i framer-motion</code>.</li>
+<li>Add motion tokens to <code>app/globals.css</code> (<code>--ease</code>, durations) and a small <code>components/common/Motion.tsx</code> wrapper (fade/slide presets) so usage is consistent.</li>
+<li>Apply: route/page transitions (wrap <code>app/(app)/layout.tsx</code> children or use <code>motion.div</code>), list-row enter (invoices/customers/products tables), modal + assistant-dock slide-over (<code>Modal.tsx</code>, <code>AssistantDock.tsx</code>), toast/notification appearance, KPI count-up.</li>
+<li>Respect <code>prefers-reduced-motion</code> (Framer&#39;s <code>useReducedMotion</code>).
+<strong>Files:</strong> <code>components/common/Motion.tsx</code> (new), <code>Modal.tsx</code>, <code>components/ai/AssistantDock.tsx</code>, list pages, <code>app/globals.css</code>.
+<strong>Acceptance:</strong> smooth enter/exit on modals, dock, route changes; reduced-motion disables them.</li>
+</ol>
+<h3>2.3 Dashboard de-mock  ·  Priority: HIGH</h3>
+<p><strong>Why:</strong> KPI grid is real, but <code>HealthRing</code>, <code>IntegrationStatus</code>, <code>TrustBadges</code>, <code>ApiSparkline</code>, <code>VolumeChart</code>, <code>LiveFeed</code> still read <code>@/data/*</code>; greeting/date are hardcoded (<code>t.greeting</code>, <code>t.date</code>).
+<strong>How:</strong></p>
+<ol>
+<li>Extend <code>GET /api/dashboard</code> (<code>app/api/dashboard/route.ts</code> + <code>lib/db/queries.ts</code>) to return: health bars (reuse <code>computeClearanceStats</code>), integration items (from <code>/api/integration</code> logic — cert state), 7-day volume (real invoice counts/day), live feed (recent <code>ClearanceRecord</code>/invoices). <code>getDashboardKpis</code> already returns <code>counters/healthBars/kpis</code>.</li>
+<li>Rewrite the widgets to take props (real data) instead of importing <code>@/data</code>. <code>LiveFeed</code>/<code>VolumeChart</code> already accept <code>initial*</code> props — pass real arrays. <code>HealthRing</code> gets <code>score</code> (already wired). Replace <code>IntegrationStatus</code>/<code>TrustBadges</code>/<code>ApiSparkline</code> mock with real props or remove if purely decorative.</li>
+<li>Greeting: derive from <code>useAuth().user.name</code> and real date in <code>app/(app)/dashboard/page.tsx</code> (currently <code>t.greeting</code> = &quot;Good morning, Khalid&quot;).
+<strong>Files:</strong> <code>app/(app)/dashboard/page.tsx</code>, <code>app/api/dashboard/route.ts</code>, <code>lib/db/queries.ts</code>, <code>components/dashboard/*</code>.
+<strong>Acceptance:</strong> a fresh tenant shows real zeros/empty; numbers equal DB; name is the logged-in user.</li>
+</ol>
+<h3>2.4 Analytics de-mock  ·  Priority: MEDIUM</h3>
+<p><strong>Why:</strong> Real KPIs but <code>dailyBars</code> and avg-clearance are dummy fallbacks.
+<strong>How:</strong> In <code>lib/db/queries.ts</code> <code>getAnalyticsData</code>, compute daily volume from invoices and drop hardcoded arrays; wire <code>app/(app)/analytics/page.tsx</code> to <code>AsyncBoundary</code>.
+<strong>Files:</strong> <code>lib/db/queries.ts</code>, <code>app/(app)/analytics/page.tsx</code>.
+<strong>Acceptance:</strong> charts reflect real invoices; empty tenant → empty states.</p>
+<h3>2.5 Page-state consistency  ·  Priority: MEDIUM</h3>
+<p><strong>Why:</strong> <code>reports</code>, <code>notifications</code> still use the old <code>loading</code> boolean; <code>audit</code> should confirm states.
+<strong>How:</strong> Refactor <code>app/(app)/reports/page.tsx</code>, <code>app/(app)/notifications/page.tsx</code>, <code>app/(app)/audit/page.tsx</code> to <code>useAsyncData</code> + <code>AsyncBoundary</code> + <code>NoCompanyState</code>. (Forms — <code>invoices/new</code>, <code>credit-notes</code>, <code>debit-notes</code> — are fine as-is; they&#39;re not lists.)
+<strong>Acceptance:</strong> no bare &quot;Loading…&quot;; error+retry + empty everywhere.</p>
+<h3>2.6 Remove dead mock modules  ·  Priority: LOW (do last)</h3>
+<p><strong>Why:</strong> Several <code>@/data/*</code> + orphaned components remain after pages were rewritten.
+<strong>How:</strong> After 2.3, delete orphaned: <code>components/clearance/ClearanceFeed|ClearanceStats|SuccessDonut.tsx</code>, <code>components/integration/CertificateWidget.tsx</code>, and the now-unused <code>data/clearance.ts</code>, <code>data/kpis.ts</code>, <code>data/feed.ts</code>, <code>data/volume.ts</code>, <code>data/analytics.ts</code> <strong>only once nothing imports them</strong> (<code>grep -rl &#39;from &quot;@/data/x&quot;&#39;</code>). Keep <code>data/nav.ts</code>, <code>data/ai.ts</code> (prompts), <code>data/services.ts</code>, <code>data/company.ts</code> if still referenced. Update/remove stale tests (<code>components/clearance/*</code> referenced by none; <code>EnvCard.test.tsx</code>, <code>InvoiceTable.test.tsx</code> may import mock fixtures — keep fixtures local).
+<strong>Acceptance:</strong> <code>grep -rl &#39;from &quot;@/data/clearance&quot;&#39;</code> etc. returns nothing; build + tests green.</p>
+<h3>2.7 Env validation at boot  ·  Priority: MEDIUM</h3>
+<p><strong>Why:</strong> Misconfig should fail fast, not at first request.
+<strong>How:</strong> Add <code>lib/env.ts</code> with a zod schema for required vars (<code>DATABASE_URL</code>, <code>DIRECT_URL</code>, <code>AUTH_SECRET</code>) and optional (<code>OPENROUTER_API_KEY</code>, <code>ZATCA_MODE</code>). Import once in <code>lib/db/client.ts</code> or an instrumentation hook. Warn (not crash) when AI key absent (mock mode is intended).
+<strong>Files:</strong> <code>lib/env.ts</code> (new).
+<strong>Acceptance:</strong> missing <code>DATABASE_URL</code>/<code>AUTH_SECRET</code> throws a clear startup error.</p>
+<h3>2.8 Accessibility / RTL pass  ·  Priority: MEDIUM</h3>
+<p><strong>How:</strong> Keyboard focus rings on interactive elements; <code>aria-label</code>s on icon-only buttons (dock, bell — done); ensure Arabic (<code>dir=rtl</code>) flips layouts (use logical props <code>insetInlineStart/End</code>, <code>marginInlineStart</code> — already used in newer components; audit older ones). Test with <code>lang=ar</code>.
+<strong>Acceptance:</strong> tab-navigable; RTL has no clipped/overlapping UI.</p>
+<hr>
+<h2>3. Functional gaps to close</h2>
+<h3>3.1 Password reset flow  ·  Priority: HIGH (referenced, not built)</h3>
+<p><strong>Why:</strong> Login/Settings mention &quot;Forgot password&quot; but no flow exists.
+<strong>How:</strong> <code>app/forgot/page.tsx</code> + <code>app/reset/page.tsx</code>; <code>POST /api/auth/forgot</code> (issue a signed, expiring token — reuse <code>lib/auth/session.ts</code> jose), <code>POST /api/auth/reset</code> (verify token, set new <code>passwordHash</code>). Email delivery is out of scope for sandbox — return/log the link, or store a one-time token. Add <code>/forgot</code>,<code>/reset</code> to <code>proxy.ts</code> allowlist.
+<strong>Files:</strong> <code>app/forgot/</code>, <code>app/reset/</code>, <code>app/api/auth/forgot/route.ts</code>, <code>app/api/auth/reset/route.ts</code>, <code>proxy.ts</code>.
+<strong>Acceptance:</strong> request → token → set new password → login works.</p>
+<h3>3.2 Credit / Debit notes — verify + polish  ·  Priority: MEDIUM</h3>
+<p><strong>Why:</strong> Built (<code>components/invoices/NewNoteForm.tsx</code> → <code>POST /api/invoices</code> with <code>documentType</code>) but not browser-verified end-to-end.
+<strong>How:</strong> Browser test: create a note referencing <code>INV-2026-12438</code>; confirm it persists with <code>documentType=credit|debit</code> and appears in lists/Audit Vault. Fix the buyer/company single-select UX (now one tenant).
+<strong>Acceptance:</strong> a credit note is created, signed, and visible.</p>
+<h3>3.3 Real ZATCA compliance checks  ·  Priority: MEDIUM (needed for real production CSID)</h3>
+<p><strong>Why:</strong> <code>runComplianceChecks</code> in <code>lib/services/onboarding-service.ts</code> is mocked (returns <code>{success:true}</code> without submitting sample invoices) — see the <code>TODO</code> there.
+<strong>How:</strong> Generate the 4 sample documents (standard, simplified, credit, debit), sign with the compliance key, submit via <code>submitComplianceInvoice</code> against the sandbox; gate Production CSID issuance on success.
+<strong>Files:</strong> <code>lib/services/onboarding-service.ts</code>, <code>lib/zatca/onboarding.ts</code>, <code>lib/zatca/client.ts</code>.
+<strong>Acceptance:</strong> sandbox onboarding passes real compliance checks before issuing a production CSID.</p>
+<h3>3.4 ZATCA submission for local cert  ·  Priority: MEDIUM</h3>
+<p><strong>Why:</strong> Local dev cert (<code>provisionLocalCertificate</code>) can sign but real clearance needs a real CSID. <code>submitInvoice</code> will fail against the gateway with a placeholder token.
+<strong>How:</strong> In the Compliance Center / submit tool, detect <code>isLocal</code> (already exposed by <code>/api/integration</code>) and show &quot;connect ZATCA to clear/report&quot; instead of a confusing gateway error. Optionally add a &quot;simulation&quot; submit that marks reported locally for demos.
+<strong>Files:</strong> <code>lib/ai/tools.ts</code> (<code>submitInvoice</code>), <code>app/(app)/clearance/page.tsx</code>, <code>lib/services/clearance-service.ts</code>.
+<strong>Acceptance:</strong> local-cert tenants get a clear message, not a stack trace.</p>
+<h3>3.5 Invoice detail view  ·  Priority: LOW</h3>
+<p><strong>Why:</strong> List + PDF exist; a dedicated <code>/invoices/[id]</code> view (status, XML, QR, ZATCA response, actions) improves UX.
+<strong>Files:</strong> <code>app/(app)/invoices/[id]/page.tsx</code> (new), reuse <code>getInvoice</code>, <code>/api/invoices/[id]/pdf</code>.</p>
+<hr>
+<h2>4. AI enhancements</h2>
+<h3>4.1 Stream the agent&#39;s final answer  ·  Priority: MEDIUM</h3>
+<p><strong>Why:</strong> Tool-loop is non-streaming; the dock shows the final message all at once.
+<strong>How:</strong> After the tool rounds resolve, do a final streaming completion (<code>chatStream</code>) for the natural-language summary; keep tool rounds non-streaming. Or stream only when no tool is needed.
+<strong>Files:</strong> <code>app/api/ai/agent/route.ts</code>, <code>components/ai/AssistantDock.tsx</code>.</p>
+<h3>4.2 Confirm-before-write  ·  Priority: MEDIUM</h3>
+<p><strong>Why:</strong> The agent executes writes immediately (e.g. createInvoice). Safer to confirm destructive/financial actions.
+<strong>How:</strong> Add a &quot;dry-run/confirm&quot; step: write tools return a proposed action the user confirms in the dock before a second call executes. Or tag tools <code>confirm: true</code> and have the route return a pending action.
+<strong>Files:</strong> <code>lib/ai/tools.ts</code>, <code>app/api/ai/agent/route.ts</code>, <code>components/ai/AssistantDock.tsx</code>.</p>
+<h3>4.3 Ingest tenant data into the vector store  ·  Priority: MEDIUM</h3>
+<p><strong>Why:</strong> RAG currently retrieves global ZATCA chunks only; company-scoped chunks (<code>scope=company</code>) are designed but not populated.
+<strong>How:</strong> On invoice/customer changes (or a scheduled job), upsert summaries via <code>upsertChunks([{scope:&quot;company&quot;, companyId, source:&quot;invoice&quot;, text}])</code>. Add to <code>/api/ai/ingest</code> a company-scoped mode.
+<strong>Files:</strong> <code>lib/ai/vector-store.ts</code>, <code>app/api/ai/ingest/route.ts</code>, hooks in <code>invoice-service</code>.
+<strong>Acceptance:</strong> &quot;how many invoices did I send to Tamimi?&quot; retrieves tenant context.</p>
+<h3>4.4 Embedding cold-start + pgvector path  ·  Priority: LOW</h3>
+<p><strong>Why:</strong> First embed loads the MiniLM model (~5s). Cosine is in-app (fine for a small corpus).
+<strong>How:</strong> Warm the pipeline at boot (instrumentation) so first chat isn&#39;t slow. For scale, migrate <code>KnowledgeChunk.embedding</code> to pgvector (<code>vector(384)</code>, Prisma <code>Unsupported</code>, raw SQL <code>&lt;=&gt;</code> search) behind the existing retrieve interface in <code>lib/ai/vector-store.ts</code>.
+<strong>Files:</strong> <code>lib/ai/embeddings.ts</code>, <code>lib/ai/vector-store.ts</code>, <code>prisma/schema.prisma</code>.</p>
+<hr>
+<h2>5. Admin &amp; business</h2>
+<h3>5.1 Custom DB-backed roles  ·  Priority: MEDIUM</h3>
+<p><strong>Why:</strong> Phase 5 ships 5 system roles + matrix view; the PRD wants composable custom roles.
+<strong>How:</strong> Add <code>Role</code> (id, companyId, name, isSystem) + <code>RolePermission</code> (role→permission). <code>User.roleId</code> alongside <code>role</code>. Make <code>can()</code> consult DB roles when <code>roleId</code> is set (cache per request). Roles tab gains a permission-checkbox builder.
+<strong>Files:</strong> <code>prisma/schema.prisma</code>, <code>lib/auth/rbac.ts</code>, <code>app/api/roles/*</code>, <code>app/(app)/users/page.tsx</code>.
+<strong>Acceptance:</strong> create a custom role from permissions; assign it; it gates API + UI.</p>
+<h3>5.2 Billing  ·  Priority: LOW (post-v1)</h3>
+<p><strong>Why:</strong> Monetization (PRD §10). Settings reserves a Billing section.
+<strong>How:</strong> Stripe subscriptions: plans by invoice volume/branches/seats; <code>Subscription</code> model; webhook route; usage metering. Free sandbox tier default.
+<strong>Files:</strong> <code>app/api/billing/*</code> (new), <code>prisma/schema.prisma</code>, <code>app/(app)/settings/page.tsx</code>.</p>
+<hr>
+<h2>6. Testing</h2>
+<h3>6.1 Unit/integration coverage  ·  Priority: MEDIUM</h3>
+<p>Add tests as you touch code (TDD). DB tests on the Neon test branch, self-cleaning. Targets without
+coverage: dashboard shaping, analytics aggregation, notes flow, password-reset tokens, custom roles.</p>
+<h3>6.2 End-to-end (Playwright)  ·  Priority: HIGH for ship confidence</h3>
+<p><strong>How:</strong> Add <code>e2e/</code> Playwright specs for the critical journeys: register → onboard → add customer/product → issue invoice → see it in Compliance Center; AI dock command creates an entity; users invite. Use a seeded/throwaway tenant. The browser MCP used for manual verification mirrors these.
+<strong>Files:</strong> <code>e2e/*.spec.ts</code>, <code>playwright.config.ts</code>.
+<strong>Acceptance:</strong> <code>npx playwright test</code> green on the critical flows.</p>
+<h3>6.3 CI  ·  Priority: MEDIUM</h3>
+<p>GitHub Actions: <code>tsc --noEmit</code>, <code>vitest run</code>, <code>playwright test</code> (against a preview/Neon branch), lint. Block merge on red.
+<strong>Files:</strong> <code>.github/workflows/ci.yml</code> (new).</p>
+<hr>
+<h2>7. Deployment &amp; production readiness</h2>
+<p><strong>Path to ship (Vercel + Neon):</strong></p>
+<ol>
+<li><strong>DB:</strong> enable <code>pgvector</code> on Neon if migrating embeddings; run <code>prisma migrate deploy</code> against <code>DIRECT_URL</code> (switch from <code>db push</code> to real migrations for prod — generate an initial migration from the current schema).</li>
+<li><strong>Env vars</strong> (platform, NOT files): <code>DATABASE_URL</code> (pooled), <code>DIRECT_URL</code>, <code>AUTH_SECRET</code> (rotate: <code>openssl rand -base64 48</code>), <code>AUTH_ENFORCE=true</code>, <code>ZATCA_MODE</code>, <code>OPENROUTER_API_KEY</code>, embedding settings. The <code>archive/</code> files never deploy.</li>
+<li><strong>Seed:</strong> none in prod (gated by <code>SEED_DEMO</code>). First user self-registers.</li>
+<li><strong>Build:</strong> <code>next build</code>; verify the embeddings model downloads/caches in the serverless env (or pin a warm region / use a hosted embedding to avoid cold start — see 4.4).</li>
+<li><strong>Domains/HTTPS</strong>, security headers, rate-limit tuning in <code>proxy.ts</code>.
+<strong>Acceptance:</strong> clean deploy, register→issue works in prod, no secret in the bundle (<code>grep</code> the build output).</li>
+</ol>
+<hr>
+<h2>8. Security hardening checklist</h2>
+<ul>
+<li><input disabled="" type="checkbox"> <code>AUTH_ENFORCE=true</code> in prod; rotate <code>AUTH_SECRET</code>.</li>
+<li><input disabled="" type="checkbox"> Every mutating route zod-validated + <code>requirePermission</code> + tenant-scoped (audit <code>app/api/**</code>).</li>
+<li><input disabled="" type="checkbox"> ZATCA private keys encrypted at rest (<code>lib/crypto/encrypt.ts</code>) — verify <code>ENCRYPTION_KEY</code> set in prod.</li>
+<li><input disabled="" type="checkbox"> CSRF (origin check) + rate limit in <code>proxy.ts</code> — tune limits.</li>
+<li><input disabled="" type="checkbox"> Session expiry/rotation; <code>httpOnly</code>, <code>secure</code>, <code>sameSite</code> cookies (set in auth routes).</li>
+<li><input disabled="" type="checkbox"> No secrets in git: <code>git check-ignore archive/ .env creds.md</code>; scan history if ever doubtful.</li>
+<li><input disabled="" type="checkbox"> Password reset tokens single-use + short-lived (§3.1).</li>
+<li><input disabled="" type="checkbox"> AI tools: confirm RBAC on every tool; no tool exposes cross-tenant data (<code>companyId</code> from session only).</li>
+</ul>
+<hr>
+<h2>9. Suggested execution order</h2>
+<ol>
+<li><strong>Phase 6 visible polish:</strong> 2.3 dashboard de-mock → 2.1 theme → 2.2 animations → 2.4/2.5 state consistency → 2.6 cleanup.</li>
+<li><strong>Close functional gaps:</strong> 3.1 password reset → 3.2 notes verify → 3.4 local-cert submit message → 3.3 real compliance checks.</li>
+<li><strong>AI polish:</strong> 4.1 streaming → 4.2 confirm-before-write → 4.3 tenant ingestion.</li>
+<li><strong>Hardening:</strong> 2.7 env validation → §8 security → 5.1 custom roles.</li>
+<li><strong>Ship:</strong> 6.2 e2e → 6.3 CI → §7 deploy. (Billing 5.2 after launch.)</li>
+</ol>
+<p>Each item: TDD the logic, wire the UI to the established patterns, browser-verify, commit atomically
+on <code>feature/production-readiness</code>, keep <code>tsc --noEmit</code> + <code>vitest run</code> green.</p>
+
+<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/08-remaining-work.md</div>
+</main>
+</div>
+</body>
+</html>

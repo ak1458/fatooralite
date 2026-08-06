@@ -7,8 +7,9 @@ export interface StatusMeta {
   bg: string;
 }
 
-/** Short status label + token colors, used by tables and clearance feeds. */
-export function statusMeta(status: InvoiceStatus, t: Dict, lang: Lang): StatusMeta {
+/** Short status label + token colors, used by tables and clearance feeds.
+ *  Accepts any status string (the DB has more than the display union). */
+export function statusMeta(status: InvoiceStatus | string, t: Dict, lang: Lang): StatusMeta {
   switch (status) {
     case "cleared":
       return { label: t.smCleared, color: "var(--ac)", bg: "var(--acs)" };
@@ -20,6 +21,14 @@ export function statusMeta(status: InvoiceStatus, t: Dict, lang: Lang): StatusMe
       return { label: lang === "ar" ? "مسودة" : "Draft", color: "var(--t3)", bg: "var(--s3)" };
     case "warning":
       return { label: lang === "ar" ? "تحذير" : "Warning", color: "var(--warn)", bg: "var(--warns)" };
+    case "reported":
+      return { label: lang === "ar" ? "مُبلّغ" : "Reported", color: "var(--ac)", bg: "var(--acs)" };
+    case "signed":
+      return { label: lang === "ar" ? "موقّعة" : "Signed", color: "var(--info,#3b82f6)", bg: "var(--s3)" };
+    case "submitted":
+      return { label: lang === "ar" ? "مُرسلة" : "Submitted", color: "var(--warn)", bg: "var(--warns)" };
+    default:
+      return { label: String(status), color: "var(--t3)", bg: "var(--s3)" };
   }
 }
 

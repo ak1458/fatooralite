@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Architecture · Fatoora Lite Pro Docs</title>
+<style>
+:root{
+  --bg:#0b1210;--s1:#101a17;--s2:#16211d;--bd:#223129;--tx:#e8f0ec;--t2:#b7c6bf;
+  --t3:#7d8f86;--ac:#34d399;--acs:rgba(52,211,153,.12);--code:#0d1614;
+  --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{--bg:#f6f8f7;--s1:#ffffff;--s2:#eef2f0;--bd:#d9e2dd;--tx:#15211c;--t2:#3d4d46;
+  --t3:#6b7c74;--ac:#0d9668;--acs:rgba(13,150,104,.1);--code:#f0f4f2;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.65 var(--sans)}
+.layout{display:flex;min-height:100vh}
+nav{width:260px;flex:none;background:var(--s1);border-inline-end:1px solid var(--bd);
+  padding:22px 16px;position:sticky;top:0;height:100vh;overflow-y:auto}
+nav .brand{font-weight:800;font-size:16px;margin-bottom:4px}
+nav .brand span{color:var(--ac)}
+nav .sub{font-size:11.5px;color:var(--t3);margin-bottom:18px}
+nav .group{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--t3);margin:16px 8px 6px}
+nav a{display:block;padding:7px 10px;border-radius:8px;color:var(--t2);text-decoration:none;
+  font-size:13px;font-weight:500}
+nav a:hover{background:var(--s2);color:var(--tx)}
+nav a.active{background:var(--acs);color:var(--ac);font-weight:700}
+main{flex:1;min-width:0;padding:40px 48px 80px;max-width:960px}
+main h1{font-size:28px;line-height:1.25;margin:0 0 4px;letter-spacing:-.02em}
+main h2{font-size:20px;margin:34px 0 10px;padding-top:14px;border-top:1px solid var(--bd)}
+main h3{font-size:16px;margin:24px 0 8px}
+main a{color:var(--ac)}
+main p, main li{color:var(--t2)}
+main strong{color:var(--tx)}
+main code{font-family:var(--mono);font-size:12.5px;background:var(--code);
+  border:1px solid var(--bd);border-radius:5px;padding:1px 5px}
+main pre{background:var(--code);border:1px solid var(--bd);border-radius:10px;
+  padding:14px 16px;overflow-x:auto}
+main pre code{border:none;background:transparent;padding:0;font-size:12.5px;line-height:1.6}
+main table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;display:block;
+  overflow-x:auto}
+main th,main td{border:1px solid var(--bd);padding:8px 12px;text-align:left;vertical-align:top}
+main th{background:var(--s2);font-weight:700}
+main blockquote{margin:14px 0;padding:10px 16px;border-inline-start:3px solid var(--ac);
+  background:var(--acs);border-radius:0 10px 10px 0}
+main blockquote p{margin:4px 0}
+main hr{border:none;border-top:1px solid var(--bd);margin:28px 0}
+main input[type=checkbox]{accent-color:var(--ac)}
+.footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--bd);
+  font-size:12px;color:var(--t3)}
+@media(max-width:860px){.layout{flex-direction:column}nav{width:auto;height:auto;position:static}}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
+<div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html">Deployment Guide</a><a href="10-ai-architecture.html" class="active">AI Architecture</a></nav>
+<main>
+<h1>Fatoora Lite Pro — AI Architecture (Providers, RAG, Tool Calling)</h1>
+<p>AI is a core architectural layer of Fatoora Lite Pro, not a bolt-on chat widget. This
+document describes the three pillars — the <strong>provider-agnostic model layer</strong>, the
+<strong>RAG retrieval stack</strong>, and <strong>application-wide tool calling</strong> — and exactly how to
+switch from free development models to enterprise providers (Anthropic / OpenAI).</p>
+<hr>
+<h2>1. Provider-agnostic model layer</h2>
+<p><strong>Design goal:</strong> development runs on OpenRouter free models; production for Gulf
+clients can switch to Anthropic or OpenAI by changing environment variables only —
+zero code changes at call sites.</p>
+<h3>Layout</h3>
+<pre><code>fatooralite/lib/ai/
+  provider.ts            # ChatProvider interface + factory + stable wrappers
+  providers/
+    openai-compat.ts     # generic OpenAI-compatible adapter (fetch-based)
+    openrouter.ts        # OpenRouter instance (models-array routing, free-model tuning)
+    openai.ts            # OpenAI instance
+    anthropic.ts         # official @anthropic-ai/sdk adapter (Messages API)
+  embeddings.ts          # EmbeddingProvider factory (local | openai | voyage)
+  vector-store.ts        # pgvector store (upsert / retrieve / clear)
+  tenant-ingest.ts       # company-data summarization -&gt; chunks
+  tools.ts               # tool registry (schema + zod + RBAC + confirm + handler)
+</code></pre>
+<h3>The interface (<code>lib/ai/provider.ts</code>)</h3>
+<pre><code class="language-ts">interface ChatProvider {
+  name: string;
+  isConfigured(): boolean;
+  chatWithTools(messages, tools, opts): Promise&lt;AssistantMessage&gt;; // tool-calling turn
+  chatText(messages, opts): Promise&lt;string&gt;;                       // plain completion
+  chatStream(messages, opts): Promise&lt;ReadableStream&lt;Uint8Array&gt;&gt;; // token stream
+}
+</code></pre>
+<p>The internal wire format is OpenAI-style (<code>role</code>, <code>tool_calls</code> with JSON-string
+arguments) because the tool registry already speaks it. Adapters translate:</p>
+<ul>
+<li><strong>OpenRouter / OpenAI</strong> share <code>providers/openai-compat.ts</code> (same protocol).
+OpenRouter adds its <code>models: [primary, fallback]</code> routing and
+<code>reasoning: {effort: &quot;low&quot;}</code> tuning for free reasoning models.</li>
+<li><strong>Anthropic</strong> (<code>providers/anthropic.ts</code>, official SDK) maps:<ul>
+<li><code>system</code> messages → the <code>system</code> parameter</li>
+<li>assistant <code>tool_calls</code> → <code>tool_use</code> content blocks</li>
+<li><code>role:&quot;tool&quot;</code> results → <code>tool_result</code> blocks, batched into <strong>one</strong> user turn
+(the Messages API requires all results of a turn together)</li>
+<li>tool schemas → <code>{name, description, input_schema}</code></li>
+<li><code>toolChoice:&quot;required&quot;</code> → <code>tool_choice:{type:&quot;any&quot;}</code></li>
+</ul>
+</li>
+</ul>
+<h3>Switching providers</h3>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Env change</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Development (default)</td>
+<td><code>AI_PROVIDER=openrouter</code>, <code>OPENROUTER_API_KEY=…</code></td>
+</tr>
+<tr>
+<td>Enterprise — Anthropic</td>
+<td><code>AI_PROVIDER=anthropic</code>, <code>ANTHROPIC_API_KEY=…</code>, optionally <code>AI_MODEL=claude-opus-4-8</code></td>
+</tr>
+<tr>
+<td>Enterprise — OpenAI</td>
+<td><code>AI_PROVIDER=openai</code>, <code>OPENAI_API_KEY=…</code>, optionally <code>AI_MODEL=…</code></td>
+</tr>
+</tbody></table>
+<p>That is the entire migration. Call sites (<code>/api/ai</code>, <code>/api/ai/agent</code>,
+<code>/api/ai/insights</code>) import only <code>lib/ai/provider</code>.</p>
+<hr>
+<h2>2. RAG (Retrieval-Augmented Generation)</h2>
+<h3>Why two databases</h3>
+<p>The <strong>relational schema</strong> (Prisma/Postgres) is the source of truth for structured
+application data — invoices, customers, certificates. The <strong>vector index</strong> answers a
+different question: <em>&quot;which pieces of knowledge are semantically relevant to this
+message?&quot;</em>. Fatoora Lite Pro keeps both in one Postgres instance — pgvector provides the
+vector database capability without operating a second system — but they are separate
+concerns with separate access paths:</p>
+<ul>
+<li>Structured reads/writes go through Prisma models.</li>
+<li>Vector search goes through raw SQL over <code>KnowledgeChunk.embedding</code> (<code>vector</code>
+column) using the cosine operator <code>&lt;=&gt;</code>, executed <strong>in the database</strong>.</li>
+</ul>
+<h3>The store (<code>lib/ai/vector-store.ts</code>)</h3>
+<p><code>KnowledgeChunk</code> rows carry <code>scope</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Scope</th>
+<th>Contents</th>
+<th>Visibility</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>global</code></td>
+<td>ZATCA regulation corpus (<code>lib/ai/zatca-corpus.ts</code>)</td>
+<td>all tenants</td>
+</tr>
+<tr>
+<td><code>company</code></td>
+<td>per-tenant summaries (invoices, customers, products, aggregates)</td>
+<td>that tenant only — retrieval filters <code>companyId</code> server-side</td>
+</tr>
+</tbody></table>
+<p>The <code>embedding</code> column is deliberately <strong>dimension-agnostic</strong> (<code>vector</code>, not
+<code>vector(384)</code>): rows from different embedding models can coexist during a provider
+migration, and retrieval filters <code>vector_dims(embedding) = &lt;query dims&gt;</code> so a query
+only ever compares against compatible vectors. Exact search is used (no index);
+appropriate for the corpus size — add an HNSW index and a fixed dimension when a
+tenant&#39;s corpus grows past ~50k chunks.</p>
+<h3>Embeddings (<code>lib/ai/embeddings.ts</code>)</h3>
+<table>
+<thead>
+<tr>
+<th><code>EMBEDDING_PROVIDER</code></th>
+<th>Model</th>
+<th>Dim</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>local</code> (default)</td>
+<td>MiniLM-L6-v2, in-process</td>
+<td>384</td>
+<td>no key, no per-call cost; cold-start on first use</td>
+</tr>
+<tr>
+<td><code>openai</code></td>
+<td>text-embedding-3-small</td>
+<td>1536</td>
+<td>pairs with <code>AI_PROVIDER=openai</code></td>
+</tr>
+<tr>
+<td><code>voyage</code></td>
+<td>voyage-3.5-lite</td>
+<td>1024</td>
+<td>Anthropic-recommended pairing</td>
+</tr>
+</tbody></table>
+<p><strong>Switching embedding providers requires re-ingesting</strong> both scopes
+(<code>POST /api/ai/ingest</code>, then <code>{&quot;scope&quot;:&quot;company&quot;}</code>) — old-dimension vectors simply
+stop matching (they are filtered out, never wrongly compared).</p>
+<h3>Ingestion</h3>
+<ul>
+<li><strong>Global:</strong> <code>POST /api/ai/ingest</code> re-embeds the ZATCA corpus (idempotent).</li>
+<li><strong>Tenant:</strong> <code>lib/ai/tenant-ingest.ts</code> summarizes the company&#39;s recent invoices,
+customers, products and an aggregate stats chunk into <code>scope=company</code> rows.
+Triggered automatically (debounced 15 s) after invoice/customer/product mutations —
+both from API routes and from AI tool writes — and manually via
+<code>POST /api/ai/ingest {&quot;scope&quot;:&quot;company&quot;}</code>.</li>
+</ul>
+<h3>Retrieval flow (both chat endpoints)</h3>
+<ol>
+<li>Embed the latest user message.</li>
+<li><code>SELECT … 1 - (embedding &lt;=&gt; $query) AS score … WHERE scope=&#39;global&#39; OR (scope=&#39;company&#39; AND companyId=$session.companyId) ORDER BY embedding &lt;=&gt; $query LIMIT k</code>.</li>
+<li>Chunks above the similarity floor are injected into the system prompt as
+numbered context; the model is instructed to cite <code>[n]</code>.</li>
+</ol>
+<hr>
+<h2>3. Application-wide tool calling (the agent)</h2>
+<p>The assistant dock (bottom-right, every page) is a <strong>do-anything agent</strong>, not a chat
+box. <code>POST /api/ai/agent</code> runs a tool loop (max 5 rounds):</p>
+<ol>
+<li>System prompt = ZATCA knowledge + retrieved RAG context + tool-use rules.</li>
+<li>The model may call tools; each call is dispatched through
+<code>lib/ai/tools.ts::executeTool</code>.</li>
+<li>Results feed back; the loop continues until the model answers in natural language.</li>
+</ol>
+<h3>The tool registry (<code>lib/ai/tools.ts</code>)</h3>
+<p>Each tool declares: JSON schema (for the model), a <strong>zod schema</strong> (server-side
+validation), a <strong>permission</strong> (RBAC — checked against the caller&#39;s effective
+permissions, which include DB-backed custom roles), and the handler. Tools are
+tenant-scoped by construction: <code>companyId</code> always comes from the session, never from
+model output.</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Kind</th>
+<th>Permission</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>listInvoices / listCustomers / listProducts / findInvoice / getComplianceStats / getReport</td>
+<td>read</td>
+<td><code>audit:view</code></td>
+</tr>
+<tr>
+<td>addCustomer / addProduct</td>
+<td>write</td>
+<td><code>invoice:create</code></td>
+</tr>
+<tr>
+<td>createInvoice</td>
+<td>write + <strong>confirm</strong></td>
+<td><code>invoice:create</code></td>
+</tr>
+<tr>
+<td>submitInvoice</td>
+<td>write + <strong>confirm</strong></td>
+<td><code>invoice:clear</code></td>
+</tr>
+<tr>
+<td>navigate</td>
+<td>UI</td>
+<td><code>audit:view</code></td>
+</tr>
+</tbody></table>
+<h3>Confirm-before-write</h3>
+<p>Financial/irreversible tools carry a <code>confirm</code> summarizer. When the model requests
+one, the route <strong>does not execute it</strong> — it returns a <code>pendingAction</code>
+(<code>{name, arguments, summary}</code>); the dock renders a confirmation card; on approval the
+client posts <code>confirmedAction</code> back, and the route executes it with zod + RBAC
+re-enforced. Declining costs nothing.</p>
+<h3>Adding a new tool</h3>
+<ol>
+<li>Add an entry to <code>TOOLS</code> in <code>lib/ai/tools.ts</code> (schema + zod + permission +
+handler; add <code>confirm</code> if the action moves money or files with ZATCA).</li>
+<li>Nothing else — the schemas are auto-published to the model each turn.</li>
+</ol>
+<h3>Known limitation (documented deliberately)</h3>
+<p>The agent&#39;s final answer is returned as a complete JSON message, not a token
+stream: streaming through the tool loop requires parsing streamed tool-call deltas
+in all three provider adapters. The dedicated Q&amp;A endpoint (<code>POST /api/ai</code>) does
+stream tokens. Revisit if dock latency becomes a complaint.</p>
+
+<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/10-ai-architecture.md</div>
+</main>
+</div>
+</body>
+</html>

@@ -6,6 +6,14 @@ import type { InvoiceInput } from "../lib/zatca/types";
 const prisma = new PrismaClient();
 
 async function main() {
+  // Demo seed is opt-in only. Production / real use starts empty: users register
+  // their own company via the onboarding flow. Set SEED_DEMO=true for a local
+  // fixture (Almarai sample tenant).
+  if (process.env.SEED_DEMO !== "true") {
+    console.log("Skipping demo seed. Set SEED_DEMO=true to load the Almarai sample tenant.");
+    return;
+  }
+
   // Fresh start for repeatable seeds.
   await prisma.auditEntry.deleteMany();
   await prisma.clearanceRecord.deleteMany();
@@ -20,31 +28,71 @@ async function main() {
     data: {
       name: "Almarai Company",
       nameAr: "شركة المراعي",
+      // The demo tenant supplies every ZATCA-mandatory field below, so it has
+      // effectively completed onboarding. Without this it defaults to
+      // "pending" and OnboardingGuard redirects it into the wizard — meaning
+      // the seeded dashboard, invoices and analytics this fixture exists to
+      // demonstrate were unreachable.
+      onboardingStatus: "complete",
+      onboardingStep: 6,
       vatNumber: "311122334400003",
       crNumber: "1010000001",
       address: "Riyadh, Saudi Arabia",
+      businessCategory: "manufacturing",
+      crType: "CRN",
+      crIssueDate: "2005-03-12",
+      crIssuePlace: "Riyadh",
+      vatRegistrationDate: "2018-01-01",
+      economicActivity: "Dairy and food product manufacturing",
+      buildingNumber: "7452",
+      streetName: "King Fahd Road",
+      streetNameAr: "طريق الملك فهد",
+      district: "Al Olaya",
+      districtAr: "العليا",
+      city: "Riyadh",
+      cityAr: "الرياض",
+      postalCode: "12333",
+      additionalNumber: "2929",
+      province: "Riyadh Region",
+      countryCode: "SA",
+      contactName: "Khalid Al-Otaibi",
+      contactPhone: "+966501234567",
+      contactEmail: "khalid@almarai.example",
+      invoiceTypes: "both",
+      iban: "SA0380000000608010167519",
+      bankName: "Al Rajhi Bank",
       branches: { create: [{ name: "Riyadh HQ", nameAr: "المقر الرئيسي", city: "Riyadh" }] },
+      // The demo tenant is on Pro, not a trial: it seeds more invoices than
+      // the trial cap allows, and a demo that hits a paywall partway through
+      // demonstrates the wrong thing. A company with no Subscription row
+      // resolves to "expired" (lib/billing/entitlements.ts), so this is
+      // required, not decorative.
+      subscription: { create: { plan: "pro", status: "active" } },
     },
     include: { branches: true },
   });
 
   const kp = generateKeyPair();
   const csr = generateCsr(kp.privateKeyPem, kp.publicKeyPem, {
-    commonName: "FatooraLite-EGS",
+    commonName: "FatooraLite-Pro-EGS",
     organizationName: company.name,
     organizationalUnit: "Riyadh HQ",
   });
   await prisma.certificate.create({
     data: {
       companyId: company.id,
-      kind: "production",
+      // "local", not "production": the token below is a placeholder string,
+      // not a ZATCA-issued CSID. Labelling it "production" made the demo
+      // tenant's dashboard claim "Production CSID: Active" and "Gateway:
+      // Connected" to api.zatca.gov.sa, which is not true of any tenant that
+      // has not completed real onboarding with a Fatoora portal OTP. Local
+      // signing works either way — getActiveCertificate() selects on status.
+      kind: "local",
       csrPem: csr,
       privateKey: kp.privateKeyPem,
       publicKey: kp.publicKeyPem,
-      // Placeholder CSID — replace by running real ZATCA onboarding (Settings →
-      // Onboarding). Signing works locally; gateway clearance needs real values.
       token: "PLACEHOLDER-CSID-TOKEN",
-      secret: "PLACEHOLDER-CSID-SECRET",
+      secret: "LOCAL-DEV-SECRET",
       status: "active",
       issuedAt: new Date("2025-12-19"),
       expiresAt: new Date("2026-12-19"),
@@ -109,7 +157,15 @@ async function main() {
         invoiceNumber: input.invoiceNumber,
         uuid: signed.uuid,
         kind: input.kind,
-        status: "cleared",
+        // "signed", not "cleared". These invoices are genuinely signed — real
+        // XAdES, real hash chain, real QR — but they have never been submitted
+        // to ZATCA, and there is no ClearanceRecord for them. Marking them
+        // cleared made the dashboard report a 100% clearance rate and two
+        // accepted documents while the Live Clearance Activity feed (which
+        // reads ClearanceRecord) sat empty: a visible contradiction, and a
+        // claim that the tax authority accepted documents it never saw.
+        // They become "cleared" for real once ZATCA onboarding is completed.
+        status: "signed",
         issueDate: input.issueDate,
         issueTime: input.issueTime ?? "00:00:00",
         buyerName: input.buyer?.name,

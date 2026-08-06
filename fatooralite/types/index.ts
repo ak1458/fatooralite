@@ -24,6 +24,11 @@ export interface Invoice {
   status: InvoiceStatus;
   uuid: string; // short display form
   result: string; // "✓" | code like "BR-KSA-83" | "—"
+  // Raw fields (present when served from getInvoiceList) used by forms/pickers.
+  id?: string;
+  invoiceNumber?: string;
+  grandTotal?: number;
+  documentType?: string;
 }
 
 export interface FeedEvent {
@@ -54,7 +59,10 @@ export interface HealthBar {
 
 export interface VolumeBar {
   day: Bilingual;
+  /** Bar height, 0-100, normalised against the busiest day in the window. */
   pct: number;
+  /** Actual invoice count for the day. Never render `pct` as a count. */
+  count: number;
   highlight?: boolean;
 }
 
@@ -79,7 +87,7 @@ export interface RevenueRow {
 
 export interface AiMessage {
   role: "user" | "assistant";
-  text: Bilingual;
+  text: Bilingual | string;
 }
 
 export interface AiInsight {

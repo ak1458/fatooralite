@@ -8,9 +8,6 @@ export const runtime = "nodejs";
 
 /** POST /api/onboarding/start — generate CSR + get a Compliance CSID. */
 export async function POST(req: Request) {
-  const { deny } = await requirePermission(req, "settings:manage");
-  if (deny) return deny;
-
   let body: {
     companyId?: string;
     otp?: string;
@@ -30,6 +27,12 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
+
+  // Must be scoped to companyId — without it, any user with settings:manage
+  // on their own tenant could onboard/operate on a DIFFERENT company's ZATCA
+  // certificates just by putting that company's id in the request body.
+  const { deny } = await requirePermission(req, "settings:manage", companyId);
+  if (deny) return deny;
 
   try {
     const result = await startOnboarding({ companyId, otp, commonName, organizationalUnit, mode }, );

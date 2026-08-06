@@ -60,7 +60,7 @@ export function FilterTabs({
                 borderRadius: 7,
                 fontFamily: "var(--fmono)",
                 background: on ? "var(--ac)" : "var(--s3)",
-                color: on ? "#04130d" : "var(--t2)",
+                color: on ? "var(--on-ac)" : "var(--t2)",
               }}
             >
               {tab.count}

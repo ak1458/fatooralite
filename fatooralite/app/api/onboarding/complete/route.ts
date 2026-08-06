@@ -8,9 +8,6 @@ export const runtime = "nodejs";
 
 /** POST /api/onboarding/complete — exchange the compliance CSID for production. */
 export async function POST(req: Request) {
-  const { deny } = await requirePermission(req, "settings:manage");
-  if (deny) return deny;
-
   let body: { companyId?: string; mode?: ZatcaMode };
   try {
     body = await req.json();
@@ -20,6 +17,10 @@ export async function POST(req: Request) {
   if (!body.companyId) {
     return NextResponse.json({ error: "companyId is required" }, { status: 400 });
   }
+
+  // See app/api/onboarding/start/route.ts — must scope to companyId, not just check the permission in the abstract.
+  const { deny } = await requirePermission(req, "settings:manage", body.companyId);
+  if (deny) return deny;
 
   try {
     const result = await completeOnboarding(body.companyId, body.mode);

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ============================================================
-   FatooraLite design tokens (ported from the approved design).
+   Fatoora Lite Pro design tokens (ported from the approved design).
    Components reference ONLY these vars — never literal colors.
    Theme is switched via [data-theme] on <html>.
    ============================================================ */
@@ -20,6 +20,17 @@
   --ac: #059669;
   --acb: #10b981;
   --acs: rgba(16, 185, 129, 0.13);
+  --acbd: rgba(16, 185, 129, 0.22);
+  /* Foreground for text sitting ON --ac / --warn. These must flip with the
+     theme: --warn is light amber in dark mode (needs dark text) and dark
+     ochre in light mode (needs light text), so a literal fails contrast in
+     one theme or the other. --on-ac happens to be the same in both because
+     --ac is, but it is a token so the rule has no exceptions. */
+  --on-ac: #04130d;
+  --on-warn: #1a1200;
+  /* --dang is a light rose here; white on it is ~2:1. */
+  --on-dang: #3b0210;
+  --scrim: rgba(0, 0, 0, 0.55);
   --warn: #f59e0b;
   --warns: rgba(245, 158, 11, 0.14);
   --dang: #fb7185;
@@ -44,6 +55,12 @@
   --ac: #059669;
   --acb: #059669;
   --acs: rgba(5, 150, 105, 0.12);
+  --acbd: rgba(5, 150, 105, 0.28);
+  --on-ac: #04130d;
+  /* --warn is #b45309 here; #1a1200 on it is ~3.2:1, below AA. */
+  --on-warn: #fffaf2;
+  --on-dang: #ffffff;
+  --scrim: rgba(12, 22, 17, 0.42);
   --warn: #b45309;
   --warns: rgba(180, 83, 9, 0.1);
   --dang: #e11d48;
@@ -53,6 +70,15 @@
   --sh: 0 1px 2px rgba(12, 22, 17, 0.05), 0 18px 44px -24px rgba(12, 22, 17, 0.2);
   --glow: rgba(5, 150, 105, 0.1);
   --glow2: rgba(37, 99, 235, 0.06);
+}
+
+/* Motion tokens (Framer Motion + CSS transitions) */
+:root {
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 150ms;
+  --dur-normal: 250ms;
+  --dur-slow: 400ms;
 }
 
 /* Font stacks. The --font-* vars are provided by next/font on <html>.
@@ -139,4 +165,98 @@ body {
   to {
     stroke-dashoffset: -200;
   }
+}
+
+/* Visible to assistive technology only. Used where colour or position carries
+   meaning that needs a text equivalent (e.g. wizard step completion state). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ============================================================
+   Focus ring — visible only via keyboard, never via mouse.
+   Applied globally to all interactive elements so every component
+   gets a consistent ring without per-component styles.
+   ============================================================ */
+:focus-visible {
+  outline: 2px solid var(--ac);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Buttons and inputs get a slightly tighter radius to match their shape */
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-radius: 8px;
+}
+
+/* Remove default outline on non-keyboard focus */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ============================================================
+   Skip-to-content link — hidden until focused.
+   ============================================================ */
+.skip-link {
+  position: fixed;
+  top: -100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  padding: 12px 24px;
+  border-radius: 12px;
+  background: var(--ac);
+  color: #04130d;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+  transition: top var(--dur-fast) var(--ease);
+}
+.skip-link:focus {
+  top: 12px;
+}
+
+/* ============================================================
+   Sidebar drawer overlay (mobile < 768px)
+   ============================================================ */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-normal) var(--ease);
+}
+.sidebar-overlay[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ============================================================
+   Responsive table wrapper — enables horizontal scroll on overflow
+   ============================================================ */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.table-scroll::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.24);
+  border-radius: 3px;
 }
