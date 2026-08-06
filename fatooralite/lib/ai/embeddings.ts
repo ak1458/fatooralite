@@ -11,8 +11,6 @@
  * retrievable under the new model.
  */
 
-import { pipeline } from "@huggingface/transformers";
-
 export interface EmbeddingProvider {
   name: string;
   embed(texts: string[]): Promise<number[][]>;
@@ -22,9 +20,25 @@ export interface EmbeddingProvider {
 
 let extractorPromise: Promise<unknown> | null = null;
 
-function getExtractor() {
+/**
+ * Loads @huggingface/transformers on first use, never at module load.
+ *
+ * It used to be a top-level `import`. That package pulls in onnxruntime-node,
+ * a native binary, and `libonnxruntime.so.1` does not exist on Vercel's
+ * serverless runtime — so merely *importing* this module crashed the function.
+ * Because `lib/ai/tenant-ingest.ts` imports it and the invoice and customer
+ * routes import that, `GET /api/invoices` and `GET /api/customers` returned a
+ * 500 with an empty body in production while working locally, where the native
+ * library resolves. Neither route embeds anything on a read.
+ *
+ * A dynamic import keeps the local provider available wherever the native
+ * library genuinely exists, and costs nothing everywhere else.
+ */
+async function getExtractor() {
   if (!extractorPromise) {
-    extractorPromise = pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
+    extractorPromise = import("@huggingface/transformers").then(({ pipeline }) =>
+      pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2"),
+    );
   }
   return extractorPromise as Promise<(
     texts: string[],
