@@ -58,22 +58,25 @@ describe.skipIf(!hasTestDb)("plan (DB-backed)", () => {
     return company;
   }
 
+  // A single batched INSERT, not N sequential round trips. Nothing under
+  // test here needs real chaining/locking (that's invoice-service.test.ts's
+  // job) — checkInvoiceLimit only counts rows, so N independent rows created
+  // in one statement is behaviourally identical to N created one at a time,
+  // and doesn't run into Neon's per-round-trip latency N times over.
   async function addInvoices(companyId: string, n: number) {
-    for (let i = 0; i < n; i++) {
-      await db.invoice.create({
-        data: {
-          companyId,
-          uuid: `uuid-${companyId}-${i}`,
-          invoiceNumber: `INV-${i}`,
-          kind: "standard",
-          status: "draft",
-          issueDate: "2026-08-04",
-          taxableAmount: 100,
-          vatAmount: 15,
-          grandTotal: 115,
-        },
-      });
-    }
+    await db.invoice.createMany({
+      data: Array.from({ length: n }, (_, i) => ({
+        companyId,
+        uuid: `uuid-${companyId}-${i}`,
+        invoiceNumber: `INV-${i}`,
+        kind: "standard",
+        status: "draft",
+        issueDate: "2026-08-04",
+        taxableAmount: 100,
+        vatAmount: 15,
+        grandTotal: 115,
+      })),
+    });
   }
 
   describe("startTrial", () => {
@@ -83,7 +86,7 @@ describe.skipIf(!hasTestDb)("plan (DB-backed)", () => {
       const { plan, trialDaysLeft } = await getTenantPlan(company.id, db);
       expect(plan).toBe("trial");
       expect(trialDaysLeft).toBe(TRIAL_DAYS);
-    });
+    }, 20_000);
 
     it("does not restart an existing trial when called again", async () => {
       const company = await makeCompany();
@@ -93,7 +96,7 @@ describe.skipIf(!hasTestDb)("plan (DB-backed)", () => {
       });
       await startTrial(company.id, db);
       expect(await getEffectivePlan(company.id, db)).toBe("expired");
-    });
+    }, 20_000);
 
     it("does not downgrade a paying customer", async () => {
       const company = await makeProCompany(new Date(Date.now() + 30 * 86_400_000));

@@ -47,4 +47,19 @@ describe("GET /api/health/deep", () => {
     const text = await res.text();
     expect(text).not.toContain("deep-health-test-secret");
   });
+
+  it("reports background-job visibility (W8) alongside dependency health", async () => {
+    const { GET } = await import("./route");
+    const res = await GET(
+      new Request("http://localhost/api/health/deep", { headers: { authorization: "Bearer deep-health-test-secret" } }),
+    );
+    const data = await res.json();
+    expect(data.jobs).toMatchObject({
+      reportingPending: expect.any(Number),
+      reportingOverdue: expect.any(Number),
+      reportingFailed: expect.any(Number),
+      submittedStale: expect.any(Number),
+      needsReview: expect.any(Number),
+    });
+  });
 });

@@ -1,3 +1,5 @@
+import { parseRiyadhTimestamp } from "@/lib/time/riyadh";
+
 export interface ClearanceInvoice {
   kind: string;
   status: string;
@@ -23,7 +25,7 @@ const ACCEPTED = new Set(["cleared", "reported"]);
 const REPORTED = new Set(["reported", "cleared", "rejected"]);
 
 function hoursSince(issueDate: string, issueTime: string): number {
-  const ts = Date.parse(`${issueDate}T${issueTime || "00:00:00"}`);
+  const ts = parseRiyadhTimestamp(issueDate, issueTime || "00:00:00").getTime();
   if (Number.isNaN(ts)) return 0;
   return (Date.now() - ts) / 3_600_000;
 }

@@ -97,7 +97,7 @@ describe.skipIf(!hasTestDb)("ZATCA submission crash window", () => {
     // PIH/ICV-relevant identity is untouched by the reliability plumbing.
     expect(after?.uuid).toBe(inv.uuid);
     expect(after?.hash).toBe("abc123");
-  });
+  }, 20_000);
 
   it("leaves an invoice in `submitted`, not `signed`, when the process dies mid-flight (scenario 6: crash during submission)", async () => {
     const inv = await makeSignedInvoice();
@@ -121,7 +121,7 @@ describe.skipIf(!hasTestDb)("ZATCA submission crash window", () => {
     // eligible for immediate resubmission.
     expect(after?.nextSubmitAt).not.toBeNull();
     expect(after?.needsReview).toBe(false);
-  });
+  }, 20_000);
 
   it("does not silently resend an invoice already recorded as cleared (scenario 2: submit twice)", async () => {
     const inv = await makeSignedInvoice();
@@ -132,7 +132,7 @@ describe.skipIf(!hasTestDb)("ZATCA submission crash window", () => {
     const g2 = countingGateway();
     await expect(submitInvoice(inv.id, g2.submitter, db)).rejects.toThrow(/already cleared/i);
     expect(g2.calls).toHaveLength(0);
-  });
+  }, 20_000);
 
   it("records the gateway verdict and the invoice status together (scenario 1 continued)", async () => {
     const inv = await makeSignedInvoice();
@@ -149,9 +149,9 @@ describe.skipIf(!hasTestDb)("ZATCA submission crash window", () => {
     expect(row?.status).toBe("cleared");
     expect(records).toHaveLength(1);
     expect(records[0].status).toBe("accepted");
-  });
+  }, 20_000);
 
-  it("refuses a second caller while the first is still mid-flight, and never calls the gateway twice (scenario 3: concurrent submission)", async () => {
+  it("refuses one of two concurrent callers while the other is mid-flight, and never calls the gateway twice (scenario 3: concurrent submission)", async () => {
     const inv = await makeSignedInvoice();
     let releaseGateway!: () => void;
     const gate = new Promise<void>((resolve) => { releaseGateway = resolve; });
@@ -168,21 +168,37 @@ describe.skipIf(!hasTestDb)("ZATCA submission crash window", () => {
       },
     };
 
-    const first = submitInvoice(inv.id, slowSubmitter, db);
-    // Give the first call time to win the atomic claim before the second starts.
-    await new Promise((r) => setTimeout(r, 50));
-    const second = submitInvoice(inv.id, slowSubmitter, db);
+    // Which of two truly concurrent callers wins the atomic claim is decided
+    // by arrival order at Postgres, not by which one was issued first in JS
+    // — under real network latency those orders can differ. (A prior version
+    // of this test assumed call order == claim order via a 50ms stagger; that
+    // assumption silently deadlocked whenever the second call actually won
+    // the race, since the test only released the gate after the *assumed*
+    // loser rejected — which never happened for the actual winner.) Fire both
+    // concurrently, and use whichever one rejects first as the loser, rather
+    // than assuming which one it is.
+    const callA = submitInvoice(inv.id, slowSubmitter, db);
+    const callB = submitInvoice(inv.id, slowSubmitter, db);
+    const settleOrder = (label: "A" | "B", p: typeof callA) =>
+      p.then(
+        (value) => ({ label, status: "fulfilled" as const, value }),
+        (error) => ({ label, status: "rejected" as const, error }),
+      );
 
-    await expect(second).rejects.toThrow(SubmissionInFlightError);
+    const loser = await Promise.race([settleOrder("A", callA), settleOrder("B", callB)]);
+    expect(loser.status).toBe("rejected");
+    if (loser.status === "rejected") expect(loser.error).toBeInstanceOf(SubmissionInFlightError);
+
     releaseGateway();
-    const firstResult = await first;
-
-    expect(firstResult.status).toBe("cleared");
+    const [resA, resB] = await Promise.allSettled([callA, callB]);
+    const winner = loser.label === "A" ? resB : resA;
+    expect(winner.status).toBe("fulfilled");
+    if (winner.status === "fulfilled") expect(winner.value.status).toBe("cleared");
     expect(gatewayCalls).toBe(1); // the loser never reached client.submit()
 
     const after = await db.invoice.findUnique({ where: { id: inv.id }, select: { submitAttempts: true } });
     expect(after?.submitAttempts).toBe(1);
-  });
+  }, 20_000);
 
   it("schedules a backed-off retry on a gateway timeout, preserving uuid and hash for the eventual resend (scenarios 4/5: timeout after/before gateway receipt)", async () => {
     const inv = await makeSignedInvoice();
@@ -213,7 +229,7 @@ describe.skipIf(!hasTestDb)("ZATCA submission crash window", () => {
 
     const auditRows = await db.auditEntry.findMany({ where: { invoiceId: inv.id, kind: "event" } });
     expect(auditRows.length).toBeGreaterThan(0);
-  });
+  }, 20_000);
 
   it("refuses a direct resubmit while status is submitted, without touching the gateway (scenario 8a: retry after SUBMITTED)", async () => {
     const inv = await makeSignedInvoice();
@@ -231,5 +247,5 @@ describe.skipIf(!hasTestDb)("ZATCA submission crash window", () => {
     const g = countingGateway();
     await expect(submitInvoice(inv.id, g.submitter, db)).rejects.toThrow(SubmissionInFlightError);
     expect(g.calls).toHaveLength(0);
-  });
+  }, 20_000);
 });

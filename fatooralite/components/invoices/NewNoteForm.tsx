@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import type { Invoice } from "@/types";
+import { riyadhToday, riyadhTimeOfDay } from "@/lib/time/riyadh";
 
 interface Company {
   id: string;
@@ -158,8 +159,8 @@ export function NewNoteForm({ type }: { type: "credit" | "debit" }) {
         invoiceNumber: number,
         kind,
         documentType: type,
-        issueDate: new Date().toISOString().slice(0, 10),
-        issueTime: new Date().toISOString().slice(11, 19),
+        issueDate: riyadhToday(),
+        issueTime: riyadhTimeOfDay(),
         seller: { name: company?.name ?? "", vatNumber: company?.vatNumber ?? "" },
         buyer: buyerName ? { name: buyerName, vatNumber: buyerVat || undefined } : undefined,
         lines: lines.map((l) => ({ description: l.description, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice) })),

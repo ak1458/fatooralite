@@ -34,11 +34,16 @@ afterAll(async () => {
   if (db) await db.$disconnect();
 });
 
+// W12 added issue-time BR-KSA-44 validation (standard invoices need a buyer
+// VAT) — this fixture predates that and must carry a valid buyer now, or
+// every test below fails at issueInvoice() before reaching what it actually
+// tests (signing, chaining, the certificate check).
 const input: InvoiceInput = {
   invoiceNumber: "INV-S-1",
   kind: "standard",
   issueDate: "2026-06-17",
   seller: { name: "Almarai", vatNumber: "311122334400003" },
+  buyer: { name: "Tamimi", vatNumber: "300000000000003" },
   lines: [{ description: "Milk", quantity: 10, unitPrice: 12 }],
 };
 
@@ -54,14 +59,14 @@ describe.skipIf(!hasTestDb)("issueInvoice", () => {
     expect(stored.status).toBe("signed");
     expect(stored.hash).toBe(res.signed.hash);
     expect(stored.qr).toBeTruthy();
-  });
+  }, 20_000);
 
   it("chains the previous invoice hash", async () => {
     const first = await issueInvoice(companyId, { ...input, invoiceNumber: "INV-S-2" }, db);
     const second = await issueInvoice(companyId, { ...input, invoiceNumber: "INV-S-3" }, db);
     const secondRow = await db.invoice.findUniqueOrThrow({ where: { id: second.invoiceId } });
     expect(secondRow.previousHash).toBe(first.signed.hash);
-  });
+  }, 20_000);
 
   it("rejects when no active certificate exists", async () => {
     const bare = await db.company.create({ data: { name: "NoCert", vatNumber: "300000000000111" } });

@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { computeClearanceStats, type ClearanceInvoice } from "./clearance-stats";
+import { riyadhToday, riyadhTimeOfDay } from "@/lib/time/riyadh";
 
+// computeClearanceStats reads issueDate/issueTime as Asia/Riyadh wall-clock
+// (Phase 3 / W9) — build fixtures in the same zone, not the test machine's
+// local time, or "N hours ago" drifts by the local-vs-Riyadh offset.
 function hoursAgoIssue(h: number) {
   const d = new Date(Date.now() - h * 3_600_000);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return {
-    issueDate: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
-    issueTime: `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`,
-  };
+  return { issueDate: riyadhToday(d), issueTime: riyadhTimeOfDay(d) };
 }
 
 describe("computeClearanceStats", () => {

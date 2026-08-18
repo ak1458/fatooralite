@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { num } from "@/lib/db/decimal";
 import { requirePermission } from "@/lib/auth/server";
+import { riyadhToday } from "@/lib/time/riyadh";
 
 export const runtime = "nodejs";
 
@@ -9,11 +10,6 @@ const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
-
-/** `YYYY-MM-DD` for a Date, read in UTC. */
-function isoDay(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 /**
  * Resolve a `YYYY-MM` param (or the current month) to an inclusive-exclusive
@@ -24,11 +20,17 @@ function isoDay(d: Date): string {
  * into depended on where the server happened to run. Invoice.issueDate is
  * stored as a `YYYY-MM-DD` string, and comparing strings sorts identically to
  * comparing the dates they denote, so this is timezone-free by construction.
+ *
+ * The DEFAULT month (no `month` param) is resolved in Asia/Riyadh, not UTC
+ * or server-local (Phase 3 / W9) — issueDate itself is now stamped as a
+ * Riyadh calendar day, so "this month" must mean the same thing. This only
+ * changes which month is shown by default; an explicitly requested month's
+ * figures, and the `cleared`/`reported` status filter, are unchanged (D1).
  */
 function resolveMonth(month: string | null): { start: string; end: string; label: string } {
-  const now = new Date();
-  let year = now.getUTCFullYear();
-  let m = now.getUTCMonth();
+  const todayRiyadh = riyadhToday();
+  let year = Number(todayRiyadh.slice(0, 4));
+  let m = Number(todayRiyadh.slice(5, 7)) - 1;
   if (month && /^\d{4}-\d{2}$/.test(month)) {
     const [y, mm] = month.split("-").map(Number);
     year = y;
@@ -61,10 +63,11 @@ export async function GET(req: Request) {
   let start: string, end: string, label: string;
   if (rangeDaysParam && /^\d+$/.test(rangeDaysParam)) {
     const days = Math.min(parseInt(rangeDaysParam, 10), 366);
-    const now = new Date();
+    const now = Date.now();
     // `end` is exclusive, so extend it to tomorrow to include today's invoices.
-    end = isoDay(new Date(now.getTime() + 86_400_000));
-    start = isoDay(new Date(now.getTime() - days * 86_400_000));
+    // Riyadh calendar days (Phase 3 / W9), matching issueDate's own zone.
+    end = riyadhToday(new Date(now + 86_400_000));
+    start = riyadhToday(new Date(now - days * 86_400_000));
     label = `Last ${days} days`;
   } else {
     ({ start, end, label } = resolveMonth(searchParams.get("month")));

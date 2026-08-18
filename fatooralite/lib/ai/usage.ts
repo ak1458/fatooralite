@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultDb } from "@/lib/db/client";
 import { log } from "@/lib/log/logger";
+import { riyadhMonthStartUtc } from "@/lib/time/riyadh";
 
 /**
  * Per-call AI usage accounting (Phase 2 / W6 — closes F-11's "no per-customer
@@ -53,8 +54,7 @@ export interface UsageSummaryRow {
 
 /** Current-month usage for one company, grouped by route. Always company-scoped — no cross-tenant read path. */
 export async function monthlyUsageSummary(companyId: string, db: PrismaClient = defaultDb): Promise<UsageSummaryRow[]> {
-  const now = new Date();
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const monthStart = riyadhMonthStartUtc();
 
   const grouped = await db.aiUsage.groupBy({
     by: ["route"],

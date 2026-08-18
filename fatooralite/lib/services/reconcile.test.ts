@@ -97,7 +97,7 @@ describe.skipIf(!hasTestDb)("reconcileStuckSubmissions", () => {
     expect(after?.hash).toBe(inv.hash);
     const records = await db.clearanceRecord.findMany({ where: { invoiceId: inv.id } });
     expect(records).toHaveLength(1);
-  });
+  }, 20_000);
 
   it("does not touch a submission that isn't stale yet (scenario 8b: not eligible)", async () => {
     const inv = await makeStuckInvoice({ lastSubmitAt: new Date() }); // just claimed, well inside the staleness window
@@ -109,7 +109,7 @@ describe.skipIf(!hasTestDb)("reconcileStuckSubmissions", () => {
     const after = await db.invoice.findUnique({ where: { id: inv.id }, select: { status: true } });
     expect(after?.status).toBe("submitted");
     void result;
-  });
+  }, 20_000);
 
   it("respects the backoff window, then becomes eligible once it passes (scenario 9: repeated retries)", async () => {
     const stale = new Date(Date.now() - STALE_SUBMISSION_MS - 1000);
@@ -135,7 +135,7 @@ describe.skipIf(!hasTestDb)("reconcileStuckSubmissions", () => {
     expect(later.resubmitted).toBeGreaterThanOrEqual(1);
     const after = await db.invoice.findUnique({ where: { id: inv.id }, select: { status: true } });
     expect(after?.status).toBe("cleared");
-  });
+  }, 20_000);
 
   it("flags for review at the retry ceiling instead of retrying forever, and audits it (scenario 10: max retries reached)", async () => {
     const inv = await makeStuckInvoice({
@@ -160,7 +160,7 @@ describe.skipIf(!hasTestDb)("reconcileStuckSubmissions", () => {
     const again = await reconcileStuckSubmissions({ submitter: g.submitter }, db);
     expect(again.scanned).toBe(0);
     expect(g.calls).toBe(1); // unchanged — no second gateway call
-  });
+  }, 20_000);
 
   it("leaves a still-failing submission stranded honestly, with backoff advanced and no forged verdict (scenario 11: reconciliation after restart)", async () => {
     const inv = await makeStuckInvoice({ lastSubmitAt: new Date(Date.now() - STALE_SUBMISSION_MS - 1000) });
@@ -176,7 +176,7 @@ describe.skipIf(!hasTestDb)("reconcileStuckSubmissions", () => {
     expect(after?.nextSubmitAt).not.toBeNull();
     expect(after?.hash).toBe(inv.hash);
     expect(after?.uuid).toBe(inv.uuid);
-  });
+  }, 20_000);
 
   it("two overlapping reconciler ticks never resend the same invoice twice", async () => {
     const inv = await makeStuckInvoice({ lastSubmitAt: new Date(Date.now() - STALE_SUBMISSION_MS - 1000) });
@@ -207,5 +207,5 @@ describe.skipIf(!hasTestDb)("reconcileStuckSubmissions", () => {
 
     const records = await db.clearanceRecord.findMany({ where: { invoiceId: inv.id } });
     expect(records).toHaveLength(1);
-  });
+  }, 20_000);
 });

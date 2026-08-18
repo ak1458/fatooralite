@@ -542,3 +542,63 @@ Two pre-existing tests in `lib/billing/plan.test.ts` (unrelated to Phase 2
 scope) time out under current Neon latency — a 25-30-iteration sequential
 insert loop, not a logic bug. Documented in `handoff.md`, not fixed
 (out of scope: billing/licensing, not W3–W7/W26).
+
+---
+
+## Remediation Phase 3 — 2026-08-18
+
+12 planned items (W8–W18, N8) plus three investigations carried over from
+Phase 2's own completion report (F-A, F-B, F-C), plus one more real bug
+found during final verification. Full write-up in `handoff.md`'s
+2026-08-18 Phase 3 entry; per-item evidence in `docs/audit/
+remediation-ledger.md`'s Phase 3 table and Phase 3 outcome section. Full
+regression confirmed clean before closing: 73 test files, 497 tests, 0
+failed, 0 skipped — see `docs/SESSION_HANDOFF_2026-08-18.md` for the exact
+run mechanics and root-cause detail.
+
+**F-A/F-B/F-C closed first**, per the brief: F-A (`plan.test.ts` timeouts)
+root-caused to the sequential-insert loop flagged in Phase 2's own note above
+— fixed with a single batched `createMany`, not a timeout bump. F-B
+(`deepmerge-ts` advisory) investigated to an accepted-risk conclusion: dev-
+dependency-only, unreachable code path, no fix at any Prisma version — no
+blind up/downgrade. F-C (Windows `validate-zatca.ts` libuv teardown) fixed by
+switching `process.exit()` to `process.exitCode` — the real race, not
+exit-code suppression. A fourth, unplanned finding surfaced during the
+phase's own final regression: `clearance-crash.test.ts`'s concurrent-
+submission test deadlocked under real network latency because it assumed
+JS call order matched the database's claim-race order — fixed the same way
+as the other three, by finding the real mechanism (temporary timing
+instrumentation) rather than raising its timeout indefinitely.
+
+**W8–W11, W13, W18 are DONE outright.** W9 (Asia/Riyadh timezone) touched the
+widest surface of the phase — every place issue-time/period-boundary math
+previously used server-local `Date` or UTC midnight now goes through
+`lib/time/riyadh.ts`. W12 (ZATCA XSD/Schematron validation) is **PARTIAL by
+necessity**: the roadmap itself gates full validation on X1 (owner-blocked
+Fatoora portal access for the actual schema files); what shipped instead is
+issue-time BR-KSA business-rule validation, moving an existing check earlier
+in the pipeline rather than adding the schema validation X1 blocks. W14, W15,
+W17 are PARTIAL with the gap named plainly (infra this session doesn't have,
+partial route coverage, and an owner-only Neon console action, respectively).
+
+**N8** (credit/debit notes, promoted from Phase 5) shipped the part that was
+missing and testable — persisted `billingReferenceId`/`instructionNote`/
+`referencedInvoiceId`, verified end to end against a real signed XML and a
+real PIH chain — and explicitly did **not** invent the two things that
+needed a business decision it isn't this session's to make: refund and
+cancellation flows stay MISSING, and a new decision (**D9**, whether credit
+notes should subtract from VAT totals instead of adding) was filed rather
+than resolved unilaterally.
+
+A meaningful chunk of this phase's time went to test-infrastructure
+archaeology, not application code: a Postgres advisory-lock timeout on
+`prisma migrate deploy` root-caused to using Neon's **pooled** connection URL
+for schema operations (pgbouncer's transaction-pooling mode doesn't reliably
+support the session-level features schema DDL needs) — fixed by switching to
+the **direct** URL for all schema operations, a new invariant recorded in
+`START-HERE.md`. Separately, two independent AI-agent safety gates (Prisma's
+own consent check, and Claude Code's own permission classifier — which also
+blocks an agent from self-granting that consent by editing its own
+`settings.json`) meant the schema-pushing DB-gated test files needed a human
+to literally run the command by hand at several points in this phase, not
+just once.

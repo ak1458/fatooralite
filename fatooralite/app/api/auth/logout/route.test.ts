@@ -62,7 +62,7 @@ describe.skipIf(!hasTestDb)("POST /api/auth/logout", () => {
     const after = await db.user.findUnique({ where: { id: user.id }, select: { sessionVersion: true } });
     expect(after?.sessionVersion).toBe(user.sessionVersion + 1);
     expect(await hasCurrentSessionVersion(payload, db)).toBe(false);
-  });
+  }, 20_000);
 
   it("still clears the cookie when there is no session to revoke", async () => {
     const { POST } = await import("./route");

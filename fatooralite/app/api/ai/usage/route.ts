@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePermission, getUserFromRequest } from "@/lib/auth/server";
 import { monthlyUsageSummary } from "@/lib/ai/usage";
+import { riyadhToday } from "@/lib/time/riyadh";
 
 export const runtime = "nodejs";
 
@@ -15,5 +16,5 @@ export async function GET(req: Request) {
   }
 
   const routes = await monthlyUsageSummary(user.companyId);
-  return NextResponse.json({ month: new Date().toISOString().slice(0, 7), routes });
+  return NextResponse.json({ month: riyadhToday().slice(0, 7), routes });
 }

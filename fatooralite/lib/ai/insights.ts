@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultDb } from "@/lib/db/client";
 import { num } from "@/lib/db/decimal";
+import { parseRiyadhTimestamp, riyadhMonthStartUtc } from "@/lib/time/riyadh";
 
 export type InsightTone = "warn" | "info" | "ac";
 
@@ -28,7 +29,7 @@ const REPORTED = new Set(["reported", "cleared", "rejected"]);
 
 /** Hours elapsed since an invoice was issued, from its date + time strings. */
 function hoursSinceIssue(issueDate: string, issueTime: string): number {
-  const ts = Date.parse(`${issueDate}T${issueTime || "00:00:00"}`);
+  const ts = parseRiyadhTimestamp(issueDate, issueTime || "00:00:00").getTime();
   if (Number.isNaN(ts)) return 0;
   return (Date.now() - ts) / 3_600_000;
 }
@@ -84,16 +85,15 @@ export async function computeInsights(
     else if (h >= 18) nearDeadlineCount++;
   }
 
-  // Current-month VAT.
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  // Current-month VAT — Asia/Riyadh month boundary, not server-local.
+  const monthStart = riyadhMonthStartUtc();
   const monthInv = invoices.filter(
     (i) => i.createdAt >= monthStart && REPORTED.has(i.status) && i.status !== "rejected",
   );
   const monthVat = monthInv.reduce((s, i) => s + num(i.vatAmount), 0);
 
   // Amount anomaly: largest invoice vs the 30-day average.
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000);
   const recent = invoices.filter((i) => i.createdAt >= thirtyDaysAgo);
   const avg = recent.length
     ? recent.reduce((s, i) => s + num(i.grandTotal), 0) / recent.length

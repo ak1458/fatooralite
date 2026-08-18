@@ -10,6 +10,7 @@ import type { ZatcaMode } from "@/lib/zatca/client";
 import type { InvoiceInput } from "@/lib/zatca/types";
 import { encryptPrivateKey, decryptPrivateKey, encryptSecret, decryptSecret } from "@/lib/crypto/encrypt";
 import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
+import { riyadhToday, riyadhTimeOfDay } from "@/lib/time/riyadh";
 
 export class OnboardingStateError extends Error {
   constructor(message: string) {
@@ -214,10 +215,8 @@ export async function runComplianceChecks(
     publicKeyPem: compliance.publicKey,
   };
 
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  const issueDate = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-  const issueTime = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  const issueDate = riyadhToday();
+  const issueTime = riyadhTimeOfDay();
 
   const seller = { name: company.name, vatNumber: company.vatNumber };
   // ZATCA's documented sample buyer VAT for compliance checks.

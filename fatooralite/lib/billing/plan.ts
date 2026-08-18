@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultDb } from "@/lib/db/client";
+import { riyadhMonthStartUtc } from "@/lib/time/riyadh";
 import {
   FEATURE_LABELS,
   PLAN_LIMITS,
@@ -84,10 +85,13 @@ export async function startTrial(
   });
 }
 
-/** First instant of the current calendar month, in local server time. */
+/**
+ * First instant of the current calendar month, in Asia/Riyadh — the trial
+ * invoice cap is a business-facing monthly limit, so its boundary must not
+ * depend on the server's own timezone (Phase 3 / W9).
+ */
 function startOfCurrentMonth(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1);
+  return riyadhMonthStartUtc();
 }
 
 export interface LimitCheck {

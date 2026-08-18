@@ -169,7 +169,15 @@ async function main() {
   );
 
   console.log(`\n${allPass ? "ALL LOCAL CHECKS PASSED" : "SOME CHECKS FAILED"}`);
-  process.exit(allPass ? 0 : 1);
+  // Set the exit code and let the event loop drain naturally, rather than
+  // forcing an abrupt process.exit() here. The sandbox fetch above used
+  // AbortSignal.timeout(15_000), whose internal timer handle is still
+  // registered even though the fetch itself already resolved — a forced
+  // process.exit() racing that pending handle's teardown is what produced
+  // "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)" from libuv on
+  // Windows (F-C). process.exitCode lets Node close handles in its own,
+  // non-racy shutdown sequence instead.
+  process.exitCode = allPass ? 0 : 1;
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => { console.error(e); process.exitCode = 1; });

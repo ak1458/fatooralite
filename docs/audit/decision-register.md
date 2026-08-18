@@ -1,6 +1,7 @@
 # Decision register — Fatoora Lite Pro remediation
 
-Eight decisions surfaced by the 2026-08-18 production audit. **None has been
+Nine decisions: eight surfaced by the 2026-08-18 production audit, plus D9
+(surfaced during Phase 3/N8 implementation, same day). **None has been
 implemented.** Each carries a recommendation; behaviour changes only on written
 owner approval.
 
@@ -291,6 +292,101 @@ whatever is decided, rather than left permanently failing.
 
 **IF DEFERRED** M-501, M-600, M-722 and X4 stay FAILED/BLOCKED, and the final
 production gate cannot close.
+
+---
+
+## D9 — Credit/debit note amount sign & reconciliation · **OPEN** · needed to close N8
+
+**QUESTION**
+When a credit or debit note is issued, should its `taxableAmount`/`vatAmount`
+be stored (and read back everywhere they're aggregated) as a **negative**
+correction to the original invoice, or as a **positive** figure that some
+separate, `documentType`-aware aggregation step subtracts or adds at read
+time? Either is a legitimate implementation of the same accounting fact —
+this register exists to pick one on purpose rather than leave it as an
+accident of what N8's schema change happened to touch.
+
+**CURRENT BEHAVIOUR**
+Confirmed while implementing N8 (Phase 3): a credit note goes through the
+exact same `issueInvoice()` → `invoiceTotals()` pipeline as an ordinary
+invoice (`lib/services/invoice-service.ts`, `lib/zatca/money.ts`). Nothing in
+that pipeline reads `documentType`. Concretely:
+
+- `lib/validation/schemas.ts` (`createInvoiceSchema`) requires
+  `quantity: z.number().positive()` and `unitPrice: z.number().min(0)`
+  unconditionally — a credit note's own line amounts are always **positive**
+  going in, credit note or not.
+- `prisma/migrations/20260818160000_check_constraints/migration.sql` enforces
+  the same thing at the database level: `CHECK ("quantity" > 0)`,
+  `CHECK ("unitPrice" >= 0)` on `InvoiceLine`. Even an app-layer change to
+  send negative amounts would be rejected by Postgres today.
+- `app/api/reports/route.ts:91-92` (the VAT return) sums
+  `taxableAmount`/`vatAmount` across every matched invoice with a plain `+=`,
+  with no `documentType` filter and no subtraction. A credit note for a
+  returned sale currently **inflates** the VAT return for its period instead
+  of reducing it.
+- Nothing in `lib/services/reconcile-service.ts`, `lib/services/
+  clearance-stats.ts`, or the AI assistant's compliance-stats tool branches on
+  `documentType` either — confirmed by grep, zero matches in both files.
+
+The one thing N8 did add (this same session) is a **queryable link**:
+`Invoice.referencedInvoiceId`/`billingReferenceId`/`instructionNote`, so a
+credit note's relationship to the invoice it corrects is no longer only
+readable by parsing XML text. That's necessary for whichever option below is
+chosen, but doesn't itself decide the sign question.
+
+**WHY IT MATTERS**
+A VAT return that only ever adds is wrong the first time a real customer
+issues a credit note for a return or pricing correction — which the roadmap
+itself calls "routine" business (`remediation-roadmap.md`'s N8 row: "real
+businesses issue credit notes routinely"). This isn't a cosmetic gap; it
+overstates VAT owed to ZATCA using this product's own numbers.
+
+**AUTHORITATIVE BASIS**
+ZATCA's e-invoicing rules require a credit/debit note to reference the
+original invoice and state its effect (`InvoiceTypeCode` 381/383, which N8's
+XML layer already emits correctly) — that part is settled and unaffected by
+this decision. What ZATCA does **not** prescribe is this product's internal
+storage/aggregation convention for getting from "a signed 381 document exists"
+to "the VAT return total is correct." No specific ZATCA or GAZT citation
+gathered for the storage convention itself — flag for a Saudi tax adviser
+alongside D1, since both bear on what the VAT return legitimately contains.
+
+**OPTIONS**
+
+| | Option | Consequence |
+|---|---|---|
+| A | Store credit/debit note `taxableAmount`/`vatAmount`/`grandTotal` as negative on the Invoice row itself | Every existing `+=` aggregation (reports, dashboards, AI compliance stats) becomes correct for free, with zero call-site changes. Requires loosening the Zod schema and the W11 CHECK constraints to allow negative totals **only** when `documentType != 'invoice'` — a conditional CHECK constraint, more complex than the current unconditional one, and a real behaviour change to a migration already shipped this phase |
+| B | Keep line/total amounts positive always; make every aggregation site `documentType`-aware (subtract for `credit`, add extra for `debit`) | No constraint/schema changes. Every current and future aggregation query (reports, reconciliation, dashboards, AI tools, anything added later) must remember to branch on `documentType` correctly — an easy rule to forget once, and each forgetting silently re-introduces this exact bug in a new place |
+| C | Neither — leave `Invoice.taxableAmount` etc. as the line-level truth, add a separate `netEffect` (or similar) column/view that's already sign-adjusted, used only by aggregation call sites | Isolates the sign decision to one place; original line amounts stay simple and auditable. New column, new backfill question for the two credit notes seeded during this phase's own testing |
+
+**RECOMMENDATION — B, revisit as A once real transaction volume justifies the
+constraint change.**
+B ships with no schema/constraint change, on top of the CHECK constraints
+already deployed this phase, and the fix is small (four call sites currently:
+`app/api/reports/route.ts`, `lib/services/reconcile-service.ts`,
+`lib/services/clearance-stats.ts`, `lib/ai/tools.ts`'s `getComplianceStats`).
+The real risk B carries — a fifth call site added later that forgets the
+branch — is exactly what a **shared aggregation helper** (not written this
+phase) neutralizes: one `netVat(invoices)`-style function every call site
+uses, rather than four independent `+=` loops. That helper is the concrete
+follow-up this decision unlocks, not something to build speculatively ahead
+of the owner's sign-off on B itself.
+
+**ENGINEERING IMPACT**
+B: small (S) — a shared aggregation helper plus four call-site updates, no
+migration. A: medium (M) — a new conditional CHECK constraint migration, a
+Zod schema change, and an audit of every existing negative-amount rejection
+path (BR-KSA-22 in `lib/zatca/validate.ts` also assumes `unitPrice >= 0`
+unconditionally today). C: medium (M) — new column/view plus a backfill
+decision for existing note rows.
+
+**IF DEFERRED**
+The VAT return stays wrong for any tenant that issues a credit or debit note,
+silently, with no error or warning anywhere in the product — this is the
+concrete, currently-live consequence, not a hypothetical one. N8's own
+ledger status should read PARTIAL (link + XML + tests done; totals-correctness
+not) until this is decided and implemented.
 
 ---
 

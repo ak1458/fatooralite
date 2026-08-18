@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { isConfigured, getChatProvider } from "@/lib/ai/provider";
 import { gatewayBaseUrl } from "@/lib/zatca/client";
+import { getJobStats } from "@/lib/services/job-stats";
 
 export const runtime = "nodejs";
 
@@ -25,14 +26,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [db, zatca] = await Promise.all([checkDatabase(), checkZatca()]);
+  const [db, zatca, jobs] = await Promise.all([checkDatabase(), checkZatca(), getJobStats()]);
   const ai = checkAi();
   const email = { configured: Boolean(process.env.RESEND_API_KEY) };
   const redis = { configured: Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) };
 
   const healthy = db.ok && zatca.ok;
   return NextResponse.json(
-    { status: healthy ? "ok" : "degraded", timestamp: new Date().toISOString(), db, zatca, ai, email, redis },
+    { status: healthy ? "ok" : "degraded", timestamp: new Date().toISOString(), db, zatca, ai, email, redis, jobs },
     { status: healthy ? 200 : 503 },
   );
 }

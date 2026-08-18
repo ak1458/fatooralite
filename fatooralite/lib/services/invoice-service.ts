@@ -20,11 +20,29 @@ import {
 import { buildXadesSignature, injectSignature, injectQrCode, finalizeSignatureValue } from "@/lib/zatca/xades";
 import { tag9Base64, isRealCsid } from "@/lib/zatca/tag9";
 import type { InvoiceInput, SignedInvoice } from "@/lib/zatca/types";
+import { parseRiyadhTimestamp } from "@/lib/time/riyadh";
+import { validateInvoiceAll, type ValidationIssue } from "@/lib/zatca/validate";
 
 export class NoCertificateError extends Error {
   constructor() {
     super("No active certificate for company");
     this.name = "NoCertificateError";
+  }
+}
+
+/**
+ * Business-rule validation failed BEFORE anything was chained/signed
+ * (Phase 3 / W12). Previously validateInvoice only ran inside the ZATCA
+ * submitters (lib/zatca/client.ts), so an invalid invoice could be signed
+ * into the PIH/ICV chain and only rejected later, at submit time — burning
+ * a chain slot and an invoice number for a document that was already
+ * doomed. Anything passing this gate still passes the submit-time gate
+ * unchanged; this only stops documents that would have failed anyway.
+ */
+export class InvoiceValidationError extends Error {
+  constructor(public readonly issues: ValidationIssue[]) {
+    super(`Invoice failed validation: ${issues.map((i) => `${i.code} — ${i.message}`).join("; ")}`);
+    this.name = "InvoiceValidationError";
   }
 }
 
@@ -43,14 +61,26 @@ export async function issueInvoice(
   companyId: string,
   input: InvoiceInput,
   db: PrismaClient = defaultDb,
+  opts?: { branchId?: string },
 ): Promise<IssueResult> {
+  // Validate BEFORE reserving a chain slot or signing — see
+  // InvoiceValidationError above for why (Phase 3 / W12).
+  const issues = validateInvoiceAll(input);
+  if (issues.length > 0) throw new InvoiceValidationError(issues);
+
   const cert = await getActiveCertificate(companyId, db);
   if (!cert || !cert.privateKey || !cert.publicKey) throw new NoCertificateError();
   const privateKey = cert.privateKey;
   const publicKey = cert.publicKey;
 
   const uuid = newUuid();
+  // XAdES signingTime and the QR timestamp echo the invoice's own local
+  // issueDate/issueTime literally (business-local representation, not a UTC
+  // instant) — unchanged in shape from before. `issueInstant` below is the
+  // REAL Asia/Riyadh instant (lib/time/riyadh.ts, Phase 3 / W9), used only
+  // for actual elapsed-time arithmetic (the reporting deadline).
   const timestamp = `${input.issueDate}T${input.issueTime ?? "00:00:00"}`;
+  const issueInstant = parseRiyadhTimestamp(input.issueDate, input.issueTime ?? "00:00:00");
 
   // The entire chain-critical section runs under one interactive transaction:
   // the FOR UPDATE lock in nextChainSlot is held across read → sign → write so
@@ -72,11 +102,11 @@ export async function issueInvoice(
       // Simplified (B2C) invoices are reported within 24h; stamp the deadline.
       const reportingDeadline =
         input.kind === "simplified"
-          ? new Date(Date.parse(timestamp) + 24 * 3600_000)
+          ? new Date(issueInstant.getTime() + 24 * 3600_000)
           : null;
 
       const draft = await createInvoice(
-        { companyId, input: enrichedInput },
+        { companyId, branchId: opts?.branchId, input: enrichedInput },
         uuid,
         txDb,
         { reportingDeadline },

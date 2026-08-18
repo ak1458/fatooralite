@@ -42,22 +42,32 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
   the other — no ZATCA round trip has ever been performed — is owner-blocked
   on a Fatoora portal OTP.
 - **Remediation Phase 1 is complete** (W1 Arabic PDF, W2 security audit trail).
-  **Remediation Phase 2 is also complete** (W3 idempotency/reconciliation, W4
+  **Remediation Phase 2 is complete** (W3 idempotency/reconciliation, W4
   observability, W5 AI confirmation tokens, W6 RAG restriction/AI usage
-  accounting, W7 deployment config, W26 remaining risks). Programme state
-  lives in `docs/audit/remediation-ledger.md`; read that before starting
-  anything. Phase 3 has NOT been started.
+  accounting, W7 deployment config, W26 remaining risks).
+  **Remediation Phase 3 is complete, with honestly-documented PARTIALs**
+  (W8–W18, N8; F-A/F-B/F-C investigated and closed). Programme state lives in
+  `docs/audit/remediation-ledger.md`; read that before starting anything.
+  Phase 4 has NOT been started. Full regression (73 test files, 497 tests)
+  confirmed 0 failed / 0 skipped. **If you're picking this up fresh, read
+  `docs/SESSION_HANDOFF_2026-08-18.md` first** for the exact current state
+  and what to do if this work isn't committed yet.
 - **Thirteen defects were found and fixed in the original audit**, four
   financial or compliance-affecting. Full detail in
   `docs/audit/2026-08-18-findings.md`.
 - **The test suite now runs its database-gated half.** It was 285 passed /
   43 skipped; after the audit it was 363 passed / 0 skipped, after
-  remediation Phase 1 it was 402 passed / 0 skipped, and after remediation
-  Phase 2 it is **447 passed / 2 failed / 0 skipped** (449 total, 47 net new).
-  The 2 failures are pre-existing, unrelated to Phase 2 (`lib/billing/
-  plan.test.ts` — two tests time out under current Neon latency doing a
-  25-30-iteration sequential insert loop; documented in `handoff.md`, not
-  fixed — billing/licensing is outside W3–W7/W26 scope).
+  remediation Phase 1 it was 402 passed / 0 skipped, after remediation
+  Phase 2 it was 447 passed / 2 pre-existing failed / 0 skipped, and after
+  remediation Phase 3 it is **497 passed / 0 failed / 0 skipped** (73 test
+  files, run against `fatoora_audit` via `TEST_DATABASE_URL`). The 2
+  pre-existing Phase 2 failures (`lib/billing/plan.test.ts`) are now fixed
+  (F-A). Run convention that changed this phase: 6 files that call
+  `pushTestSchema()` must run in separate `vitest run` invocations, one at a
+  time (running two together races); the other 67 must run together in one
+  invocation with `--no-file-parallelism` (true parallel execution against
+  the same database caused real connection contention, not a code bug).
+  See `handoff.md`'s Phase 3 entry for the full mechanics.
 - Security core verified adversarially: 25 cross-tenant attacks refused,
   privilege escalation refused, invoice totals recomputed server-side, the
   ZATCA chain did not fork under concurrency, RAG leaked nothing under prompt
@@ -161,12 +171,18 @@ reconfirmed as no-longer-reproducing; F-12 confirmed accepted-with-basis).
 Suite: 447 passed / 2 pre-existing unrelated failures / 0 skipped. Ledger:
 507 GREEN / 1069. Full write-up in `handoff.md`'s 2026-08-18 Phase 2 entry.
 
-**Phase 3 is next and has not been started:** W8 background job substrate, W9
-Asia/Riyadh timezone policy, W10 branchId scoping, W11 DB CHECK constraints,
-W12 ZATCA XSD/Schematron validation, W13 migration safety drills, W14
-performance testing, W15 test coverage, W16 failure-injection harness, W17
-DevOps staging/patch process, W18 assistant scope claims. See
-`docs/audit/remediation-roadmap.md` §Phase 3.
+**Phase 3 is done, with honestly-documented PARTIALs.** W8 background job
+substrate, W9 Asia/Riyadh timezone policy, W10 branchId scoping, W11 DB CHECK
+constraints, W13 migration safety drills, W18 assistant scope claims are
+DONE outright. W12 (ZATCA XSD/Schematron validation), W14 (performance
+testing), W15 (test coverage), W17 (DevOps staging/patch process), and N8
+(credit/debit notes, promoted from Phase 5) are PARTIAL — each gap is either
+owner-blocked (X1, X2) or a deliberately undecided business rule (D9), never
+silently substituted. W16 (failure-injection harness) is DONE for the
+harness itself. F-A/F-B/F-C (carried over from Phase 2's own report) are
+closed. Full detail: `docs/audit/remediation-ledger.md`'s Phase 3 table and
+outcome section, `handoff.md`'s Phase 3 entry, `docs/SESSION_HANDOFF_
+2026-08-18.md`. **Phase 4 has not been started.**
 
 **Three decisions are still open and block work:** D1 (VAT-return scope), D7
 (does the absent Control Center gate launch), D8 (is WhatsApp launch scope).
@@ -397,6 +413,29 @@ regression, and the reason is in the code comment beside it.
   that sends its own `x-request-id` is ignored — trusting a client-supplied
   correlation id would let a caller plant an arbitrary value into every log
   line describing its own request.
+- **Schema operations (`prisma db push`, `migrate dev`, `migrate deploy`)
+  must use the DIRECT (non-pooled) Neon connection URL, never the pooled
+  (pgbouncer) one.** Pgbouncer's transaction-pooling mode doesn't reliably
+  support the session-level features (advisory locks, prepared statements)
+  schema DDL depends on — using the pooled URL produces intermittent
+  advisory-lock-timeout and "table does not exist" failures that look
+  unrelated to the real cause. The app's own runtime queries are fine
+  against the pooled URL; this only applies to schema-mutating commands.
+  Phase 3 / W13 (`docs/19-operations-runbook.md` §3).
+- **`prisma db push --force-reset` (what every DB-gated test file's
+  `pushTestSchema()` calls) refuses to run when Prisma detects it's being
+  invoked by an AI agent, without `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`
+  set to a human's own verbatim consent text.** This is a real Prisma CLI
+  safety feature, not a bug to route around — and Claude Code's own
+  permission classifier separately blocks an agent from setting that env var
+  itself, or from editing its own `settings.json` to self-grant a bypass.
+  Only 6 test files call `pushTestSchema()`
+  (`lib/ai/vector-store.test.ts`, `lib/auth/server.test.ts`,
+  `lib/billing/plan.test.ts`, `lib/db/repo.test.ts`,
+  `lib/services/clearance-service.test.ts`,
+  `lib/services/invoice-service.test.ts`); each needs its own separate
+  `vitest run` invocation (two together race). See `handoff.md`'s Phase 3
+  entry for what actually worked.
 
 ---
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { zodErrorResponse } from "@/lib/validation/http";
 import { Prisma } from "@prisma/client";
-import { issueInvoice, NoCertificateError } from "@/lib/services/invoice-service";
+import { issueInvoice, NoCertificateError, InvoiceValidationError } from "@/lib/services/invoice-service";
 import { getInvoiceList } from "@/lib/db/queries";
 import { createInvoiceSchema } from "@/lib/validation/schemas";
 import { requirePermission } from "@/lib/auth/server";
@@ -16,14 +16,14 @@ export const runtime = "nodejs";
 
 /** POST /api/invoices — issue (create + sign) a new invoice. */
 export async function POST(req: Request) {
-  let body: { companyId?: string; input?: InvoiceInput };
+  let body: { companyId?: string; input?: InvoiceInput; branchId?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { companyId, input } = body;
+  const { companyId, input, branchId } = body;
   if (!companyId || !input) {
     return NextResponse.json(
       { error: "companyId and input are required" },
@@ -33,6 +33,15 @@ export async function POST(req: Request) {
 
   const { deny } = await requirePermission(req, "invoice:create", companyId);
   if (deny) return deny;
+
+  // branchId is route-level, not a UBL/InvoiceInput concept — a location
+  // label on the row, not a security boundary. Still verify it belongs to
+  // the caller's own tenant: trusting an unverified branchId across
+  // companies would attribute one tenant's invoice to another's location.
+  if (branchId) {
+    const branch = await prisma.branch.findFirst({ where: { id: branchId, companyId } });
+    if (!branch) return NextResponse.json({ error: "Branch not found for this company" }, { status: 400 });
+  }
 
   // Two separate gates: the entitlement (an expired trial cannot issue at all)
   // and the volume cap (a live trial can, up to its monthly allowance).
@@ -72,12 +81,15 @@ export async function POST(req: Request) {
       }))
     } as InvoiceInput;
 
-    const result = await issueInvoice(companyId, typedInput);
+    const result = await issueInvoice(companyId, typedInput, prisma, { branchId });
     scheduleCompanyIngest(companyId);
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
     const invalid = zodErrorResponse(err);
     if (invalid) return invalid;
+    if (err instanceof InvoiceValidationError) {
+      return NextResponse.json({ error: err.message, issues: err.issues }, { status: 400 });
+    }
     if (err instanceof NoCertificateError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }
@@ -114,18 +126,26 @@ export async function POST(req: Request) {
   }
 }
 
-/** GET /api/invoices?companyId=...&status=... — list invoices. */
+/** GET /api/invoices?companyId=...&status=...&branchId=... — list invoices. */
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const companyId = url.searchParams.get("companyId");
   const status = url.searchParams.get("status") ?? undefined;
+  const branchId = url.searchParams.get("branchId") ?? undefined;
   if (!companyId) {
     return NextResponse.json({ error: "companyId is required" }, { status: 400 });
   }
-  
+
   const { deny } = await requirePermission(req, "audit:view", companyId);
   if (deny) return deny;
 
-  const data = await getInvoiceList(companyId, status ? { status } : undefined);
+  // Same tenant-ownership check as POST — a branchId from another company
+  // must not silently return an empty (or worse, cross-tenant) result.
+  if (branchId) {
+    const branch = await prisma.branch.findFirst({ where: { id: branchId, companyId } });
+    if (!branch) return NextResponse.json({ error: "Branch not found for this company" }, { status: 400 });
+  }
+
+  const data = await getInvoiceList(companyId, { status, branchId });
   return NextResponse.json(data);
 }

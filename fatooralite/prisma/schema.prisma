@@ -94,8 +94,8 @@ model Subscription {
   companyId              String    @unique
   // Paid-only product: a tenant is in a 7-day trial, on pro, or expired.
   // There is no free tier. Plan resolution lives in lib/billing/entitlements.ts.
-  plan                   String    @default("trial") // trial | pro
-  status                 String    @default("active") // active | past_due | canceled
+  plan                   String    @default("trial") // trial | pro — DB CHECK constraint (W11)
+  status                 String    @default("active") // active | past_due | canceled — deliberately NOT DB-constrained; see W11 migration header (entitlements.test.ts proves this must tolerate arbitrary provider status strings)
   processorCustomerId    String?
   processorSubscriptionId String?
   /** End of the 7-day trial. Set at registration; null on a pro row. */
@@ -124,7 +124,7 @@ model Branch {
 model Certificate {
   id          String    @id @default(cuid())
   companyId   String
-  kind        String // "compliance" | "production" | "local"
+  kind        String // "compliance" | "production" | "local" — DB CHECK constraint (W11)
   serial      String?
   csrPem      String?
   privateKey  String? // EC private key PEM, encrypted at rest (lib/crypto/encrypt.ts)
@@ -133,7 +133,7 @@ model Certificate {
   token       String? // ZATCA binarySecurityToken (CSID certificate, base64)
   secret      String? // ZATCA CSID secret
   requestId   String? // ZATCA request id
-  status      String    @default("pending") // pending|compliance|active|expired|failed
+  status      String    @default("pending") // pending|compliance|active|expired|failed|used — DB CHECK constraint (W11). "used" (a compliance cert once its production CSID is issued) was undocumented here until W11's audit found the real write site.
   issuedAt    DateTime?
   expiresAt   DateTime?
   createdAt   DateTime  @default(now())
@@ -144,6 +144,13 @@ model Certificate {
   @@index([companyId, status])
 }
 
+/// DB-level CHECK constraints (Phase 3 / W11, migration
+/// 20260818160000_check_constraints — not representable in this file, Prisma
+/// has no CHECK support) enforce: status/kind/documentType/reportingState
+/// vocabularies, submitAttempts >= 0, and grandTotal ~= taxableAmount +
+/// vatAmount. Every one of those columns already only ever holds the values
+/// the constraint allows; the constraint verified against actual write
+/// sites, not just the comments below (see the migration's own header).
 model Invoice {
   id            String   @id @default(cuid())
   companyId     String
@@ -168,6 +175,19 @@ model Invoice {
   signature     String?
   qr            String?
   resultCode    String? // e.g. BR-KSA-83 on rejection
+  // Credit/debit notes (N8): billingReferenceId/instructionNote are the raw
+  // strings that go into the signed XML's BillingReference/Note elements —
+  // kept even when they don't resolve to a row in this same company (e.g. the
+  // original was issued before this column existed, or was a typo the user
+  // must fix). referencedInvoiceId is the resolved soft link, set only when
+  // billingReferenceId matches an existing invoiceNumber for this company at
+  // issue time; nothing re-resolves it later, so a subsequent rename of the
+  // original's invoiceNumber (not possible today — invoiceNumber is
+  // server-assigned and immutable — but worth stating) would not retroactively
+  // break or fix this link.
+  billingReferenceId  String?
+  instructionNote     String?
+  referencedInvoiceId String?
   // B2C 24h reporting queue: simplified invoices are "pending" until the cron
   // reports them; standard invoices are "n/a" (cleared synchronously).
   reportingState    String    @default("n/a") // n/a | pending | reported | failed
@@ -188,6 +208,11 @@ model Invoice {
   lines    InvoiceLine[]
   records  ClearanceRecord[]
   audit    AuditEntry[]
+  // Self-relation for credit/debit notes (N8). SetNull rather than Cascade:
+  // deleting the original invoice (already rare — invoices aren't normally
+  // deleted post-issue) must not delete the correction that documents it.
+  referencedInvoice Invoice?  @relation("InvoiceCorrections", fields: [referencedInvoiceId], references: [id], onDelete: SetNull)
+  corrections       Invoice[] @relation("InvoiceCorrections")
 
   @@unique([companyId, invoiceNumber])
   @@index([companyId, createdAt])
@@ -204,8 +229,10 @@ model Invoice {
   // an index here is free.
   @@index([customerId])
   @@index([branchId])
+  @@index([referencedInvoiceId])
 }
 
+/// DB CHECK constraints (W11): quantity > 0, unitPrice >= 0, 0 <= vatRate <= 1.
 model InvoiceLine {
   id          String  @id @default(cuid())
   invoiceId   String

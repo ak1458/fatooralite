@@ -104,6 +104,21 @@ export async function createInvoice(
   // Simplified (B2C) invoices enter the 24h reporting queue; standard invoices
   // are cleared synchronously and never reported on a timer.
   const reportingState = input.kind === "simplified" ? "pending" : "n/a";
+  // Credit/debit notes (N8): billingReferenceId is the invoice number the
+  // note corrects (already required by BR-KSA-56/57 validation before this
+  // runs). Resolve it to a real row in this company so the correction is
+  // queryable instead of only living inside the signed XML text — but don't
+  // fail the write if it doesn't resolve; the raw string still reaches the
+  // XML's BillingReference either way, and refusing to issue over an
+  // unresolved reference isn't this function's call to make.
+  let referencedInvoiceId: string | undefined;
+  if (input.billingReferenceId) {
+    const referenced = await db.invoice.findFirst({
+      where: { companyId, invoiceNumber: input.billingReferenceId },
+      select: { id: true },
+    });
+    referencedInvoiceId = referenced?.id;
+  }
   return db.invoice.create({
     data: {
       companyId,
@@ -112,6 +127,9 @@ export async function createInvoice(
       uuid,
       kind: input.kind,
       documentType: input.documentType ?? "invoice",
+      billingReferenceId: input.billingReferenceId,
+      instructionNote: input.instructionNote,
+      referencedInvoiceId,
       status: "draft",
       issueDate: input.issueDate,
       issueTime: input.issueTime ?? "00:00:00",

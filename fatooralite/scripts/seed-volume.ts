@@ -75,6 +75,34 @@ async function seed(count: number) {
       });
     }
     await prisma.invoice.createMany({ data: rows, skipDuplicates: true });
+
+    // 1-3 lines per invoice. seed-volume previously created line-less
+    // invoices, which meant PDF/report/detail joins were never exercised at
+    // volume (Phase 3 / W14). Batched, never one create() per line — the F-A
+    // lesson (sequential single-row inserts don't survive Neon latency at
+    // this scale).
+    const created = await prisma.invoice.findMany({
+      where: { uuid: { in: rows.map((r) => r.uuid) } },
+      select: { id: true, uuid: true, taxableAmount: true },
+    });
+    const byUuid = new Map(created.map((c) => [c.uuid, c]));
+    const lineRows = rows.flatMap((r) => {
+      const inv = byUuid.get(r.uuid);
+      if (!inv) return [];
+      const lineCount = 1 + (Number(inv.taxableAmount) % 3);
+      const netEach = Math.round((Number(inv.taxableAmount) / lineCount) * 100) / 100;
+      return Array.from({ length: lineCount }, (_, li) => ({
+        invoiceId: inv.id,
+        description: `Line ${li + 1}`,
+        quantity: 1,
+        unitPrice: netEach,
+        vatRate: 0.15,
+        netAmount: netEach,
+        vatAmount: Math.round(netEach * 0.15 * 100) / 100,
+      }));
+    });
+    await prisma.invoiceLine.createMany({ data: lineRows });
+
     process.stdout.write(`\r  seeded ${Math.min(start + batchSize, count)}/${count}`);
   }
 

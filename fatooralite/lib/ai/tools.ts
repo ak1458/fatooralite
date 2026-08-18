@@ -9,6 +9,7 @@ import { issueInvoice } from "@/lib/services/invoice-service";
 import { submitInvoice } from "@/lib/services/clearance-service";
 import { computeClearanceStats } from "@/lib/services/clearance-stats";
 import type { InvoiceInput } from "@/lib/zatca/types";
+import { riyadhToday, riyadhTimeOfDay } from "@/lib/time/riyadh";
 
 export interface ToolContext {
   companyId: string;
@@ -48,13 +49,19 @@ const lineSchema = z.object({
   unitPrice: z.number().min(0),
 });
 
+// The AI-created invoice's issue date/time is the Saudi tax point — Asia/Riyadh, not server-local (Phase 3 / W9).
 function todayParts() {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return {
-    date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
-    time: `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`,
-  };
+  return { date: riyadhToday(), time: riyadhTimeOfDay() };
+}
+
+// Phase 3 / W18: every read tool below returns rows scoped to ctx.companyId —
+// one tenant's own data, never platform-wide. Tag it the same way retrieved
+// [tenant-data] hits are tagged (app/api/ai/agent/route.ts) so the model
+// can't generalize "this company's invoices" into "how businesses on this
+// platform typically do X" — the KNOWLEDGE BOUNDARIES block in
+// zatca-prompt.ts tells it to read this tag as scope, not as content to cite.
+function tenantScoped(data: unknown): string {
+  return `[tenant-data — this company only] ${JSON.stringify(data)}`;
 }
 
 const TOOLS: Record<string, ToolDef> = {
@@ -75,7 +82,7 @@ const TOOLS: Record<string, ToolDef> = {
       // Money columns are Decimal; JSON.stringify renders them as strings
       // ("230"), and the model then has to do arithmetic on strings. Convert at
       // this boundary like every other read path does (lib/db/decimal.ts).
-      return { content: JSON.stringify(invoices.map((i) => ({ ...i, grandTotal: num(i.grandTotal) }))) };
+      return { content: tenantScoped(invoices.map((i) => ({ ...i, grandTotal: num(i.grandTotal) }))) };
     },
   },
   listCustomers: {
@@ -88,7 +95,7 @@ const TOOLS: Record<string, ToolDef> = {
         where: { companyId: ctx.companyId }, orderBy: { createdAt: "desc" }, take: 50,
         select: { name: true, vatNumber: true, city: true, email: true },
       });
-      return { content: JSON.stringify(customers) };
+      return { content: tenantScoped(customers) };
     },
   },
   listProducts: {
@@ -101,7 +108,7 @@ const TOOLS: Record<string, ToolDef> = {
         where: { companyId: ctx.companyId }, orderBy: { createdAt: "desc" }, take: 50,
         select: { name: true, sku: true, unitPrice: true, vatCategory: true },
       });
-      return { content: JSON.stringify(products.map((p) => ({ ...p, unitPrice: num(p.unitPrice) }))) };
+      return { content: tenantScoped(products.map((p) => ({ ...p, unitPrice: num(p.unitPrice) }))) };
     },
   },
   getComplianceStats: {
@@ -114,7 +121,7 @@ const TOOLS: Record<string, ToolDef> = {
         where: { companyId: ctx.companyId },
         select: { kind: true, status: true, vatAmount: true, issueDate: true, issueTime: true, resultCode: true },
       });
-      return { content: JSON.stringify(computeClearanceStats(invoices.map((i) => ({ ...i, vatAmount: num(i.vatAmount) })))) };
+      return { content: tenantScoped(computeClearanceStats(invoices.map((i) => ({ ...i, vatAmount: num(i.vatAmount) })))) };
     },
   },
   findInvoice: {
@@ -130,7 +137,7 @@ const TOOLS: Record<string, ToolDef> = {
       });
       return {
         content: inv
-          ? JSON.stringify({ ...inv, grandTotal: num(inv.grandTotal), vatAmount: num(inv.vatAmount) })
+          ? tenantScoped({ ...inv, grandTotal: num(inv.grandTotal), vatAmount: num(inv.vatAmount) })
           : `No invoice found with number ${a.invoiceNumber}.`,
       };
     },
@@ -151,7 +158,7 @@ const TOOLS: Record<string, ToolDef> = {
       const totalTaxable = invoices.reduce((s, i) => s + num(i.taxableAmount), 0);
       const totalVat = invoices.reduce((s, i) => s + num(i.vatAmount), 0);
       return {
-        content: JSON.stringify({ period: `Last ${days} days`, totalInvoices: invoices.length, totalTaxable, totalVat }),
+        content: tenantScoped({ period: `Last ${days} days`, totalInvoices: invoices.length, totalTaxable, totalVat }),
         navigate: `/reports?rangeDays=${days}`,
       };
     },

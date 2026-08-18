@@ -40,14 +40,14 @@ describe.skipIf(!hasTestDb)("registerCompany", () => {
     expect(user.email).toBe("owner1@acme.com");
     expect(user.passwordHash).toBeTruthy();
     expect(user.passwordHash).not.toBe("secret12");
-  });
+  }, 20_000);
 
   it("rejects a duplicate email", async () => {
     await registerCompany({ ...base, email: "dup@acme.com", vatNumber: "300000000000011" }, db);
     await expect(
       registerCompany({ ...base, email: "dup@acme.com", vatNumber: "300000000000029" }, db),
     ).rejects.toThrow(RegisterError);
-  });
+  }, 20_000);
 
   it("rejects a duplicate VAT number", async () => {
     await registerCompany({ ...base, email: "e1@acme.com", vatNumber: "300000000000037" }, db);
