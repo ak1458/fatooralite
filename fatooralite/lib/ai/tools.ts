@@ -72,7 +72,10 @@ const TOOLS: Record<string, ToolDef> = {
         take: a.limit ?? 10,
         select: { invoiceNumber: true, kind: true, status: true, grandTotal: true, buyerName: true, issueDate: true },
       });
-      return { content: JSON.stringify(invoices) };
+      // Money columns are Decimal; JSON.stringify renders them as strings
+      // ("230"), and the model then has to do arithmetic on strings. Convert at
+      // this boundary like every other read path does (lib/db/decimal.ts).
+      return { content: JSON.stringify(invoices.map((i) => ({ ...i, grandTotal: num(i.grandTotal) }))) };
     },
   },
   listCustomers: {
@@ -98,7 +101,7 @@ const TOOLS: Record<string, ToolDef> = {
         where: { companyId: ctx.companyId }, orderBy: { createdAt: "desc" }, take: 50,
         select: { name: true, sku: true, unitPrice: true, vatCategory: true },
       });
-      return { content: JSON.stringify(products) };
+      return { content: JSON.stringify(products.map((p) => ({ ...p, unitPrice: num(p.unitPrice) }))) };
     },
   },
   getComplianceStats: {
@@ -125,7 +128,11 @@ const TOOLS: Record<string, ToolDef> = {
         where: { companyId: ctx.companyId, invoiceNumber: a.invoiceNumber },
         select: { invoiceNumber: true, kind: true, status: true, grandTotal: true, vatAmount: true, buyerName: true, resultCode: true, issueDate: true },
       });
-      return { content: inv ? JSON.stringify(inv) : `No invoice found with number ${a.invoiceNumber}.` };
+      return {
+        content: inv
+          ? JSON.stringify({ ...inv, grandTotal: num(inv.grandTotal), vatAmount: num(inv.vatAmount) })
+          : `No invoice found with number ${a.invoiceNumber}.`,
+      };
     },
   },
   getReport: {

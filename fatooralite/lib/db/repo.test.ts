@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { hasTestDb, pushTestSchema, testClient } from "./test-db";
+import { num } from "./decimal";
 import {
   createCompany,
   createInvoice,
@@ -44,9 +45,13 @@ describe.skipIf(!hasTestDb)("db repository", () => {
     );
     const invoice = await createInvoice({ companyId: company.id, input }, "uuid-t-1", db);
     expect(invoice.lines).toHaveLength(1);
-    expect(invoice.taxableAmount).toBe(120);
-    expect(invoice.vatAmount).toBe(18);
-    expect(invoice.grandTotal).toBe(138);
+    // repo.ts is below the read boundary: it returns Prisma rows as-is, so money
+    // columns arrive as Decimal. Conversion to number happens one layer up, in
+    // lib/db/queries.ts and lib/services/* via num() — asserting a plain number
+    // here would be asserting the wrong contract for this layer.
+    expect(num(invoice.taxableAmount)).toBe(120);
+    expect(num(invoice.vatAmount)).toBe(18);
+    expect(num(invoice.grandTotal)).toBe(138);
     expect(invoice.status).toBe("draft");
   });
 

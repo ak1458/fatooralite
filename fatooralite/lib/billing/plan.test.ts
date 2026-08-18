@@ -34,7 +34,14 @@ describe.skipIf(!hasTestDb)("plan (DB-backed)", () => {
 
   async function makeCompany() {
     seq += 1;
-    return db.company.create({ data: { name: `Acme ${seq}`, vatNumber: "300000000000003" } });
+    // Company.vatNumber is @unique, so the VAT number has to vary with `seq`
+    // exactly as the name does. A fixed literal here made every company after
+    // the first in this file fail on the unique constraint — invisible in CI,
+    // which skips this suite when TEST_DATABASE_URL is unset.
+    // Keeps the ZATCA shape: 15 digits, leading and trailing 3.
+    return db.company.create({
+      data: { name: `Acme ${seq}`, vatNumber: `3${String(seq).padStart(13, "0")}3` },
+    });
   }
 
   async function makeTrialCompany() {
