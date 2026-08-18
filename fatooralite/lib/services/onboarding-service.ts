@@ -8,7 +8,7 @@ import {
 } from "@/lib/zatca/onboarding";
 import type { ZatcaMode } from "@/lib/zatca/client";
 import type { InvoiceInput } from "@/lib/zatca/types";
-import { encryptPrivateKey, decryptPrivateKey } from "@/lib/crypto/encrypt";
+import { encryptPrivateKey, decryptPrivateKey, encryptSecret, decryptSecret } from "@/lib/crypto/encrypt";
 
 export class OnboardingStateError extends Error {
   constructor(message: string) {
@@ -68,7 +68,7 @@ export async function provisionLocalCertificate(
       // Local placeholder CSID — valid base64 so the XAdES cert digest computes;
       // replaced by a real binarySecurityToken when ZATCA onboarding runs.
       token: publicKeyDerBase64(kp.publicKeyPem),
-      secret: "LOCAL-DEV-SECRET",
+      secret: encryptSecret("LOCAL-DEV-SECRET"),
       issuedAt: new Date(),
       expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       serial: "LOCAL-DEV",
@@ -127,7 +127,7 @@ export async function startOnboarding(
       privateKey: encryptPrivateKey(kp.privateKeyPem),
       publicKey: kp.publicKeyPem,
       token: compliance.token,
-      secret: compliance.secret,
+      secret: encryptSecret(compliance.secret),
       requestId: compliance.requestId,
     },
   });
@@ -231,7 +231,7 @@ export async function runComplianceChecks(
         invoiceHash: signed.hash,
         uuid: signed.uuid,
       },
-      { token: compliance.token, secret: compliance.secret },
+      { token: compliance.token, secret: decryptSecret(compliance.secret)! },
       mode,
     );
     results.push({
@@ -273,7 +273,7 @@ export async function completeOnboarding(
   }
 
   const production = await requestProductionCsid(
-    { token: compliance.token, secret: compliance.secret, requestId: compliance.requestId },
+    { token: compliance.token, secret: decryptSecret(compliance.secret)!, requestId: compliance.requestId },
     mode,
   );
 
@@ -291,7 +291,7 @@ export async function completeOnboarding(
       privateKey: compliance.privateKey, // already encrypted in the compliance record
       publicKey: compliance.publicKey,
       token: production.token,
-      secret: production.secret,
+      secret: encryptSecret(production.secret),
       requestId: production.requestId,
       issuedAt: new Date(),
     },

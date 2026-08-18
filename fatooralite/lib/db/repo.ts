@@ -3,7 +3,7 @@ import { prisma as defaultDb } from "./client";
 import type { InvoiceInput } from "@/lib/zatca/types";
 import { invoiceTotals, lineNet, lineVat, STANDARD_VAT_RATE } from "@/lib/zatca/money";
 import { genesisHash } from "@/lib/zatca/hash";
-import { decryptPrivateKey } from "@/lib/crypto/encrypt";
+import { decryptPrivateKey, decryptSecret } from "@/lib/crypto/encrypt";
 
 /**
  * Thin repository over Prisma. Every function takes an optional `db` so tests
@@ -29,6 +29,11 @@ export async function getActiveCertificate(companyId: string, db: PrismaClient =
   });
   if (cert && cert.privateKey) {
     cert.privateKey = decryptPrivateKey(cert.privateKey);
+  }
+  // The CSID secret is wrapped at rest alongside the signing key; unwrap it on
+  // the same read boundary so callers (the ZATCA client) see plain credentials.
+  if (cert) {
+    cert.secret = decryptSecret(cert.secret);
   }
   return cert;
 }

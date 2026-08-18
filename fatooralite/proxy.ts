@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/session";
 import { isRateLimited } from "@/lib/ratelimit/limiter";
+import { clientIpFor } from "@/lib/ratelimit/client-ip";
 
 // Rate limiting window shared by both buckets below. The limiter itself
 // (lib/ratelimit/limiter.ts) uses Upstash Redis when configured — so limits
@@ -82,8 +83,25 @@ function isPublicAsset(pathname: string): boolean {
  * set AUTH_ENFORCE=false only for unauthenticated local development demos.
  */
 export async function proxy(req: NextRequest) {
+  // A NUL byte is never legitimate in a URL, and PostgreSQL rejects one inside
+  // a text value outright. Any route that passed a path segment or query value
+  // into a Prisma query therefore answered `?status=%00` or `/api/audit/%00`
+  // with an unhandled 500 — an authenticated caller could produce server errors
+  // on demand and bury real faults in the error log. Rejecting it here fixes
+  // the whole class in one place instead of per route, and keeps future routes
+  // covered by default.
+  if (/%00/i.test(req.url)) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: "Malformed request URL" }, { status: 400 }),
+      req,
+    );
+  }
+
   // Rate limiting: strict budget on credential endpoints, general budget elsewhere.
-  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "127.0.0.1";
+  // Never key the limiter on the raw X-Forwarded-For header — the caller writes
+  // it, so a fresh value per request is a fresh bucket per request and the
+  // limit stops existing. See lib/ratelimit/client-ip.ts.
+  const ip = clientIpFor(req.headers);
   const isCredentialEndpoint =
     req.method === "POST" &&
     (req.nextUrl.pathname.startsWith("/api/auth/login") ||
