@@ -10,7 +10,7 @@ current state, not a summary of intentions. `START-HERE.md` points here.
 | | |
 |---|---|
 | Branch | `audit/production-readiness-2026-08-18` |
-| Latest commit | Phase 4's work is committed on top of `97135cf` (Phase 3), not pushed to `main` — see §4 for the exact hash |
+| Latest commit | `7dec667` — Phase 4's work is committed on top of `97135cf` (Phase 3), not pushed to `main` |
 | Phase 2 | **COMPLETE**, committed as `1c93593`. 447 passed / 2 pre-existing failures / 0 skipped at the time. Ledger: 507 GREEN / 1069 |
 | Phase 3 | **COMPLETE and fully verified**, committed as `97135cf`. All 12 planned items (W8–W18, N8) delivered with evidence. Full regression at the time: 73 test files, 497 tests, 0 failed, 0 skipped |
 | Phase 4 | **COMPLETE, with honestly-documented PARTIALs.** 5 of 7 planned items (W19, W21, W22, W23, W24) DONE outright; W20 (doc reconciliation) and W25 (backup procedures) PARTIAL, gaps stated plainly below. Full regression: **76 test files, 519 tests, 0 failed, 0 skipped** |
@@ -167,9 +167,8 @@ re-run after one failure is not that signal yet.
 ## 4. Commit status
 
 **Done.** Phase 3's work is committed as `97135cf`. Phase 4's work (this
-session) is committed as a separate new commit on top of it — see
-`git log --oneline -3` on `audit/production-readiness-2026-08-18` for the
-exact hash; not pushed to `main`, working tree clean afterward. No scratch
+session) is committed as `7dec667` on top of it (43 files changed) — not
+pushed to `main`, working tree clean afterward. No scratch
 helper scripts were left behind this phase (the run commands in §5 were
 run directly, nothing throwaway needed cleanup before committing).
 
