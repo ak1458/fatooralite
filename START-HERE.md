@@ -34,7 +34,25 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
 
 ---
 
-## Current state (2026-08-06)
+## Current state (2026-08-18)
+
+- **A full production audit was run on 2026-08-18** against both audit
+  specifications (1069 items). Report and ledger in `docs/audit/`. Verdict:
+  **NOT READY**, on two blockers that are not engineering work in this repo —
+  no ZATCA round trip has ever been performed, and Arabic invoice PDFs cannot
+  be generated.
+- **Thirteen defects were found and fixed**, four financial or
+  compliance-affecting. Full detail in `docs/audit/2026-08-18-findings.md`.
+- **The test suite now runs its database-gated half.** It was 285 passed /
+  43 skipped; it is now **363 passed / 0 skipped**. Two of those suites had
+  never executed at all (`plan.test.ts` collided on a unique VAT number), so
+  18 licensing assertions had never run.
+- Security core verified adversarially: 25 cross-tenant attacks refused,
+  privilege escalation refused, invoice totals recomputed server-side, the
+  ZATCA chain did not fork under concurrency, RAG leaked nothing under prompt
+  injection. Evidence in the audit report, not inferred from reading code.
+
+## Previous state (2026-08-06)
 
 - **Shipped.** `main` is pushed to GitHub and deployed to production. Tagged
   `v0.4.0`; tags `v0.1.0`–`v0.4.0` are all on the remote.
@@ -115,7 +133,29 @@ clearing an `any` cast. Prefer both over another reading pass.
 
 ## What is left
 
-### 1. Phase 7 — market research *(do this next)*
+### 0. Audit blockers *(do these first — see `docs/audit/`)*
+
+1. **Arabic invoice PDFs fail outright.** `WinAnsi cannot encode "ش" (0x0634)`.
+   English invoices render; any Arabic or mixed-script buyer name returns 500.
+   The invoice is already signed and numbered by then, so the tenant holds a
+   filed document they cannot print or send. Needs an embedded Unicode font
+   *and* a shaping engine — pdf-lib does no Arabic shaping — realistically an
+   HTML→PDF pipeline. Do not "fix" it by substituting placeholder characters;
+   silently altering a name on a tax document is worse than failing.
+2. **No security audit trail.** `AuditEntry` is written at four call sites, all
+   invoice artifacts. Nothing records logins, failed logins, permission denials,
+   password resets, role changes or certificate issuance. Needs a migration
+   (actor/tenant columns) plus a query surface — writing rows nothing can read
+   would only make the gap look closed.
+3. **No observability.** No error tracking, structured logging, metrics or
+   alerting; 28 raw `console.*` call sites.
+4. **No AI usage accounting**, and any tenant owner can trigger a *global* RAG
+   re-index (`POST /api/ai/ingest {scope:"global"}` needs only `settings:manage`).
+5. **HUMAN DECISION:** `/api/reports` counts only `cleared`/`reported` invoices,
+   so an issued-but-not-yet-cleared invoice is absent from the VAT return. That
+   is a tax-scope call, deliberately left unchanged.
+
+### 1. Phase 7 — market research
 
 Deliverable `docs/17-market-analysis.md`. ZATCA-adjacent vendors (Wafeq,
 Qoyod, Zoho Books KSA, Odoo partners, Mudad, ClearTax KSA, Sada), their
@@ -234,6 +274,29 @@ regression, and the reason is in the code comment beside it.
 - **No AI attribution anywhere in the repo** — no `Co-Authored-By`, no
   "Generated with", no robot sign-offs. Enforced by `.githooks/commit-msg`;
   enable with `git config core.hooksPath .githooks`.
+- **Logging out signs the user out on every device.** `POST /api/auth/logout`
+  increments `User.sessionVersion`. The JWT carries no per-session id, so
+  per-device logout is not possible without a schema change; for software
+  holding a business's tax records, "signed out means signed out everywhere" is
+  the safer default. Clearing the cookie alone was not a logout at all — the
+  token stayed valid for its full 7 days.
+- **`/api/reports` filters on `issueDate`, not `createdAt`.** The VAT period is
+  decided by the tax point, not by when the row was written, and `issueDate` is
+  a `YYYY-MM-DD` string so the comparison is timezone-free. Using `createdAt`
+  with `new Date(y, m, 1)` boundaries put invoices in the wrong month and made
+  the answer depend on the server's timezone.
+- **The rate limiter reads `X-Forwarded-For` from the RIGHT.** The caller writes
+  that header, so the leftmost entry is attacker-chosen; only entries appended
+  by our own edge can be trusted. `TRUSTED_PROXY_HOPS` (default 1) is correct on
+  Vercel. Reading it left-to-right, or using the whole header as the key, means
+  a fresh value per request is a fresh bucket per request.
+- **`Certificate.secret` is encrypted at rest, and legacy clear-text rows are
+  returned unchanged.** `decryptSecret` distinguishes them by shape, so no
+  migration was needed. Do not "simplify" that passthrough away.
+- **`submitInvoice` writes status `submitted` before calling ZATCA.** That state
+  existed in the schema and was read by the UI but never written, so a crash
+  after ZATCA accepted looked identical to never having sent. An invoice in
+  `submitted` means "fate unknown, needs reconciling" — it is not a bug.
 
 ---
 

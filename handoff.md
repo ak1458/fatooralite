@@ -1752,3 +1752,116 @@ wake it, or move the project off a scale-to-zero tier.
 login 200, and `/api/invoices`, `/api/customers`, `/api/products`,
 `/api/dashboard`, `/api/analytics` all 200 with real data — invoices list
 returns `INV-2026-04415`, dashboard reports `inv: 2`.
+
+---
+
+## 2026-08-18 — Full production audit against both audit specifications
+
+Ran the Master Production Audit and the Advanced Audit Addendum end to end as a
+single specification: 1069 actionable items, every one given a status and
+reconciled (461 GREEN / 291 PARTIAL / 9 FAILED / 192 MISSING / 5 RISK /
+9 UNKNOWN / 102 N/A = 1069). Report, findings register and full ledger are in
+`docs/audit/`.
+
+### How it was done
+
+Nothing was accepted from reading code. I stood up a real target: an isolated
+`fatoora_audit` database on the same Neon project (created for this, never
+`neondb`), seeded two independent tenants with their own users, customers,
+products, certificates and signed invoices, and ran a production build
+(`next start`, `NODE_ENV=production`, `AUTH_ENFORCE=true`) against it. Every
+finding below was reproduced over HTTP against that build.
+
+The `--force-reset` Prisma needs for the DB-gated suites is guarded by an
+AI-agent safety gate; I stopped and asked for explicit consent rather than
+working around it, and the runner script hard-refuses any URL that still
+resolves to `neondb`.
+
+### The thing that mattered most
+
+**Running the tests that had never run.** CI reported 285 passed / 43 skipped
+and had done so for a long time. The 43 were DB-gated, and among them
+`lib/billing/plan.test.ts` was *broken* — `makeCompany()` incremented `seq` for
+the company name but hard-coded `vatNumber` on a `@unique` column, so every
+company after the first collided and all 18 licensing assertions had never
+executed. Two fixes later the suite runs its full half: **363 passed / 0
+skipped**. If you take one thing from this entry: a skipped test is not a
+passing test, and CI was structurally unable to notice.
+
+### Defects found and fixed (13)
+
+Security: logout never revoked the session server-side (the JWT stayed valid its
+full 7 days — fixed by bumping `sessionVersion`, which the schema already had for
+password resets); the rate limiter used the whole `X-Forwarded-For` header as its
+bucket key, so rotating it minted a new bucket per request (0/14 blocked before,
+30/130 after, matching the honest control); the ZATCA CSID secret sat in clear
+text beside an AES-256-GCM-encrypted private key, and `token`+`secret` together
+are the gateway credential.
+
+Financial: `invoiceTotals()` reduced the taxable base by a document-level
+allowance but computed VAT from the *unreduced* base — 1000 SAR less a 100 SAR
+discount gave taxable 900 and VAT 150, and the XML's TaxSubtotal rows summed to
+1000 while the document said 900. Latent (no caller supplies allowances yet) but
+the UBL builder already emits them. `/api/reports` filtered on `createdAt`
+against server-local month boundaries, so an invoice issued 15 July and entered
+10 August was declared in August and vanished from July; proven with three
+invoices producing July=0, August=3.
+
+Reliability: 4 of 8 concurrent invoice issues returned 500 with
+``Invalid `prisma.$queryRaw()` invocation … Transaction API error`` in the
+response body — the `FOR UPDATE` lock serialises issuance and queued
+transactions blew the 20s timeout. Now 8/8, with P2028 mapped to 503 +
+`Retry-After` and no raw error text returned.
+
+ZATCA: the `submitted` status was documented in the schema and read by the UI
+but **never written**, so a crash after the gateway accepted was
+indistinguishable from never having sent — the Addendum's central scenario, live.
+And the gateway `fetch` had no timeout at all, which is precisely how that window
+opens on Vercel. Both fixed; the four post-response writes are now one
+transaction.
+
+Also: email case mismatch (sign-up/login compared raw case, `forgot` lowercased,
+so anyone who typed a capital could log in but never reset their password —
+silently, because that endpoint returns a generic success by design); unvalidated
+login body and NUL bytes producing attacker-triggerable 500s; `/api/integration`
+telling a tenant with a working certificate that it had none (it filtered
+`kind:"production"` after local certs were relabelled `kind:"local"`); and the AI
+assistant receiving money as Decimal strings.
+
+### What I deliberately did NOT do, and why
+
+- **Arabic PDF.** `WinAnsi cannot encode "ش"`. Fixing it needs a Unicode font
+  *and* a shaping engine — pdf-lib does no Arabic shaping, so embedding a font
+  alone renders letters disconnected and reversed. That is an HTML→PDF pipeline,
+  a feature, not an audit patch. I also rejected substituting placeholders for
+  unencodable characters: silently changing a customer name on a tax document is
+  worse than a clean failure.
+- **Security audit trail.** Needs a migration for actor/tenant columns plus a
+  read surface. Writing rows nothing can query would make the gap look closed.
+- **VAT return scope.** Reports count only `cleared`/`reported`, so an
+  issued-but-uncleared invoice is missing from the return. That is a tax
+  decision, not an engineering one. Flagged, unchanged.
+- **Validation at issuance.** A standard invoice with no buyer VAT is signed and
+  consumes an ICV slot, then can never clear. Moving `validateInvoice` to
+  issuance is right, but it changes which invoices the product accepts and
+  immediately breaks the AI `createInvoice` tool. Product call.
+
+### What held up
+
+Worth recording, because it is the good news: 25 cross-tenant read and write
+attacks all refused; privilege escalation refused at every level; client-sent
+`grandTotal:1` on a 1000 SAR invoice recomputed to 1150; a spoofed seller VAT
+never reached the signed XML; 13 concurrent invoices produced 13 distinct hashes
+and zero chain forks; RAG leaked no tenant-B marker across five prompt-injection
+attempts even when the model *claimed* to be listing all tenants (the boundary is
+server-side tool scoping, not the model); and a full disaster-recovery drill —
+export all 16 tables, restore into a fresh database, boot the app against it —
+had the customer logging in with invoices, products and certificate intact.
+
+### Cost me time
+
+Two things. First, the parallel full-suite run force-resets `fatoora_audit`, so
+it silently wiped the two-tenant fixture out from under a later drill; re-seed
+before any run that depends on it. Second, `pkill` does not kill `next start` on
+Windows — use `netstat -ano | grep :PORT` and `taskkill //PID`. A stale server on
+3999 made a verified fix look like it had not worked.

@@ -434,3 +434,53 @@ over another reading pass.
 
 The owner-blocked items at the top gate the actual launch date regardless of
 where engineering gets to.
+
+---
+
+## Production audit — 2026-08-18
+
+Ran the Master Production Audit and the Advanced Audit Addendum together as one
+specification: **1069 actionable items**, all reconciled. Full report, findings
+register and per-item ledger in `docs/audit/`.
+
+**Verdict: NOT READY**, on two blockers, neither of which is engineering work
+left undone in this repository:
+
+1. No ZATCA round trip has ever been performed — blocked on a Fatoora portal OTP.
+   Local validation (7/7) and sandbox reachability are the only levels verified.
+2. Arabic invoice PDFs cannot be generated at all (`WinAnsi cannot encode "ش"`).
+
+### Delivered versus planned
+
+Planned: audit, report, and fix what is safely fixable.
+Delivered: **13 defects fixed**, each FAILED → FIXED → RETESTED → GREEN, and the
+test suite moved from **285 passed / 43 skipped to 363 passed / 0 skipped**.
+
+Four of the thirteen were financial or compliance-affecting:
+
+- Document-level discounts computed VAT on the undiscounted base, and the XML's
+  TaxSubtotal rows disagreed with the document total (EN16931 BR-CO-13/17).
+  Latent — no caller supplies allowances yet — but the UBL builder emits them.
+- VAT returns filtered on `createdAt` against server-local month boundaries, so
+  invoices landed in the wrong tax period.
+- The ZATCA CSID secret was stored in clear text beside an encrypted private key.
+- The `submitted` invoice state was documented and read but never written, so a
+  crash after ZATCA accepted looked exactly like never having sent.
+
+### What this phase confirmed about method
+
+The single highest-value action was **running the tests that had never run**.
+CI had reported 285 passed / 43 skipped for a long time; the skipped half
+included a suite that was itself broken (a hard-coded VAT number on a unique
+column), so 18 licensing assertions had never executed once. A skipped test is
+not a passing test, and the CI gate was structurally unable to say so.
+
+That extends the note above: prefer running the app, prefer tests whose
+expectations come from the schema — and check that your tests actually execute.
+
+### Not done, deliberately
+
+Arabic PDF rendering (needs a shaping engine, not a patch), the security audit
+trail (needs a migration and a read surface), and the VAT-return scope question
+(a tax decision, not an engineering one) are all documented in the report with
+the reasoning, rather than half-built.
