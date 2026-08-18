@@ -30,7 +30,16 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       xml: invoice.xml || undefined,
       lines: invoice.lines,
       seller: company
-        ? { name: company.name, vatNumber: company.vatNumber, address: company.address }
+        ? {
+            name: company.name,
+            // The Arabic trading name is printed beside the Latin one when the
+            // tenant has recorded it — ZATCA expects the human-readable invoice
+            // to carry Arabic, and until the PDF could render Arabic at all
+            // there was no point passing this through.
+            nameAr: company.nameAr,
+            vatNumber: company.vatNumber,
+            address: company.address,
+          }
         : undefined,
     });
 
