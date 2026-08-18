@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { verifyWebhookSecret, parseInvoiceWebhook } from "@/lib/billing/moyasar";
 import { proPeriodEndFrom } from "@/lib/billing/plan";
 import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unrecognized payload shape" }, { status: 400 });
   }
   if (!event.companyId) {
-    console.error("Moyasar webhook: invoice has no companyId in metadata:", event.invoiceId);
+    loggerFor(req).error("billing.webhook.missing_company_id", { invoiceId: event.invoiceId });
     return NextResponse.json({ error: "Missing companyId metadata" }, { status: 400 });
   }
 

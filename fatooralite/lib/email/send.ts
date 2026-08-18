@@ -5,6 +5,8 @@
  * it just falls back to logging the email instead of sending it.
  */
 
+import { log } from "@/lib/log/logger";
+
 export interface SendEmailInput {
   to: string;
   subject: string;
@@ -41,13 +43,13 @@ export async function sendEmail({ to, subject, html }: SendEmailInput): Promise<
 
     if (!res.ok) {
       const body = await res.text().catch(() => "<unreadable body>");
-      console.error(`Email delivery failed (${res.status}): ${body}`);
+      log.error("email.delivery.failed", { status: res.status, body: body.slice(0, 300) });
       return { sent: false };
     }
 
     return { sent: true };
   } catch (err) {
-    console.error("Email delivery error:", err);
+    log.error("email.delivery.error", { error: err instanceof Error ? err.message : String(err) });
     return { sent: false };
   }
 }

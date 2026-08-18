@@ -10,6 +10,7 @@ import { scheduleCompanyIngest } from "@/lib/ai/tenant-ingest";
 import { checkInvoiceLimit, requireFeature } from "@/lib/billing/plan";
 import { featureLocked, limitReached } from "@/lib/billing/deny";
 import type { InvoiceInput } from "@/lib/zatca/types";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -108,7 +109,7 @@ export async function POST(req: Request) {
     }
     // Never return a raw error message: it is written by whichever library
     // failed and routinely names tables, columns and query internals.
-    console.error("POST /api/invoices failed:", err);
+    loggerFor(req).error("invoice.create.failed", { error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Could not issue the invoice. Please try again." }, { status: 500 });
   }
 }

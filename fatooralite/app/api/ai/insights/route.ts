@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { computeInsights } from "@/lib/ai/insights";
 import { chatText, isConfigured } from "@/lib/ai/provider";
 import { requirePermission } from "@/lib/auth/server";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -36,13 +37,13 @@ export async function GET(req: Request) {
         );
         summary = summary || null;
       } catch (e) {
-        console.error("Insight summary error:", e);
+        loggerFor(req).error("ai.insights.summary_failed", { error: e instanceof Error ? e.message : String(e) });
       }
     }
 
     return NextResponse.json({ insights, stats, summary });
   } catch (error) {
-    console.error("Insights error:", error);
+    loggerFor(req).error("ai.insights.failed", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Failed to compute insights" }, { status: 500 });
   }
 }

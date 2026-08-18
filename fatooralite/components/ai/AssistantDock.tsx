@@ -7,7 +7,7 @@ import { Icon } from "@/components/ui/Icon";
 
 interface Msg { role: "user" | "assistant"; text: string }
 interface ModelOpt { id: string; label: string }
-interface PendingAction { name: string; arguments: string; summary: string }
+interface PendingAction { name: string; arguments: string; summary: string; confirmToken: string | null }
 
 export function AssistantDock() {
   const { company } = useCompany();
@@ -76,7 +76,12 @@ export function AssistantDock() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          confirmedAction: { name: action.name, arguments: action.arguments },
+          // A server-minted token if we have one; otherwise (no session —
+          // local-demo mode) the legacy trusted-args shape the route still
+          // accepts for that case only.
+          confirmedAction: action.confirmToken
+            ? { token: action.confirmToken }
+            : { name: action.name, arguments: action.arguments },
           companyId: company?.id,
         }),
       });

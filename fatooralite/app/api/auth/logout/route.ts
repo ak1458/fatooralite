@@ -3,6 +3,7 @@ import { SESSION_COOKIE } from "@/lib/auth/session";
 import { getUserFromRequest } from "@/lib/auth/server";
 import { prisma } from "@/lib/db/client";
 import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
   } catch (err) {
     // A deleted user, or the database being briefly unreachable, must still
     // produce a successful logout for the browser.
-    console.error("Logout: could not revoke session server-side:", err);
+    loggerFor(req).error("auth.logout.revoke_failed", { error: err instanceof Error ? err.message : String(err) });
   }
 
   return res;

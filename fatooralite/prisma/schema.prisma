@@ -172,6 +172,13 @@ model Invoice {
   // reports them; standard invoices are "n/a" (cleared synchronously).
   reportingState    String    @default("n/a") // n/a | pending | reported | failed
   reportingDeadline DateTime?                  // issueTime + 24h for simplified
+  // Submission reliability (Phase 2 / W3): the ZATCA gateway has no
+  // status-lookup endpoint, so a stranded "submitted" row can only be
+  // resubmitted (identical uuid+hash) or flagged for a human — never guessed.
+  submitAttempts Int       @default(0)     // gateway attempts: manual + cron + reconciler
+  lastSubmitAt   DateTime?                 // when the most recent attempt STARTED — the reconciler's staleness cutoff
+  nextSubmitAt   DateTime?                 // earliest time an automatic retry may run (backoff)
+  needsReview    Boolean   @default(false) // retry ceiling hit — status stays "submitted", fate still unknown, stop auto-retrying
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
 
@@ -187,6 +194,8 @@ model Invoice {
   @@index([companyId, status])
   // Drives the reporting cron's due-query (oldest deadline first).
   @@index([kind, reportingState, reportingDeadline])
+  // Drives the reconciler's due-query: invoices stuck in "submitted".
+  @@index([status, needsReview, lastSubmitAt])
   // Postgres does not auto-index foreign key columns. Neither is filtered on
   // yet (branchId isn't queried anywhere in the app despite the PRD's FR5
   // calling for branch-scoped invoice lists — the topbar branch selector
@@ -305,6 +314,51 @@ model SecurityEvent {
   // "Show every failed login" / retention purges by age.
   @@index([action, createdAt])
   @@index([createdAt])
+}
+
+/// Server-minted, single-use confirmation for a sensitive AI-proposed write
+/// (Phase 2 / W5). The agent route mints one when it returns a pendingAction;
+/// the client sends back only the opaque token. The tool name and arguments
+/// the token authorizes are read from THIS row, never from the client's copy
+/// — nothing the client sends can alter what a human actually approved.
+model AiConfirmation {
+  id         String    @id @default(cuid())
+  /// sha256 hex of the raw token. The raw value is returned to the client
+  /// once and never stored — this table can't leak a still-valid token.
+  tokenHash  String    @unique
+  userId     String
+  companyId  String
+  tool       String
+  argsJson   String
+  expiresAt  DateTime
+  /// Set atomically on first (and only) use. A second consume attempt with
+  /// consumedAt already set is the replay case and must be refused.
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+/// Per-call AI usage accounting (Phase 2 / W6). Written from the provider's
+/// own response only — nothing here is ever a client-supplied number. No FK
+/// on companyId: accounting must outlive the tenant, same rationale as
+/// SecurityEvent. No cost column: a per-model price table would be stale
+/// fiction today (D3 pricing is still open); token counts are the durable
+/// fact, cost can be computed at read time once pricing is settled.
+model AiUsage {
+  id               String   @id @default(cuid())
+  companyId        String
+  userId           String?
+  /// "agent" | "chat" | "insights" | "ingest"
+  route            String
+  provider         String
+  model            String?
+  promptTokens     Int?
+  completionTokens Int?
+  latencyMs        Int?
+  createdAt        DateTime @default(now())
+
+  @@index([companyId, createdAt])
 }
 
 model User {

@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { chatWithTools, isConfigured, type ChatMessage } from "@/lib/ai/provider";
+import { chatWithTools, isConfigured, getChatProvider, type ChatMessage } from "@/lib/ai/provider";
 import { toolSchemas, executeTool, confirmSummary } from "@/lib/ai/tools";
 import { retrieve } from "@/lib/ai/vector-store";
 import { ZATCA_SYSTEM_PROMPT } from "@/lib/ai/zatca-prompt";
 import { requirePermission, getUserFromRequest, effectivePermissions, isCallerCompany } from "@/lib/auth/server";
+import { mintConfirmation, consumeConfirmation } from "@/lib/ai/confirmation";
+import { recordAiUsage } from "@/lib/ai/usage";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -32,8 +35,15 @@ export async function POST(req: Request) {
     message?: string;
     companyId?: string;
     model?: string;
-    /** Confirm round-trip: the user approved a pending write action. */
-    confirmedAction?: { name: string; arguments: string };
+    /**
+     * Confirm round-trip: the user approved a pending write action.
+     * `token` is the server-minted confirmation (W5) — the tool and
+     * arguments it authorizes are read from the server-side record, never
+     * from the client. `{name, arguments}` is a legacy fallback used only
+     * when there is no session to bind a token to (AUTH_ENFORCE=false,
+     * documented unauthenticated local-demo mode).
+     */
+    confirmedAction?: { token: string } | { name: string; arguments: string };
   };
   try {
     body = await req.json();
@@ -56,13 +66,41 @@ export async function POST(req: Request) {
 
   // Confirmed action: execute directly (zod + RBAC still enforced inside).
   if (body.confirmedAction) {
-    const { name, arguments: argsJson } = body.confirmedAction;
-    if (typeof name !== "string" || typeof argsJson !== "string") {
+    if (!user?.userId) {
+      // AUTH_ENFORCE=false local-demo mode only: there is no session to bind
+      // a confirmation token to (requirePermission above already denies an
+      // unauthenticated request whenever auth is enforced). RBAC is already
+      // off in this mode, so falling back to the pre-W5 trusted-args shape
+      // here does not change this mode's actual security posture.
+      const legacy = body.confirmedAction as { name?: unknown; arguments?: unknown };
+      if (typeof legacy.name !== "string" || typeof legacy.arguments !== "string") {
+        return NextResponse.json({ error: "Invalid confirmed action" }, { status: 400 });
+      }
+      const outcome = await executeTool(legacy.name, legacy.arguments, {
+        companyId,
+        userRole: "employee",
+        permissions,
+      });
+      return NextResponse.json({ message: outcome.content, navigate: outcome.navigate ?? null });
+    }
+
+    const token = (body.confirmedAction as { token?: unknown }).token;
+    if (typeof token !== "string" || !token) {
       return NextResponse.json({ error: "Invalid confirmed action" }, { status: 400 });
     }
-    const outcome = await executeTool(name, argsJson, {
+    // The tool + arguments authorized come from the server-side record keyed
+    // to this token — nothing the client sends here can alter what was
+    // actually proposed and approved.
+    const consumed = await consumeConfirmation({ token, userId: user.userId, companyId });
+    if (!consumed) {
+      return NextResponse.json(
+        { error: "Confirmation expired or already used — please ask again." },
+        { status: 403 },
+      );
+    }
+    const outcome = await executeTool(consumed.tool, consumed.argsJson, {
       companyId,
-      userRole: user?.role ?? "employee",
+      userRole: user.role ?? "employee",
       permissions,
     });
     return NextResponse.json({ message: outcome.content, navigate: outcome.navigate ?? null });
@@ -137,7 +175,18 @@ export async function POST(req: Request) {
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const toolChoice = round === 0 && isCommand ? "required" : "auto";
+      const roundStarted = Date.now();
       const assistant = await chatWithTools(messages, toolSchemas(), body.model, 1024, toolChoice);
+      recordAiUsage({
+        companyId,
+        userId: user?.userId,
+        route: "agent",
+        provider: getChatProvider().name,
+        model: body.model,
+        promptTokens: assistant.usage?.promptTokens,
+        completionTokens: assistant.usage?.completionTokens,
+        latencyMs: Date.now() - roundStarted,
+      });
 
       if (assistant.tool_calls && assistant.tool_calls.length > 0) {
         // Financial/irreversible writes pause for explicit user confirmation:
@@ -145,6 +194,19 @@ export async function POST(req: Request) {
         for (const call of assistant.tool_calls) {
           const summary = confirmSummary(call.function.name, call.function.arguments);
           if (summary) {
+            // Mint a single-use token binding this exact {user, company,
+            // tool, args} — the client can only send it back, never forge
+            // one authorizing something else. No session (local-demo,
+            // AUTH_ENFORCE=false) → no token; the legacy trusted-args path
+            // in the confirmedAction branch above handles that mode.
+            const confirmToken = user?.userId
+              ? await mintConfirmation({
+                  userId: user.userId,
+                  companyId,
+                  tool: call.function.name,
+                  argsJson: call.function.arguments,
+                })
+              : null;
             return NextResponse.json({
               message:
                 (assistant.content?.trim() ? assistant.content.trim() + "\n\n" : "") +
@@ -154,6 +216,7 @@ export async function POST(req: Request) {
                 name: call.function.name,
                 arguments: call.function.arguments,
                 summary,
+                confirmToken,
               },
             });
           }
@@ -173,7 +236,7 @@ export async function POST(req: Request) {
     // Hit the round cap — return whatever we have.
     return NextResponse.json({ message: "Done.", navigate });
   } catch (err) {
-    console.error("Agent error:", err);
+    loggerFor(req).error("ai.agent.failed", { error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ message: "The assistant hit an error. Please try again.", navigate: null });
   }
 }

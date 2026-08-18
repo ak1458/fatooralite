@@ -42,15 +42,22 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
   the other — no ZATCA round trip has ever been performed — is owner-blocked
   on a Fatoora portal OTP.
 - **Remediation Phase 1 is complete** (W1 Arabic PDF, W2 security audit trail).
-  Programme state lives in `docs/audit/remediation-ledger.md`; read that before
-  starting anything. Phase 2 has NOT been started.
-- **Thirteen defects were found and fixed**, four financial or
-  compliance-affecting. Full detail in `docs/audit/2026-08-18-findings.md`.
+  **Remediation Phase 2 is also complete** (W3 idempotency/reconciliation, W4
+  observability, W5 AI confirmation tokens, W6 RAG restriction/AI usage
+  accounting, W7 deployment config, W26 remaining risks). Programme state
+  lives in `docs/audit/remediation-ledger.md`; read that before starting
+  anything. Phase 3 has NOT been started.
+- **Thirteen defects were found and fixed in the original audit**, four
+  financial or compliance-affecting. Full detail in
+  `docs/audit/2026-08-18-findings.md`.
 - **The test suite now runs its database-gated half.** It was 285 passed /
-  43 skipped; after the audit it was 363 passed / 0 skipped, and after
-  remediation Phase 1 it is **402 passed / 0 skipped**. Two of those suites had
-  never executed at all (`plan.test.ts` collided on a unique VAT number), so
-  18 licensing assertions had never run.
+  43 skipped; after the audit it was 363 passed / 0 skipped, after
+  remediation Phase 1 it was 402 passed / 0 skipped, and after remediation
+  Phase 2 it is **447 passed / 2 failed / 0 skipped** (449 total, 47 net new).
+  The 2 failures are pre-existing, unrelated to Phase 2 (`lib/billing/
+  plan.test.ts` — two tests time out under current Neon latency doing a
+  25-30-iteration sequential insert loop; documented in `handoff.md`, not
+  fixed — billing/licensing is outside W3–W7/W26 scope).
 - Security core verified adversarially: 25 cross-tenant attacks refused,
   privilege escalation refused, invoice totals recomputed server-side, the
   ZATCA chain did not fork under concurrency, RAG leaked nothing under prompt
@@ -80,7 +87,7 @@ All five CI gates pass, in the order CI runs them:
 cd fatooralite
 npm run lint                       # 0 errors — was failing for a long time; keep it green
 npm audit --audit-level=critical
-npx vitest run                     # 402 passed / 0 skipped with TEST_DATABASE_URL set
+npx vitest run                     # 447 passed / 2 pre-existing unrelated failures / 0 skipped with TEST_DATABASE_URL set
 npx tsx scripts/validate-zatca.ts  # 7/7 local checks
 npm run build
 ```
@@ -143,17 +150,30 @@ clearing an `any` cast. Prefer both over another reading pass.
 shaping + a bidi pass), and a real security/actor audit trail exists with a
 query API. Suite: 402 passed, 0 skipped. Ledger: 481 GREEN / 1069.
 
-**Phase 2 is next and has not been started:** W3 idempotency + ZATCA submission
-reconciliation + retry policy, W4 observability, W5 server-minted AI
-confirmation tokens, W6 global RAG re-index restriction + AI usage accounting,
-W7 deployment config correctness, W26 close the remaining RISK findings.
+**Phase 2 is done.** W3 idempotency + ZATCA submission reconciliation + retry
+policy (atomic CAS claim, backoff ladder, `/api/cron/zatca-reconcile`), W4
+observability (`lib/log/logger.ts`, `x-request-id` correlation, `/api/health/
+deep`), W5 server-minted AI confirmation tokens (`AiConfirmation`), W6 global
+RAG re-index restricted to `OPERATOR_SECRET` + AI usage accounting
+(`AiUsage`), W7 deployment config correctness (`APP_URL` boot check,
+`appUrl()` reset links), W26 closed the remaining RISK findings (F-16
+reconfirmed as no-longer-reproducing; F-12 confirmed accepted-with-basis).
+Suite: 447 passed / 2 pre-existing unrelated failures / 0 skipped. Ledger:
+507 GREEN / 1069. Full write-up in `handoff.md`'s 2026-08-18 Phase 2 entry.
 
-**Three decisions are open and block work:** D1 (VAT-return scope), D7 (does the
-absent Control Center gate launch), D8 (is WhatsApp launch scope). All three are
-analysed with recommendations in `docs/audit/decision-register.md`; none has been
-implemented.
+**Phase 3 is next and has not been started:** W8 background job substrate, W9
+Asia/Riyadh timezone policy, W10 branchId scoping, W11 DB CHECK constraints,
+W12 ZATCA XSD/Schematron validation, W13 migration safety drills, W14
+performance testing, W15 test coverage, W16 failure-injection harness, W17
+DevOps staging/patch process, W18 assistant scope claims. See
+`docs/audit/remediation-roadmap.md` §Phase 3.
 
-Still outstanding from the audit, unchanged:
+**Three decisions are still open and block work:** D1 (VAT-return scope), D7
+(does the absent Control Center gate launch), D8 (is WhatsApp launch scope).
+All three are analysed with recommendations in
+`docs/audit/decision-register.md`; none has been implemented.
+
+Still outstanding from the audit:
 
 1. ~~**Arabic invoice PDFs fail outright.**~~ **FIXED in Phase 1 (W1).** What
    remains is a *mirrored* RTL page layout (A-189/A-190/A-191) — Arabic text
@@ -173,10 +193,14 @@ Still outstanding from the audit, unchanged:
    `docs/audit/security-event-log.md`.
 
 </details>
-3. **No observability.** No error tracking, structured logging, metrics or
-   alerting; 28 raw `console.*` call sites.
-4. **No AI usage accounting**, and any tenant owner can trigger a *global* RAG
-   re-index (`POST /api/ai/ingest {scope:"global"}` needs only `settings:manage`).
+3. ~~**No observability.**~~ **FIXED in Phase 2 (W4).** Structured logging,
+   request correlation IDs, `/api/health/deep`. No external error-tracking
+   SaaS (Sentry/log-drain) or metrics dashboard — those are owner decisions,
+   documented in `docs/18-production-checklist.md`, not engineering defaults.
+4. ~~**No AI usage accounting, any tenant owner can trigger a global RAG
+   re-index.**~~ **FIXED in Phase 2 (W6).** Global re-index needs
+   `OPERATOR_SECRET`; per-call token/latency accounting in `AiUsage`. No
+   quota *enforcement* yet — W6 built the accounting substrate, not limits.
 5. **HUMAN DECISION:** `/api/reports` counts only `cleared`/`reported` invoices,
    so an issued-but-not-yet-cleared invoice is absent from the VAT return. That
    is a tax-scope call, deliberately left unchanged.
@@ -341,7 +365,38 @@ regression, and the reason is in the code comment beside it.
 - **`submitInvoice` writes status `submitted` before calling ZATCA.** That state
   existed in the schema and was read by the UI but never written, so a crash
   after ZATCA accepted looked identical to never having sent. An invoice in
-  `submitted` means "fate unknown, needs reconciling" — it is not a bug.
+  `submitted` means "fate unknown, needs reconciling" — it is not a bug. Since
+  Phase 2 (W3) that write is an atomic compare-and-swap
+  (`updateMany({ where: { status: { in: ["signed","rejected"] } } } })`), not
+  a plain update — this is what makes concurrent/retried submissions safe.
+  Do not revert it to a read-then-write.
+- **`Invoice.needsReview = true` with `status` still `submitted` is a
+  deliberate terminal state, never auto-resolved.** It means the retry
+  ceiling (`MAX_SUBMIT_ATTEMPTS`, `lib/services/clearance-service.ts`) was
+  hit without ever receiving a gateway response. ZATCA has no status-lookup
+  endpoint, so the system cannot know whether that document was actually
+  accepted — only a human decision (resend manually, or mark abandoned) may
+  change it. Do not build a job that clears this flag automatically.
+- **A `rejected` invoice can still be resubmitted; only `cleared`/`reported`
+  are terminal.** The CAS claim's `WHERE status IN ('signed','rejected')` is
+  intentional — a gateway rejection can be transient or credential-related,
+  and refusing resubmission there would leave no correction path.
+- **AI confirmation tokens are consumed atomically, and the executed
+  tool/arguments come from the stored `AiConfirmation` row, never from the
+  client's copy — even when they'd match.** (`lib/ai/confirmation.ts`,
+  Phase 2 / W5.) The whole point is that nothing the client sends can
+  determine what a confirmed action executes. Do not "simplify" the
+  confirm route back to trusting `{name, arguments}` from the request body.
+- **`OPERATOR_SECRET` unset means global AI re-index is fully disabled over
+  HTTP** (`POST /api/ai/ingest {scope:"global"}` → 403), by design — not a
+  misconfiguration to work around by defaulting it open. There is
+  deliberately no platform-admin role in this app. Rebuild the shared corpus
+  at deploy time with `scripts/ingest-global.ts` instead.
+- **`x-request-id` is minted server-side in `proxy.ts`
+  (`crypto.randomUUID()`) and never read from an inbound header.** A client
+  that sends its own `x-request-id` is ignored — trusting a client-supplied
+  correlation id would let a caller plant an arbitrary value into every log
+  line describing its own request.
 
 ---
 

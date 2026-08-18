@@ -54,8 +54,9 @@ Do these three, in this order:
 | `DIRECT_URL` | Neon dashboard → direct (non-pooled) | Used by Prisma migrations. |
 | `AUTH_SECRET` | `openssl rand -base64 32 \| tr -d '\r\n'` | **Must not be the `.env.example` placeholder** — now rejected at boot. Rotating it only logs everyone out. |
 | `ENCRYPTION_KEY` | `openssl rand -base64 32 \| tr -d '\r\n'` | **⚠️ NEVER rotate this independently of the database.** It is the only key that decrypts stored ZATCA private keys. Losing it means losing every tenant's signing certificate, permanently. Keep an offline copy. |
-| `CRON_SECRET` | `openssl rand -base64 32 \| tr -d '\r\n'` | Protects the ZATCA reporting cron. Also set in `vercel.json`. |
+| `CRON_SECRET` | `openssl rand -base64 32 \| tr -d '\r\n'` | Protects the ZATCA reporting **and reconcile** crons. Also set in `vercel.json`. |
 | `AUTH_ENFORCE` | `true` | Anything other than the literal `true` fails the boot guard. |
+| `APP_URL` and `NEXT_PUBLIC_APP_URL` | Your deployed URL, no trailing slash | Set both to the same value (pre-existing naming split, not unified). Without them: checkout 500s, password-reset links and sitemap/robots fall back to `http://localhost:3000`. Boot now refuses to start in production without at least one set. |
 
 > **Windows note:** use `tr -d '\r\n'`, **not** `tr -d '\n'`. A trailing `\r`
 > silently corrupts the value and produces confusing auth failures.
@@ -71,6 +72,18 @@ Do these three, in this order:
 | `RESEND_API_KEY`, `EMAIL_FROM` | Password-reset emails | Reset links are console-logged, not delivered. |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Distributed rate limiting | Falls back to in-memory (fine for a single instance, not for serverless scale). |
 | `ZATCA_MODE` | `sandbox` or `production` | Defaults to sandbox. |
+| `OPERATOR_SECRET` | Global AI knowledge re-index (`POST /api/ai/ingest {scope:"global"}`) | Endpoint returns 403 to everyone, including tenant owners — there is deliberately no platform-admin role. Re-index the shared corpus at deploy time with `scripts/ingest-global.ts` instead. |
+
+### Cron cadence — open question
+
+`vercel.json` runs both the reporting and reconcile crons **daily**
+(`0 3 * * *` / `0 4 * * *`); code comments describing a 15-minute cadence
+predate that and are aspirational, not current behaviour. A B2C simplified
+invoice must reach ZATCA within 24h of issuance — a daily-only retry loop
+makes that deadline tight if an early attempt fails. If the Vercel plan
+supports sub-daily cron (`*/15 * * * *`), both schedules should move to it;
+that is a deploy-config change, not a code change, and needs the owner's
+sign-off before touching `vercel.json` again.
 
 ---
 

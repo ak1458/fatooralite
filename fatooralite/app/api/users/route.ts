@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/server";
 import { checkSeatLimit } from "@/lib/billing/plan";
 import { limitReached } from "@/lib/billing/deny";
 import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
     );
   } catch (err) {
     if (err instanceof UserError) return NextResponse.json({ error: err.message }, { status: 409 });
-    console.error("Invite user error:", err);
+    loggerFor(req).error("user.invite.failed", { error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Could not create user" }, { status: 500 });
   }
 }

@@ -509,3 +509,36 @@ Phase 2 (W3 idempotency/reconciliation, W4 observability, W5, W6, W7, W26) is
 planned and **not started**. Three decisions — D1 VAT-return scope, D7 Control
 Center launch requirement, D8 WhatsApp launch scope — are analysed with
 recommendations and await the owner.
+
+---
+
+## Remediation Phase 2 — 2026-08-18
+
+All six planned work items delivered: W3 (idempotency + ZATCA submission
+reconciliation + retry policy), W4 (observability), W5 (server-minted AI
+confirmation tokens), W6 (global RAG re-index restriction + AI usage
+accounting), W7 (deployment configuration correctness), W26 (closed the
+remaining RISK findings). Full write-up in `handoff.md`'s 2026-08-18 Phase 2
+entry; ledger detail in `docs/audit/remediation-ledger.md` and
+`docs/audit/2026-08-18-ledger.md`.
+
+W3's design decision — an atomic compare-and-swap `updateMany` on the
+`signed`/`rejected` → `submitted` transition, instead of a row lock held
+across the gateway call — came from the `architect` subagent, invoked
+because the crash-window/retry-policy problem had real architectural
+ambiguity (schema shape, what "reconciliation" can honestly mean when ZATCA
+has no status-lookup endpoint). Everything else in the phase was
+unambiguous enough to implement directly.
+
+W26 turned up one genuine surprise: F-16 ("invalid UTF-8 in a URL yields a
+framework-level 500"), carried as an accepted risk since the original audit,
+does not reproduce anymore — reconfirmed live against the current Next.js
+version with the original byte sequences plus four more aggressive ones, on
+both a page and an API route. Most likely fixed incidentally by the Next.js
+16.3.0 upgrade done for Phase 1/5's security work. Locked in with a
+regression test rather than left as an unverified carried-over assumption.
+
+Two pre-existing tests in `lib/billing/plan.test.ts` (unrelated to Phase 2
+scope) time out under current Neon latency — a 25-30-iteration sequential
+insert loop, not a logic bug. Documented in `handoff.md`, not fixed
+(out of scope: billing/licensing, not W3–W7/W26).

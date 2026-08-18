@@ -16,10 +16,11 @@ Status: PLANNED · IN PROGRESS · DONE · BLOCKED · OPEN (decisions).
 
 | | |
 |---|---|
-| Current phase | **Phase 1 COMPLETE** — Phase 2 not started |
+| Current phase | **Phase 2 COMPLETE** — Phase 3 not started |
 | Branch | `audit/production-readiness-2026-08-18` |
 | Audit baseline | 461 GREEN / 1069 · 363 tests |
-| After Phase 1 | **481 GREEN / 1069 · 402 tests, 0 skipped** |
+| After Phase 1 | 481 GREEN / 1069 · 402 tests, 0 skipped |
+| After Phase 2 | see Phase 2 outcome below |
 | Never do | modify `neondb` · drop `fatoora_audit` or `fatoora_restore` · migrate to Supabase · push to `main` · change VAT-return behaviour without D1 |
 
 ---
@@ -36,14 +37,14 @@ Status: PLANNED · IN PROGRESS · DONE · BLOCKED · OPEN (decisions).
 
 ## Phase 2 — high-risk correctness and reliability
 
-| ID | Work item | Audit items | Status |
-|---|---|---|---|
-| W3 | Idempotency + submission reconciliation + retry policy | 12 | PLANNED |
-| W4 | Observability | 20 | PLANNED |
-| W5 | Server-minted AI confirmation tokens | 1 | PLANNED |
-| W6 | Restrict global RAG re-index + AI usage accounting | 3 | PLANNED |
-| W7 | Deployment configuration correctness | 1 | PLANNED |
-| W26 | Close remaining RISK findings | 1 | PLANNED |
+| ID | Work item | Audit items | Status | Evidence |
+|---|---|---|---|---|
+| W3 | Idempotency + submission reconciliation + retry policy | 12 | **DONE** | Atomic CAS claim on signed/rejected→submitted; retry/backoff ladder + attempt ceiling; `zatca-reconcile` cron; 11/11 scenarios tested in `clearance-crash.test.ts` + `reconcile.test.ts` |
+| W4 | Observability | 20 | **DONE** | `lib/log/logger.ts` structured JSON logging + redaction; `x-request-id` correlation on every response; `/api/health/deep`; ~26 console.\* call sites converted |
+| W5 | Server-minted AI confirmation tokens | 1 | **DONE** | `AiConfirmation` table, atomic single-use consume, 5-min TTL; `lib/ai/confirmation.test.ts` |
+| W6 | Restrict global RAG re-index + AI usage accounting | 3 | **DONE** | `OPERATOR_SECRET`-gated global ingest (fail-closed); `AiUsage` table + token/latency recording from provider responses only; `app/api/ai/ingest/route.test.ts` |
+| W7 | Deployment configuration correctness | 1 | **DONE** | `APP_URL`/`NEXT_PUBLIC_APP_URL` production boot check; `appUrl()` used for reset links; `lib/appUrl.test.ts` |
+| W26 | Close remaining RISK findings | 1 | **DONE** | F-16 reconfirmed live — does not reproduce (Next.js version fixed it); F-12 confirmed accepted-with-basis, references W21 |
 
 ## Phase 3 — important production readiness
 

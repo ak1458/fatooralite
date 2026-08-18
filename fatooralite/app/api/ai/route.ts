@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ZATCA_SYSTEM_PROMPT } from "@/lib/ai/zatca-prompt";
-import { chatStream, isConfigured, type ChatMessage } from "@/lib/ai/provider";
+import { chatStream, isConfigured, getChatProvider, type ChatMessage } from "@/lib/ai/provider";
 import { retrieve } from "@/lib/ai/vector-store";
 import { requirePermission, isCallerCompany } from "@/lib/auth/server";
+import { recordAiUsage } from "@/lib/ai/usage";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -117,7 +119,7 @@ export async function POST(req: Request) {
           hits.map((h, i) => `[${i + 1}] [${h.scope === "global" ? "global" : "tenant-data"}] ${h.text}`).join("\n");
       }
     } catch (e) {
-      console.error("RAG retrieve failed (continuing without grounding):", e);
+      loggerFor(req).warn("ai.chat.rag_retrieve_failed", { error: e instanceof Error ? e.message : String(e) });
     }
   }
 
@@ -155,10 +157,24 @@ export async function POST(req: Request) {
   ];
 
   try {
+    const started = Date.now();
     const stream = await chatStream(chat, 1024, model);
+    // Streams don't report token usage here — record the call and its
+    // latency-to-first-response with null token counts rather than guessing
+    // from text length.
+    if (companyId) {
+      recordAiUsage({
+        companyId,
+        userId: user?.userId,
+        route: "chat",
+        provider: getChatProvider().name,
+        model,
+        latencyMs: Date.now() - started,
+      }).catch(() => {});
+    }
     return new Response(stream, { headers: STREAM_HEADERS });
   } catch (error) {
-    console.error("AI Error:", error);
+    loggerFor(req).error("ai.chat.failed", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Failed to process AI request" }, { status: 500 });
   }
 }

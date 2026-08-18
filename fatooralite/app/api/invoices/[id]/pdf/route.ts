@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getInvoice, getCompany } from "@/lib/db/repo";
 import { requirePermission } from "@/lib/auth/server";
 import { generatePdf } from "@/lib/pdf/generate";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -51,7 +52,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       },
     });
   } catch (error) {
-    console.error("PDF generation error:", error);
+    loggerFor(req).error("invoice.pdf.failed", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Failed to generate PDF" }, { status: 500 });
   }
 }

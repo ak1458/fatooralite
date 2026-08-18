@@ -41,6 +41,23 @@ const envSchema = z.object({
   /* ---- optional (no warning — feature is allowed to be unconfigured) ---- */
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
+
+  /**
+   * Canonical deployed URL. lib/appUrl.ts reads these two (pre-existing
+   * naming split — see its own comment) with a localhost fallback that is
+   * only correct for `next build` without a runtime environment; production
+   * must not silently fall back to it (F-14/F-15).
+   */
+  APP_URL: z.string().url().optional(),
+  NEXT_PUBLIC_APP_URL: z.string().url().optional(),
+
+  /**
+   * Bearer secret gating POST /api/ai/ingest {scope:"global"} — there is
+   * deliberately no platform-admin role, so this is the only credential that
+   * can trigger a global RAG re-index over HTTP. Optional: the feature is
+   * allowed to stay operator-console-only (scripts/ingest-global.ts).
+   */
+  OPERATOR_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -108,6 +125,13 @@ export function validateEnv(): Env {
         "    Generate with: openssl rand -base64 32, then set in Vercel dashboard and vercel.json.",
       );
     }
+    if (!result.data.APP_URL && !result.data.NEXT_PUBLIC_APP_URL) {
+      throw new Error(
+        "⛔  APP_URL (or NEXT_PUBLIC_APP_URL) is required in production.\n" +
+        "    Without it: checkout returns 500, password-reset links and sitemap/robots\n" +
+        "    fall back to http://localhost:3000. Set both to the same deployed URL.",
+      );
+    }
     // The dev placeholder is published in .env.example and in this repo, so a
     // deployment carrying it can have its session cookies forged by anyone.
     // lib/auth/session.ts refuses to sign with it — but that throws on the
@@ -119,6 +143,12 @@ export function validateEnv(): Env {
         "⛔  AUTH_SECRET is still the development placeholder from .env.example.\n" +
         "    Session cookies signed with it are forgeable by anyone who has read this repo.\n" +
         "    Generate with: openssl rand -base64 32 | tr -d '\\r\\n'",
+      );
+    }
+    if (!result.data.RESEND_API_KEY) {
+      console.warn(
+        "⚠️  RESEND_API_KEY not set — password-reset emails will only be console-logged; " +
+        "no self-service recovery path exists for customers.",
       );
     }
   }

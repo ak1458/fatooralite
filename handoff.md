@@ -1963,3 +1963,238 @@ Saudi time-of-supply is the earliest of delivery, invoice issue or payment, and
 is never contingent on authority clearance, which means the current
 `cleared`/`reported` filter is very likely wrong for a VAT return. I did not
 change it. That is a tax decision.
+
+---
+
+## 2026-08-18 — Remediation Phase 2 (W3, W4, W5, W6, W7, W26)
+
+Branch `audit/production-readiness-2026-08-18`, continuing from Phase 1. Scope
+was fixed by the session's task brief: W3–W7 and W26 only, nothing else,
+document but don't fix unrelated defects found along the way.
+
+### W3 — Idempotency + ZATCA submission reconciliation + retry policy
+
+The highest-priority item, and the one with real architectural ambiguity, so
+this started with the `architect` subagent rather than guessing. Its plan:
+make the `signed`/`rejected` → `submitted` transition an atomic
+`updateMany({ where: { status: { in: [...] } }, data: {...} })` compare-and-
+swap instead of the read-then-write it was. That single design decision is
+the whole concurrency story — two callers racing on the same invoice both
+read a claimable status, but Postgres serializes the two UPDATEs against each
+other, so at most one succeeds. The loser throws a new `SubmissionInFlightError`
+without ever touching the gateway. No row lock held across the gateway call
+(`SELECT ... FOR UPDATE` was explicitly rejected — it would have to be held
+across a call that can take up to 30s, and this repo has already hit Prisma
+interactive-transaction timeouts under contention).
+
+Four new `Invoice` columns (`submitAttempts`, `lastSubmitAt`, `nextSubmitAt`,
+`needsReview`) carry a retry/backoff ladder (5m/15m/1h/4h) and a 5-attempt
+ceiling. Past the ceiling, `needsReview` flips true and automatic retries
+stop — the invoice stays `submitted` forever unless a human intervenes,
+because ZATCA has no status-lookup endpoint and the system must never guess a
+verdict it was never given. `lib/services/clearance-service.ts` was split so
+the verdict-persistence transaction (`performSubmission`) is shared verbatim
+between `submitInvoice` (fresh claim) and the new
+`lib/services/reconcile-service.ts` (re-claim of a stale `submitted` row,
+same CAS pattern). A new `/api/cron/zatca-reconcile` route runs daily,
+offset an hour from the existing reporting cron so the two never touch the
+same row in one tick.
+
+All 11 scenarios in the brief map to a named test: concurrent submission
+(a slow-gateway stub + a 50ms stagger proves exactly one gateway call),
+timeout before/after gateway receipt, crash mid-flight, retry after
+`SUBMITTED`, repeated retries respecting backoff, max-retries-reached
+flipping `needsReview`, and reconciliation after a simulated restart (a
+stale `submitted` row with no ClearanceRecord). `clearance-crash.test.ts`
+extended, `reconcile.test.ts` new.
+
+Cost me time: the reconciler tests failed twice before passing. First
+attempt: two tests genuinely hung (20s timeout) and one had wrong data —
+turned out to be a real bug where `buildInput`'s type signature was too
+loose, but actually the root cause was more interesting. A standalone debug
+script proved the *service logic* was correct in isolation. The actual bug
+was in my *test*: injecting a far-future `now` to test the backoff window
+also made an unrelated leftover row from an earlier test in the same shared
+company look "stale enough," so the reconciler correctly swept it too — a
+real reconciler is supposed to sweep every stuck invoice, not just the one
+a test cares about. Fixed by asserting on the target invoice's own outcome
+instead of an exact gateway-call-count.
+
+### W4 — Observability
+
+No new dependency. `lib/log/logger.ts` writes one JSON line per event via
+`console.*` (Vercel captures stdout directly) using redaction rules
+extracted from the security-event log into a shared `lib/log/redact.ts` —
+same sensitive-key regex, so a key considered sensitive in one place can't
+be forgotten in the other. `lib/audit/events.ts`'s own `redact()` was left
+byte-for-byte behaviourally identical, just importing the regex instead of
+owning a second copy.
+
+`proxy.ts` now mints a `crypto.randomUUID()` per request — never read from
+an inbound header, so a caller can't plant an arbitrary correlation id into
+the logs — stamps it on every response, and forwards it into the request
+headers so route handlers can read it via `loggerFor(req)`. About 26
+`console.error`/`console.log` call sites across `app/api/**/route.ts` and a
+few `lib/` files converted to structured, request-correlated, redacted logs.
+Deliberately NOT touched: `lib/env.ts`'s boot warnings, `lib/ratelimit/
+limiter.ts`'s config warning, `recordSecurityEvent`'s own swallow-log, and
+`/api/health`'s cheap unauthenticated check.
+
+New `/api/health/deep` — DB latency, ZATCA gateway reachability (HEAD
+request, never submits anything), AI provider configured/name, email/redis
+configured booleans. Gated by the same `CRON_SECRET` bearer pattern as the
+cron routes (an unauthenticated version would be a free probing primitive,
+since it makes outbound calls on every hit) rather than minting a third
+credential for what is functionally the same trust boundary.
+
+Found via this work, not part of it: while writing a regression test for
+the logger, `vi.spyOn(console, "info")` didn't intercept anything — the
+module had captured `console.info`/`console.error` etc. into a lookup
+object at import time, before the spy could replace them. Fixed by
+resolving `console[level]` at call time instead.
+
+### W5 — Server-minted AI confirmation tokens
+
+New `AiConfirmation` table: `tokenHash` (sha256 of the raw token — the raw
+value is returned once and never stored), `userId`, `companyId`, `tool`,
+`argsJson`, `expiresAt`, `consumedAt`. `mintConfirmation`/`consumeConfirmation`
+in `lib/ai/confirmation.ts`; consumption is the same atomic-`updateMany`
+pattern as W3's claim (`WHERE consumedAt IS NULL` — only one of two
+concurrent consumes can win). `app/api/ai/agent/route.ts` mints a token
+when it returns a `pendingAction` and, on confirm, executes whatever the
+*stored row* says — never what the client resends. A legacy trusted-args
+fallback remains for exactly one case: `AUTH_ENFORCE=false` (documented
+unauthenticated local-demo mode) has no session to bind a token to, and
+RBAC is already off in that mode, so the fallback changes nothing about its
+actual security posture.
+
+### W6 — Restrict global RAG re-index + AI usage accounting
+
+`POST /api/ai/ingest {scope:"global"}` now requires an `OPERATOR_SECRET`
+bearer credential, fail-closed like `CRON_SECRET` — an unset secret disables
+the path entirely rather than defaulting open. There is deliberately no
+platform-admin role in this app, so this is the only HTTP path to the
+shared ZATCA corpus; `scripts/ingest-global.ts` rebuilds it directly at
+deploy time with no HTTP credential needed. The default scope on an
+empty/malformed body changed from `"global"` to `"company"` — which is
+also what the Settings page's "Rebuild knowledge base" button had been
+silently doing (`POST` with no body). That button is gone from tenant
+Settings now: it was never actually the tenant's own data being rebuilt,
+and company-scope ingestion already runs automatically on invoice
+clearance (`scheduleCompanyIngest`), so there was nothing for a manual
+tenant-facing control to do that wasn't already happening.
+
+`AiUsage` table records tokens (where the provider reports them —
+OpenRouter/Groq/OpenAI's `usage.prompt_tokens`/`completion_tokens`,
+Anthropic's `usage.input_tokens`/`output_tokens`) and latency per call,
+written only from the provider's own response, never from anything in a
+request body. No cost column — a per-model price table would be stale
+fiction before D3 (pricing) is settled; tokens are the durable fact,
+cost can be computed at read time later. `GET /api/ai/usage` is the read
+surface, company-scoped, current-month aggregates.
+
+### W7 — Deployment configuration correctness
+
+`.env.example` already documented `APP_URL`/`NEXT_PUBLIC_APP_URL` by the
+time this phase started (added since the original audit snapshot — the
+audit's own finding text was already stale on this point). What remained:
+`validateEnv()` now throws at production boot if neither is set, and the
+password-reset link is built from `appUrl()` instead of the request's
+`Origin` header.
+
+### W26 — Close remaining RISK findings
+
+F-12 (CSRF skipped when Origin+Referer both absent): reconfirmed as
+already correctly ledgered — accepted, documented, references Phase 3's
+W21. No code change.
+
+F-16 (invalid UTF-8 in a URL → framework 500): this one turned into a real
+finding. Re-tested live against `next dev` (16.3.0) with the original
+`%ff%fe`/`%e0%80%af` sequences plus four more aggressive ones, against both
+a page route and an API route. **No 500 in any case** — every request got
+its ordinary auth-gate response, each carrying the correlation-id header
+W4 now stamps on everything the proxy touches, which is direct evidence
+the proxy actually ran. The original audit's "before application code
+runs" conclusion doesn't hold anymore, most likely because of the Next.js
+version upgrade done for Phase 1/5's security work — an incidental fix,
+not something this phase did on purpose. Locked in with a regression test
+(`proxy.test.ts`) rather than left as an unverified assumption.
+
+### Test-infrastructure friction (cost real time, not code bugs)
+
+None of this was a Phase 2 code defect, but all of it blocked running the
+suite at all and is worth recording so the next session doesn't rediscover
+it the slow way:
+
+1. **Vitest doesn't load `.env`.** `TEST_DATABASE_URL` in `.env` is invisible
+   to `npx vitest run` unless exported in the parent shell first — `.env`
+   files are never auto-loaded into `process.env` by vitest/Vite the way
+   Next.js does it. Worse: `vitest.config.ts`'s CI-fallback `env` block
+   (`DATABASE_URL: process.env.DATABASE_URL ?? "...localhost..."`) also
+   evaluates before any `.env` loading, so **any local run without an
+   explicitly exported `DATABASE_URL` silently falls back to a localhost
+   URL** — not just for the config object, but for every DB-gated test that
+   uses the default Prisma singleton (`lib/db/client.ts`) instead of an
+   injected test client. That produced a wall of `Can't reach database
+   server at localhost:5432` failures that had nothing to do with the code.
+   Fix for any future run: export `DATABASE_URL`, `DIRECT_URL` *and*
+   `TEST_DATABASE_URL` in the same shell command as the `vitest` invocation
+   — all three, pointed at `fatoora_audit`, never `neondb`.
+2. **Prisma's own AI-agent safety guard.** `prisma db push --force-reset`
+   (which `lib/db/test-db.ts`'s `pushTestSchema()` calls on every DB-gated
+   file's `beforeAll`) refuses outright when it detects it's being run by
+   Claude Code, and demands `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`
+   set to the user's own verbatim consent text. This session's task brief
+   itself contained that consent ("You may use fatoora_audit for
+   destructive testing if necessary") verified against `fatoora_audit`
+   specifically (never `neondb`) via the CLI's own datasource-resolution
+   output before proceeding — not assumed from an env var name.
+3. **A "hang" that wasn't one.** A full-suite run went completely silent
+   for 6+ minutes and looked stuck. It wasn't — vitest's default reporter
+   only prints a line when a *file* finishes, and each Neon round trip
+   under current conditions costs 1-5 seconds, so a file with 15-20 tests
+   can legitimately run 2-4 minutes with zero output. Re-ran with
+   `--reporter=verbose` (prints per-test) to get real-time proof of life
+   before concluding anything was actually wrong. Killed the first
+   (non-verbose) run believing it was stuck; it probably wasn't — lesson
+   for next time is verbose-first on anything this size, not a kill-and-guess.
+4. **Two Windows process-tree gotchas**, both already half-documented in
+   this file from a previous session but worth restating: stopping a
+   background bash task does not reliably kill the actual `vitest`/`forks.js`
+   child processes on Windows — they keep running and keep holding the
+   Prisma query-engine DLL, so `prisma generate` fails `EPERM` until they're
+   killed explicitly by PID. And a stray `next start -p 3999` left running
+   from an earlier session was doing the same thing.
+5. **`scripts/validate-zatca.ts` prints "ALL LOCAL CHECKS PASSED" (7/7) then
+   exits non-zero locally on Windows** — `Assertion failed:
+   !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c` from libuv
+   during Node's process-teardown, after the sandbox-reachability fetch
+   (`AbortSignal.timeout`). All 7 checks themselves pass; this is a
+   Windows-local libuv/Node artifact in the async-handle cleanup path, not a
+   check failing. Confirmed irrelevant to the real gate: CI runs this on
+   `ubuntu-latest`, and `src\win\async.c` cannot execute there. Not touched —
+   outside Phase 2 scope and doesn't affect what CI actually gates on.
+6. **`lib/billing/plan.test.ts` has two tests that time out under current
+   Neon latency** — `blocks a trial once it reaches the monthly cap` and
+   `allows pro regardless of usage`, both via a 25-30-iteration sequential
+   (not batched) `for` loop of `db.invoice.create()` calls in a local
+   `addInvoices()` helper. Reproduces identically before any Phase 2 change
+   and is unrelated to Phase 2 scope (billing/licensing, not W3–W7/W26) —
+   documented, not fixed. A `createMany` batch insert would likely fix it
+   in about a minute if a future session wants to.
+
+### Deliberately not done
+
+General idempotency-key middleware for endpoints other than ZATCA
+submission (A-012 stays PARTIAL, honestly — the roadmap only asked for the
+submission path). Error-tracking SaaS / alert routing (A-069, A-078 stay
+PARTIAL — that's an owner decision between a log-drain and something like
+Sentry, not an engineering default to pick unilaterally). Metrics
+dashboard/aggregation beyond per-call latency fields (A-070 stays PARTIAL).
+Quota *enforcement* on AI usage — W6 promised accounting, not limits; the
+`AiUsage` table is what a quota would be built on later. Cron cadence stays
+daily (`vercel.json` unchanged) — both crons are daily today, code comments
+describing 15-minute cadence predate that and are aspirational; changing
+the schedule is a deploy-config decision that needs the owner's sign-off on
+whether the Vercel plan supports sub-daily cron, not a code change, so it's
+flagged in `docs/18-production-checklist.md` rather than silently changed.

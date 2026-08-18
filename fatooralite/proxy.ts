@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/session";
 import { isRateLimited } from "@/lib/ratelimit/limiter";
 import { clientIpFor } from "@/lib/ratelimit/client-ip";
+import { REQUEST_ID_HEADER } from "@/lib/log/request-id";
 
 // Rate limiting window shared by both buckets below. The limiter itself
 // (lib/ratelimit/limiter.ts) uses Upstash Redis when configured — so limits
@@ -14,8 +15,14 @@ const MAX_REQUESTS = 100; // per minute per IP
 // Overridable for test environments (AUTH_RATE_LIMIT).
 const MAX_AUTH_REQUESTS = Number(process.env.AUTH_RATE_LIMIT ?? 10);
 
-/** Baseline security headers applied to every response. */
-function withSecurityHeaders(res: NextResponse, req?: NextRequest): NextResponse {
+/**
+ * Baseline security headers applied to every response, plus the correlation
+ * id (W4) — minted server-side, never trusted from an inbound header, so it
+ * can be handed to a customer for support ("what's the request ID you saw?")
+ * without that becoming a way to inject an arbitrary value into the logs.
+ */
+function withSecurityHeaders(res: NextResponse, req?: NextRequest, requestId?: string): NextResponse {
+  if (requestId) res.headers.set(REQUEST_ID_HEADER, requestId);
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -82,7 +89,19 @@ function isPublicAsset(pathname: string): boolean {
  * Route protection (Next.js proxy). Default is ENFORCED for production security;
  * set AUTH_ENFORCE=false only for unauthenticated local development demos.
  */
+/** `NextResponse.next()`, carrying the correlation id into the request the app handler sees. */
+function forward(req: NextRequest, requestId: string): NextResponse {
+  const headers = new Headers(req.headers);
+  headers.set(REQUEST_ID_HEADER, requestId);
+  return NextResponse.next({ request: { headers } });
+}
+
 export async function proxy(req: NextRequest) {
+  // Minted once per request, server-side. Never read from an inbound header —
+  // that would let a caller plant an arbitrary value into every downstream
+  // log line, defeating the one thing a correlation id is for.
+  const requestId = crypto.randomUUID();
+
   // A NUL byte is never legitimate in a URL, and PostgreSQL rejects one inside
   // a text value outright. Any route that passed a path segment or query value
   // into a Prisma query therefore answered `?status=%00` or `/api/audit/%00`
@@ -94,6 +113,7 @@ export async function proxy(req: NextRequest) {
     return withSecurityHeaders(
       NextResponse.json({ error: "Malformed request URL" }, { status: 400 }),
       req,
+      requestId,
     );
   }
 
@@ -112,10 +132,10 @@ export async function proxy(req: NextRequest) {
     isCredentialEndpoint &&
     (await isRateLimited("auth", ip, MAX_AUTH_REQUESTS, RATE_LIMIT_WINDOW_SECONDS))
   ) {
-    return new NextResponse("Too Many Requests", { status: 429 });
+    return withSecurityHeaders(new NextResponse("Too Many Requests", { status: 429 }), req, requestId);
   }
   if (await isRateLimited("all", ip, MAX_REQUESTS, RATE_LIMIT_WINDOW_SECONDS)) {
-    return new NextResponse("Too Many Requests", { status: 429 });
+    return withSecurityHeaders(new NextResponse("Too Many Requests", { status: 429 }), req, requestId);
   }
 
   // Basic CSRF check for state-changing operations
@@ -126,16 +146,16 @@ export async function proxy(req: NextRequest) {
       try {
         const originUrl = new URL(origin);
         if (originUrl.host !== host) {
-          return new NextResponse("CSRF token validation failed", { status: 403 });
+          return withSecurityHeaders(new NextResponse("CSRF token validation failed", { status: 403 }), req, requestId);
         }
       } catch {
-        return new NextResponse("CSRF origin invalid", { status: 403 });
+        return withSecurityHeaders(new NextResponse("CSRF origin invalid", { status: 403 }), req, requestId);
       }
     }
   }
 
   // Allow explicit disable ONLY if explicitly set to "false"
-  if (process.env.AUTH_ENFORCE === "false") return withSecurityHeaders(NextResponse.next(), req);
+  if (process.env.AUTH_ENFORCE === "false") return withSecurityHeaders(forward(req, requestId), req, requestId);
 
   const { pathname } = req.nextUrl;
   const isPublicRoute =
@@ -173,7 +193,7 @@ export async function proxy(req: NextRequest) {
     isPublicAsset(pathname);
 
   if (isPublicRoute) {
-    return withSecurityHeaders(NextResponse.next(), req);
+    return withSecurityHeaders(forward(req, requestId), req, requestId);
   }
 
   const token = req.cookies.get(SESSION_COOKIE)?.value;
@@ -185,14 +205,14 @@ export async function proxy(req: NextRequest) {
     // silently (this was undetected until the first real deployment — see
     // handoff.md). Page routes keep the redirect-to-/login UX.
     if (pathname.startsWith("/api/")) {
-      return withSecurityHeaders(NextResponse.json({ error: "Authentication required" }, { status: 401 }), req);
+      return withSecurityHeaders(NextResponse.json({ error: "Authentication required" }, { status: 401 }), req, requestId);
     }
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
-    return withSecurityHeaders(NextResponse.redirect(url), req);
+    return withSecurityHeaders(NextResponse.redirect(url), req, requestId);
   }
-  return withSecurityHeaders(NextResponse.next(), req);
+  return withSecurityHeaders(forward(req, requestId), req, requestId);
 }
 
 export const config = {

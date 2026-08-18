@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db/client";
 import { authSecretKey } from "@/lib/auth/session";
 import { sendEmail } from "@/lib/email/send";
 import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
+import { appUrl } from "@/lib/appUrl";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -62,7 +64,11 @@ export async function POST(req: Request) {
         .setExpirationTime("1h")
         .sign(authSecretKey());
 
-      const resetUrl = `${req.headers.get("origin") ?? "http://localhost:3000"}/reset?token=${token}`;
+      // Canonical deployed URL, not the caller's Origin header — a caller
+      // that sends no Origin (or a forged one, though the proxy's CSRF check
+      // already blocks that — verified 403) must not steer where the reset
+      // link points.
+      const resetUrl = `${appUrl()}/reset?token=${token}`;
       // Recorded whether or not delivery is configured: a reset request is a
       // security-relevant act, and its absence from the log would hide an
       // account-takeover attempt that never produced an email.
@@ -85,7 +91,7 @@ export async function POST(req: Request) {
     // Always return success to prevent email enumeration
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Forgot password error:", err);
+    loggerFor(req).error("auth.forgot.failed", { error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ ok: true });
   }
 }

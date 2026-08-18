@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { provisionLocalCertificate, OnboardingStateError } from "@/lib/services/onboarding-service";
 import { requirePermission } from "@/lib/auth/server";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
     if (err instanceof OnboardingStateError) {
       return NextResponse.json({ error: err.message }, { status: 404 });
     }
-    console.error("local-cert error:", err);
+    loggerFor(req).error("onboarding.local_cert.failed", { error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Could not provision certificate" }, { status: 500 });
   }
 }

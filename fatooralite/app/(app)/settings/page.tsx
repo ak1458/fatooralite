@@ -75,8 +75,6 @@ export default function SettingsPage() {
   const [form, setForm] = useState({ name: "", nameAr: "", vatNumber: "", crNumber: "", address: "" });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [ingesting, setIngesting] = useState(false);
-  const [chunks, setChunks] = useState<number | null>(null);
   const [billing, setBilling] = useState<BillingInfo | null>(null);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
@@ -102,7 +100,6 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!company?.id) return;
     loadCompany(company.id);
-    fetch(`/api/ai/ingest`).then((r) => r.json()).then((d) => setChunks(d.totalGlobal ?? null)).catch(() => {});
     // Moyasar's redirect back to success_url races the webhook that
     // actually grants Pro (see app/api/billing/webhook/route.ts) — the
     // browser can land here before the server-to-server notification does.
@@ -151,15 +148,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function reingest() {
-    setIngesting(true);
-    try {
-      const res = await fetch("/api/ai/ingest", { method: "POST" });
-      const d = await res.json();
-      setChunks(d.totalGlobal ?? chunks);
-    } finally { setIngesting(false); }
-  }
-
   const plan = billing?.plan ?? "trial";
   const isPro = plan === "pro";
   const planLabel = { trial: "Trial", pro: "Pro", expired: "Trial ended" }[plan];
@@ -192,15 +180,6 @@ export default function SettingsPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={{ fontSize: 13.5, color: "var(--t2)" }}>Theme</span><ThemeToggle /></div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={{ fontSize: 13.5, color: "var(--t2)" }}>Language</span><LangToggle /></div>
-        </div>
-      </Section>
-
-      <Section title="AI assistant" sub="The assistant retrieves from a ZATCA knowledge base to answer questions.">
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <button onClick={reingest} disabled={ingesting} style={{ padding: "9px 16px", borderRadius: 10, border: "1px solid var(--bd)", background: "var(--s2)", color: "var(--tx)", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
-            {ingesting ? "Rebuilding…" : "Rebuild knowledge base"}
-          </button>
-          <span style={{ fontSize: 13, color: "var(--t3)" }}>{chunks != null ? `${chunks} knowledge chunks indexed` : ""}</span>
         </div>
       </Section>
 

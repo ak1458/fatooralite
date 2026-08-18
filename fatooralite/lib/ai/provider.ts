@@ -37,6 +37,8 @@ export interface AssistantMessage {
   role: "assistant";
   content: string | null;
   tool_calls?: ToolCall[];
+  /** Token counts the provider itself reported — never estimated locally. Absent when the provider/model doesn't report usage. */
+  usage?: { promptTokens: number; completionTokens: number };
 }
 
 export interface ChatOptions {

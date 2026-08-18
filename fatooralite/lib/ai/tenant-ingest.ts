@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/client";
 import { num } from "@/lib/db/decimal";
 import { upsertChunks, clearSource, companyChunkCount } from "./vector-store";
+import { log } from "@/lib/log/logger";
 
 /**
  * Tenant-scoped RAG ingestion. Summarizes a company's own data (invoices,
@@ -129,7 +130,7 @@ export function scheduleCompanyIngest(companyId: string): void {
     setTimeout(() => {
       timers.delete(companyId);
       ingestCompanyData(companyId).catch((e) =>
-        console.error(`Tenant ingest failed for ${companyId}:`, e),
+        log.error("ai.tenant_ingest.failed", { companyId, error: e instanceof Error ? e.message : String(e) }),
       );
     }, DEBOUNCE_MS),
   );

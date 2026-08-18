@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/client";
 import { roleMatrix, ALL_PERMISSIONS, isPermission } from "@/lib/auth/rbac";
 import { requirePermission, getUserFromRequest } from "@/lib/auth/server";
 import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
     if (typeof e === "object" && e && "code" in e && (e as { code?: string }).code === "P2002") {
       return NextResponse.json({ error: "A role with this name already exists" }, { status: 409 });
     }
-    console.error("Create role error:", e);
+    loggerFor(req).error("role.create.failed", { error: e instanceof Error ? e.message : String(e) });
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

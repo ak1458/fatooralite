@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultDb } from "@/lib/db/client";
 import { clientIpFor } from "@/lib/ratelimit/client-ip";
+import { SENSITIVE_KEY } from "@/lib/log/redact";
 
 /**
  * Security and administrative event recording.
@@ -44,6 +45,8 @@ export const SECURITY_EVENTS = {
   planChanged: "billing.plan.changed",
   trialStarted: "billing.trial.started",
   aiIndexRebuilt: "ai.index.rebuilt",
+  zatcaSubmissionRetried: "zatca.submission.retried",
+  zatcaSubmissionExhausted: "zatca.submission.exhausted",
 } as const;
 
 export type SecurityEventName = (typeof SECURITY_EVENTS)[keyof typeof SECURITY_EVENTS];
@@ -55,20 +58,13 @@ export interface SecurityEventInput {
   companyId?: string | null;
   actorId?: string | null;
   actorEmail?: string | null;
-  targetType?: "user" | "role" | "certificate" | "subscription" | "company" | "ai" | null;
+  targetType?: "user" | "role" | "certificate" | "subscription" | "company" | "ai" | "invoice" | null;
   targetId?: string | null;
   /** Small, non-secret facts. Passed through `redact()` before storage. */
   metadata?: Record<string, unknown> | null;
   /** Incoming request, when there is one — supplies IP and user agent. */
   request?: Request | null;
 }
-
-/**
- * Keys whose values are never stored, whatever a caller passes. Matched as a
- * substring against the lower-cased key, so `newPassword` and `csidSecret` are
- * both caught.
- */
-const SENSITIVE_KEY = /pass|secret|token|key|cookie|authorization|credential|otp|nonce|hash|signature/i;
 
 /** Drop sensitive keys and clamp value sizes. Never throws. */
 export function redact(metadata: Record<string, unknown> | null | undefined): string | null {

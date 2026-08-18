@@ -123,6 +123,7 @@ export function createAnthropicProvider(): ChatProvider {
         role: "assistant",
         content: textParts.length > 0 ? textParts.join("") : null,
         tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+        usage: { promptTokens: response.usage.input_tokens, completionTokens: response.usage.output_tokens },
       };
     },
 
