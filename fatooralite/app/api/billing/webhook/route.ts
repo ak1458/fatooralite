@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { verifyWebhookSecret, parseInvoiceWebhook } from "@/lib/billing/moyasar";
 import { proPeriodEndFrom } from "@/lib/billing/plan";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
 
 export const runtime = "nodejs";
 
@@ -70,6 +71,19 @@ export async function POST(req: Request) {
       trialEndsAt: null,
       currentPeriodEnd,
     },
+  });
+
+  // A licence upgrade is a privileged state change driven by an external
+  // system, so it is recorded with the processor's invoice id — enough to
+  // reconcile against Moyasar later without storing anything sensitive.
+  await recordSecurityEvent({
+    action: SECURITY_EVENTS.planChanged,
+    outcome: "success",
+    companyId: event.companyId,
+    targetType: "subscription",
+    targetId: event.companyId,
+    request: req,
+    metadata: { to: "pro", from: sub?.plan ?? "none", processorInvoiceId: event.invoiceId },
   });
 
   return NextResponse.json({ received: true });

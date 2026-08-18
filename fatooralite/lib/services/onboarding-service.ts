@@ -9,6 +9,7 @@ import {
 import type { ZatcaMode } from "@/lib/zatca/client";
 import type { InvoiceInput } from "@/lib/zatca/types";
 import { encryptPrivateKey, decryptPrivateKey, encryptSecret, decryptSecret } from "@/lib/crypto/encrypt";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
 
 export class OnboardingStateError extends Error {
   constructor(message: string) {
@@ -74,6 +75,18 @@ export async function provisionLocalCertificate(
       serial: "LOCAL-DEV",
     },
   });
+  await recordSecurityEvent(
+    {
+      action: SECURITY_EVENTS.certificateIssued,
+      outcome: "success",
+      companyId,
+      targetType: "certificate",
+      targetId: cert.id,
+      // kind, never the key or the CSID secret beside it.
+      metadata: { kind: "local", serial: cert.serial },
+    },
+    db as never,
+  );
   return { certificateId: cert.id, created: true };
 }
 
@@ -132,6 +145,17 @@ export async function startOnboarding(
     },
   });
 
+  await recordSecurityEvent(
+    {
+      action: SECURITY_EVENTS.certificateIssued,
+      outcome: "success",
+      companyId,
+      targetType: "certificate",
+      targetId: cert.id,
+      metadata: { kind: "compliance", mode },
+    },
+    db as never,
+  );
   return { certificateId: cert.id, requestId: compliance.requestId };
 }
 

@@ -4,6 +4,7 @@ import { prisma as defaultDb } from "@/lib/db/client";
 import { hashPassword } from "@/lib/auth/password";
 import { startTrial } from "@/lib/billing/plan";
 import type { RegisterInput } from "@/lib/validation/schemas";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
 
 export class RegisterError extends Error {
   constructor(message: string) {
@@ -25,7 +26,7 @@ export async function registerCompany(input: RegisterInput, db: PrismaClient = d
   if (existingCompany) throw new RegisterError("A company with this VAT number already exists");
 
   try {
-    return await db.$transaction(async (tx) => {
+    const created = await db.$transaction(async (tx) => {
       const company = await tx.company.create({
         data: {
           name: input.companyName,
@@ -52,6 +53,23 @@ export async function registerCompany(input: RegisterInput, db: PrismaClient = d
       await startTrial(company.id, tx);
       return { company, user };
     });
+
+    // Outside the transaction on purpose: recording must never be able to roll
+    // back a completed registration.
+    await recordSecurityEvent(
+      {
+        action: SECURITY_EVENTS.trialStarted,
+        outcome: "success",
+        companyId: created.company.id,
+        actorId: created.user.id,
+        actorEmail: created.user.email,
+        targetType: "subscription",
+        targetId: created.company.id,
+        metadata: { plan: "trial" },
+      },
+      db,
+    );
+    return created;
   } catch (err) {
     // Lost a race on a unique constraint (email or vatNumber).
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {

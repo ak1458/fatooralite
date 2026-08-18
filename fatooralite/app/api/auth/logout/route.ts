@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { getUserFromRequest } from "@/lib/auth/server";
 import { prisma } from "@/lib/db/client";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,14 @@ export async function POST(req: Request) {
     await prisma.user.update({
       where: { id: user.userId },
       data: { sessionVersion: { increment: 1 } },
+    });
+    await recordSecurityEvent({
+      action: SECURITY_EVENTS.logout,
+      outcome: "success",
+      companyId: user.companyId,
+      actorId: user.userId,
+      actorEmail: user.email,
+      request: req,
     });
   } catch (err) {
     // A deleted user, or the database being briefly unreachable, must still

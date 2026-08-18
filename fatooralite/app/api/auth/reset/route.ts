@@ -3,6 +3,7 @@ import { jwtVerify } from "jose";
 import { prisma } from "@/lib/db/client";
 import { hashPassword } from "@/lib/auth/password";
 import { authSecretKey } from "@/lib/auth/session";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
 
 export const runtime = "nodejs";
 
@@ -53,6 +54,16 @@ export async function POST(req: Request) {
         passwordResetNonce: null,
         sessionVersion: { increment: 1 },
       },
+    });
+
+    await recordSecurityEvent({
+      action: SECURITY_EVENTS.passwordResetCompleted,
+      outcome: "success",
+      actorId: user.id,
+      targetType: "user",
+      targetId: user.id,
+      request: req,
+      metadata: { sessionsInvalidated: true },
     });
 
     return NextResponse.json({ ok: true });

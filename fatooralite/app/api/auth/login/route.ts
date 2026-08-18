@@ -3,6 +3,7 @@ import { findUserByEmail } from "@/lib/db/repo";
 import { verifyPassword } from "@/lib/auth/password";
 import { createSessionToken, SESSION_COOKIE } from "@/lib/auth/session";
 import { loginSchema } from "@/lib/validation/schemas";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,19 @@ export async function POST(req: Request) {
 
   const user = await findUserByEmail(email);
   if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
+    // Recorded so brute-force and credential-stuffing attempts are visible after
+    // the fact. `companyId` is whatever the address resolves to, or null when it
+    // matches no account — a null-tenant row is unreachable from any tenant's
+    // event view, which is what keeps this from leaking account existence.
+    await recordSecurityEvent({
+      action: SECURITY_EVENTS.loginFailure,
+      outcome: "failure",
+      companyId: user?.companyId ?? null,
+      actorId: user?.id ?? null,
+      actorEmail: email,
+      request: req,
+      metadata: { reason: user ? "bad_password" : "unknown_account" },
+    });
     return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
   }
 
@@ -40,6 +54,16 @@ export async function POST(req: Request) {
     role: user.role,
     companyId: user.companyId ?? undefined,
     sessionVersion: user.sessionVersion,
+  });
+
+  await recordSecurityEvent({
+    action: SECURITY_EVENTS.loginSuccess,
+    outcome: "success",
+    companyId: user.companyId,
+    actorId: user.id,
+    actorEmail: user.email,
+    request: req,
+    metadata: { role: user.role },
   });
 
   const res = NextResponse.json({

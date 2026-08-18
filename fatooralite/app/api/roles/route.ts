@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { roleMatrix, ALL_PERMISSIONS, isPermission } from "@/lib/auth/rbac";
 import { requirePermission, getUserFromRequest } from "@/lib/auth/server";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
 
 export const runtime = "nodejs";
 
@@ -72,6 +73,17 @@ export async function POST(req: Request) {
         permissions: { create: parsed.permissions.map((permission) => ({ permission })) },
       },
       include: { permissions: { select: { permission: true } } },
+    });
+    await recordSecurityEvent({
+      action: SECURITY_EVENTS.roleCreated,
+      outcome: "success",
+      companyId: user.companyId,
+      actorId: user.userId,
+      actorEmail: user.email,
+      targetType: "role",
+      targetId: role.id,
+      request: req,
+      metadata: { name: role.name, permissions: parsed.permissions.join(",") },
     });
     return NextResponse.json(
       {

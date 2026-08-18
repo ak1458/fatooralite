@@ -252,6 +252,61 @@ model AuditEntry {
   @@index([createdAt])
 }
 
+/// Security and administrative event log — "who did what, when".
+///
+/// Deliberately NOT folded into AuditEntry. That table stores invoice artifacts
+/// (the XML, the signed XML, the QR, the gateway response) keyed to an invoice,
+/// and has no actor, no tenant and no outcome. Overloading it would conflate a
+/// document archive with a security log and leave both hard to query.
+///
+/// companyId and actorId carry NO foreign key on purpose. An audit record must
+/// outlive the thing it describes: the record of a user being deleted cannot be
+/// cascaded away by that deletion, and the record of a tenant being torn down is
+/// exactly what an investigation needs afterwards. actorEmail is denormalised
+/// for the same reason — the row stays readable once the User is gone.
+///
+/// RETENTION: rows are never rewritten or deleted by application code. Choose a
+/// retention window deliberately (24 months is a common default for security
+/// logs) and enforce it with a scheduled purge; see docs/audit/. A tenant
+/// exercising a data-deletion right needs a documented decision about which of
+/// these rows are erased and which are retained as security records — that is a
+/// legal question, recorded in the decision register, not one settled here.
+///
+/// Never write a secret into `metadata`: no passwords, tokens, CSID secrets,
+/// private keys or session cookies. It holds small non-sensitive facts only.
+model SecurityEvent {
+  id         String   @id @default(cuid())
+  /// Tenant the event belongs to. Null when there is none — e.g. a failed
+  /// login for an address that matches no account.
+  companyId  String?
+  /// User who performed the action, if the request was authenticated.
+  actorId    String?
+  /// Actor's email at the time of the event; survives user deletion.
+  actorEmail String?
+  /// Dotted event name, e.g. "auth.login.failure", "user.role.changed".
+  action     String
+  /// success | failure | denied
+  outcome    String
+  /// What was acted upon: user | role | certificate | subscription | company.
+  targetType String?
+  targetId   String?
+  /// Rate-limiting identity of the caller (lib/ratelimit/client-ip.ts).
+  ip         String?
+  userAgent  String?
+  /// Small non-secret JSON, e.g. {"from":"employee","to":"owner"}.
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  // Tenant timeline — the common query, and the one that must stay fast as the
+  // table grows without bound.
+  @@index([companyId, createdAt])
+  // "What did this user do?"
+  @@index([actorId, createdAt])
+  // "Show every failed login" / retention purges by age.
+  @@index([action, createdAt])
+  @@index([createdAt])
+}
+
 model User {
   id        String  @id @default(cuid())
   companyId String?

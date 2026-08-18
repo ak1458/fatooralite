@@ -6,6 +6,7 @@ import type { SessionPayload } from "./session";
 import { can } from "./rbac";
 import type { Permission } from "./rbac";
 import { prisma } from "@/lib/db/client";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
 
 /** Read the current session in a Server Component / Route Handler (cookie store). */
 export async function getCurrentUser(): Promise<SessionPayload | null> {
@@ -111,13 +112,46 @@ export async function requirePermission(
   if (!user) {
     return { user: null, deny: NextResponse.json({ error: "Authentication required" }, { status: 401 }) };
   }
+  // Denials are recorded, not just returned. A permission denial and — far more
+  // importantly — a cross-tenant attempt are the two signals that say someone is
+  // probing this system, and neither left any trace before the security event
+  // log existed. Recording is best-effort and never blocks the denial.
   if (!(await hasCurrentSessionVersion(user))) {
+    await recordSecurityEvent({
+      action: SECURITY_EVENTS.sessionRejected,
+      outcome: "denied",
+      companyId: user.companyId,
+      actorId: user.userId,
+      actorEmail: user.email,
+      request: req,
+      metadata: { permission },
+    });
     return { user: null, deny: NextResponse.json({ error: "Session no longer valid. Please sign in again." }, { status: 401 }) };
   }
   if (!(await hasPermission(user, permission))) {
+    await recordSecurityEvent({
+      action: SECURITY_EVENTS.permissionDenied,
+      outcome: "denied",
+      companyId: user.companyId,
+      actorId: user.userId,
+      actorEmail: user.email,
+      request: req,
+      metadata: { permission, role: user.role },
+    });
     return { user, deny: NextResponse.json({ error: "Insufficient permissions" }, { status: 403 }) };
   }
   if (!isCallerCompany(user, targetCompanyId)) {
+    await recordSecurityEvent({
+      action: SECURITY_EVENTS.tenantMismatch,
+      outcome: "denied",
+      companyId: user.companyId,
+      actorId: user.userId,
+      actorEmail: user.email,
+      request: req,
+      // The tenant that was reached for is recorded: without it the log says
+      // someone was refused but not what they were trying to reach.
+      metadata: { permission, attemptedCompanyId: targetCompanyId },
+    });
     return { user, deny: NextResponse.json({ error: "Tenant mismatch. Access denied to this company's resources." }, { status: 403 }) };
   }
   return { user };

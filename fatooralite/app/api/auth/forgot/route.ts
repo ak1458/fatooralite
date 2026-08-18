@@ -3,6 +3,7 @@ import { SignJWT } from "jose";
 import { prisma } from "@/lib/db/client";
 import { authSecretKey } from "@/lib/auth/session";
 import { sendEmail } from "@/lib/email/send";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
 
 export const runtime = "nodejs";
 
@@ -62,6 +63,18 @@ export async function POST(req: Request) {
         .sign(authSecretKey());
 
       const resetUrl = `${req.headers.get("origin") ?? "http://localhost:3000"}/reset?token=${token}`;
+      // Recorded whether or not delivery is configured: a reset request is a
+      // security-relevant act, and its absence from the log would hide an
+      // account-takeover attempt that never produced an email.
+      await recordSecurityEvent({
+        action: SECURITY_EVENTS.passwordResetRequested,
+        outcome: "success",
+        companyId: user.companyId,
+        actorId: user.id,
+        actorEmail: user.email,
+        request: req,
+      });
+
       await sendEmail({
         to: email,
         subject: "Reset your Fatoora Lite Pro password",
