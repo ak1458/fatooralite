@@ -41,6 +41,15 @@ export interface AllowanceCharge {
   amount: number;             // SAR
   reason?: string;
   reasonCode?: string;        // UNCL5189
+  /**
+   * Which VAT category this document-level allowance/charge belongs to.
+   * EN16931 BR-CO-17 computes each category's tax from that category's taxable
+   * amount, so a document-level discount has to be attributed to a category
+   * before the VAT can be recomputed. Defaults to "S" (standard-rated), which
+   * is what the UBL builder previously hard-coded for every one of them.
+   * Ignored for line-level allowances, which belong to their line's category.
+   */
+  taxCategory?: TaxCategoryCode;
 }
 
 /** Payment means per ZATCA BT-81..BT-83. */

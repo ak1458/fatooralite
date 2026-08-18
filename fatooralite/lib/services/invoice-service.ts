@@ -153,6 +153,21 @@ export async function issueInvoice(
         },
       };
     },
-    { timeout: 20_000 },
+    {
+      // The FOR UPDATE lock in nextChainSlot serialises every issuer on this
+      // tenant, so a request's real cost is its own work plus everyone ahead of
+      // it in the queue. `maxWait` is how long Prisma will wait to *start* the
+      // transaction and `timeout` how long it may then run; the defaults (2s /
+      // 5s) are far too small for a queue, and the previous 20s timeout with a
+      // default 2s maxWait still failed 2 of 8 simultaneous issues in the
+      // audit — surfacing as P2028, now handled explicitly by the route.
+      //
+      // Raising these buys queue depth, it does not remove the ceiling:
+      // issuance for one tenant is inherently serial because the PIH/ICV chain
+      // requires read → sign → write under one lock. Moving signing outside the
+      // lock is the structural fix and is deliberately out of scope here.
+      maxWait: 30_000,
+      timeout: 45_000,
+    },
   );
 }

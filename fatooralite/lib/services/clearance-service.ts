@@ -99,6 +99,24 @@ export async function submitInvoice(
     })),
   };
 
+  // Mark the invoice as in-flight BEFORE the gateway call.
+  //
+  // The lifecycle documented on Invoice.status has always included "submitted",
+  // but nothing ever wrote it: an invoice went straight from "signed" to
+  // cleared/reported/rejected once the response came back. That left a window
+  // with no record — if the process died after ZATCA accepted the document and
+  // before the result was persisted (a Vercel function hitting maxDuration on a
+  // slow gateway is the ordinary way this happens), the invoice still read
+  // "signed", which is indistinguishable from never having been sent. The
+  // operator's only move is then to send it again.
+  //
+  // Writing "submitted" first does not make the retry free — nothing can, short
+  // of the gateway deduplicating — but ZATCA keys on invoiceHash + uuid, both of
+  // which are unchanged on a resend, and the state is now truthful: an invoice
+  // sitting in "submitted" is one whose fate is genuinely unknown and which
+  // needs reconciling, rather than one the UI quietly reports as unsent.
+  await setInvoiceStatus(invoiceId, "submitted", null, db);
+
   const response = await client.submit({
     input,
     uuid: invoice.uuid,
@@ -106,35 +124,41 @@ export async function submitInvoice(
     hash: invoice.hash,
   });
 
-  await addClearanceRecord(
-    {
-      invoiceId,
-      action: response.action,
-      status: response.status,
-      responseCode: response.code,
-      message: response.message,
-      rawResponse: response.raw,
-    },
-    db,
-  );
-  await addAuditEntry({ invoiceId, kind: "apiResponse", payload: response.raw }, db);
+  const newStatus =
+    response.status === "accepted"
+      ? response.action === "clearance"
+        ? "cleared"
+        : "reported"
+      : "rejected";
 
-  let newStatus: string;
-  if (response.status === "accepted") {
-    newStatus = response.action === "clearance" ? "cleared" : "reported";
-  } else {
-    newStatus = "rejected";
-  }
-  await setInvoiceStatus(invoiceId, newStatus, response.status === "rejected" ? response.code : null, db);
+  // Persist the verdict atomically. These were four sequential writes, so a
+  // failure between them could leave a ClearanceRecord reading "accepted" beside
+  // an invoice still reading "submitted" — a state nothing could explain later.
+  await db.$transaction(async (tx) => {
+    const txDb = tx as unknown as PrismaClient;
+    await addClearanceRecord(
+      {
+        invoiceId,
+        action: response.action,
+        status: response.status,
+        responseCode: response.code,
+        message: response.message,
+        rawResponse: response.raw,
+      },
+      txDb,
+    );
+    await addAuditEntry({ invoiceId, kind: "apiResponse", payload: response.raw }, txDb);
+    await setInvoiceStatus(invoiceId, newStatus, response.status === "rejected" ? response.code : null, txDb);
 
-  // Keep the B2C reporting queue in sync whether this ran from the cron or a
-  // manual submit: a reported simplified invoice leaves the pending queue.
-  if (response.action === "reporting") {
-    await db.invoice.update({
-      where: { id: invoiceId },
-      data: { reportingState: response.status === "accepted" ? "reported" : "failed" },
-    });
-  }
+    // Keep the B2C reporting queue in sync whether this ran from the cron or a
+    // manual submit: a reported simplified invoice leaves the pending queue.
+    if (response.action === "reporting") {
+      await txDb.invoice.update({
+        where: { id: invoiceId },
+        data: { reportingState: response.status === "accepted" ? "reported" : "failed" },
+      });
+    }
+  });
 
   return { invoiceId, status: newStatus, response };
 }

@@ -1,6 +1,14 @@
 import type { InvoiceInput } from "./types";
 import { validateInvoice } from "./validate";
 
+/**
+ * How long to wait on the Fatoora gateway before giving up. Comfortably inside
+ * the 60s `maxDuration` the clearance and cron routes run under, so the timeout
+ * fires as a handled error rather than the platform killing the invocation
+ * mid-write.
+ */
+const GATEWAY_TIMEOUT_MS = 30_000;
+
 export type ZatcaMode = "sandbox" | "production";
 export type ZatcaAction = "clearance" | "reporting";
 export type ZatcaStatus = "accepted" | "rejected" | "warning";
@@ -101,6 +109,11 @@ export class ZatcaClient implements ZatcaSubmitter {
       "base64",
     );
 
+    // Bound the call. With no timeout, an unresponsive gateway held the request
+    // open until the serverless function was killed — which is precisely the
+    // window where ZATCA may have accepted a document that never got recorded
+    // locally. Failing at a known point, well inside the route's own budget,
+    // keeps that window short and observable.
     const res = await fetch(`${base}${path}`, {
       method: "POST",
       headers: {
@@ -116,6 +129,7 @@ export class ZatcaClient implements ZatcaSubmitter {
         uuid: args.uuid,
         invoice: args.signedXmlBase64,
       }),
+      signal: AbortSignal.timeout(GATEWAY_TIMEOUT_MS),
     });
 
     const raw = await res.text();

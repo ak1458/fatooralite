@@ -1,7 +1,7 @@
 import { create } from "xmlbuilder2";
 import type { XMLBuilder } from "xmlbuilder2/lib/interfaces";
 import type { InvoiceInput, PostalAddress, TaxSubtotal } from "./types";
-import { invoiceTotals, lineNet, lineVat, effectiveRate } from "./money";
+import { invoiceTotals, lineNet, lineVat, effectiveRate, categoryPercent } from "./money";
 
 const TYPE_CODE: Record<string, string> = {
   invoice: "388",
@@ -240,11 +240,17 @@ export function buildInvoiceXml(input: InvoiceInput, uuid: string): string {
         acEl.ele("cbc:AllowanceChargeReason").txt(ac.reason).up();
       }
       acEl.ele("cbc:Amount", { currencyID: "SAR" }).txt(ac.amount.toFixed(2)).up();
-      // Assume standard VAT for document-level allowances
+      // Declare the allowance's actual tax category, and a percent that matches
+      // it. This was hard-coded to S/15.00 regardless of the category the
+      // amount was applied to, so a discount against a zero-rated or exempt
+      // category told ZATCA it carried 15% VAT while the TaxSubtotal said
+      // otherwise. The category defaults to "S", preserving the previous output
+      // for every allowance that does not name one.
+      const acCategory = ac.taxCategory ?? "S";
       acEl
         .ele("cac:TaxCategory")
-        .ele("cbc:ID").txt("S").up()
-        .ele("cbc:Percent").txt("15.00").up()
+        .ele("cbc:ID").txt(acCategory).up()
+        .ele("cbc:Percent").txt(categoryPercent(acCategory).toFixed(2)).up()
         .ele("cac:TaxScheme").ele("cbc:ID").txt("VAT").up().up()
         .up();
       acEl.up();

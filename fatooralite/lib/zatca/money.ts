@@ -15,6 +15,11 @@ export function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+/** VAT percentage (0–100) for a tax category — what UBL's cbc:Percent expects. */
+export function categoryPercent(category: TaxCategoryCode): number {
+  return round2(CATEGORY_RATE[category] * 100);
+}
+
 /** Effective VAT rate for a line, respecting tax category if set. */
 export function effectiveRate(line: InvoiceLine): number {
   if (line.taxCategory && line.taxCategory !== "S") {
@@ -108,6 +113,56 @@ export function invoiceTotals(
   documentAllowances?: AllowanceCharge[],
 ): InvoiceTotals {
   const subtotals = taxSubtotals(lines);
+
+  const allowanceTotalAmount = sumAllowances(documentAllowances, false);
+  const chargeTotalAmount = sumAllowances(documentAllowances, true);
+
+  // Apply each document-level allowance/charge to ITS OWN tax category's
+  // taxable base, then recompute that category's VAT from the adjusted base.
+  //
+  // This previously subtracted the allowance from the document taxable total
+  // and left `vat` computed from the *unadjusted* base. Two things were wrong
+  // with that, both of them financial:
+  //
+  //   1. VAT did not respond to a document-level discount. A 1000 SAR invoice
+  //      with a 100 SAR discount produced taxable 900 but VAT 150 — the buyer
+  //      was charged 15 SAR of VAT on money they were never charged. A
+  //      document-level *charge* had the mirror error: taxable 1100, VAT 150,
+  //      i.e. 15 SAR of VAT under-declared to ZATCA.
+  //   2. The returned taxSubtotals still described the unadjusted base, so the
+  //      TaxSubtotal rows in the signed XML summed to 1000 while the document's
+  //      TaxExclusiveAmount said 900. EN16931 BR-CO-13/BR-CO-17 require those
+  //      to agree, and ZATCA independently recomputes them — so any invoice
+  //      carrying a document-level allowance was built to be rejected.
+  //
+  // No caller supplies document-level allowances today (createInvoiceSchema
+  // does not accept them and the AI tool does not send them), so this corrects
+  // a latent defect rather than a live miscalculation — but the UBL builder
+  // already emits cac:AllowanceCharge, so the first feature to use it would
+  // have inherited both problems.
+  for (const ac of documentAllowances ?? []) {
+    const cat: TaxCategoryCode = ac.taxCategory ?? "S";
+    const signed = ac.isCharge ? ac.amount : -ac.amount;
+    const existing = subtotals.find((s) => s.taxCategory === cat);
+    if (existing) {
+      existing.taxableAmount = round2(existing.taxableAmount + signed);
+    } else {
+      // A document-level allowance for a category with no lines still has to
+      // appear in the breakdown, or the totals and the breakdown diverge again.
+      subtotals.push({
+        taxCategory: cat,
+        taxableAmount: round2(signed),
+        taxAmount: 0,
+        percent: round2(CATEGORY_RATE[cat] * 100),
+      });
+    }
+  }
+  for (const s of subtotals) {
+    s.taxAmount = round2(s.taxableAmount * (s.percent / 100));
+  }
+
+  // Document totals are the sum of the (now adjusted) per-category subtotals,
+  // so the two can never disagree.
   let taxable = 0;
   let vat = 0;
   for (const s of subtotals) {
@@ -115,16 +170,10 @@ export function invoiceTotals(
     vat = round2(vat + s.taxAmount);
   }
 
-  const allowanceTotalAmount = sumAllowances(documentAllowances, false);
-  const chargeTotalAmount = sumAllowances(documentAllowances, true);
-
-  // Document-level allowances reduce the taxable amount
-  const adjustedTaxable = round2(taxable - allowanceTotalAmount + chargeTotalAmount);
-
   return {
-    taxableAmount: adjustedTaxable,
+    taxableAmount: taxable,
     vatAmount: vat,
-    grandTotal: round2(adjustedTaxable + vat),
+    grandTotal: round2(taxable + vat),
     allowanceTotalAmount,
     chargeTotalAmount,
     taxSubtotals: subtotals,

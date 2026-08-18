@@ -29,12 +29,15 @@ export async function GET(req: Request) {
     invoices.map((i) => ({ ...i, vatAmount: num(i.vatAmount), grandTotal: num(i.grandTotal) })),
   );
 
+  // Same correction as app/api/integration/route.ts: match on status, since a
+  // locally-provisioned certificate has kind "local" and this query used to
+  // miss it entirely, reporting "no certificate" for a tenant that was signing.
   const cert = await prisma.certificate.findFirst({
-    where: { companyId, kind: "production", status: "active" },
+    where: { companyId, status: "active" },
     orderBy: { createdAt: "desc" },
-    select: { serial: true, secret: true },
+    select: { serial: true, kind: true },
   });
-  const isLocal = cert?.serial === "LOCAL-DEV" || cert?.secret === "LOCAL-DEV-SECRET";
+  const isLocal = cert?.kind === "local" || cert?.serial === "LOCAL-DEV";
 
   const feed = invoices.slice(0, 12).map((inv) => ({
     invoiceNumber: inv.invoiceNumber,
