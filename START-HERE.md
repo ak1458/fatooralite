@@ -46,28 +46,33 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
   observability, W5 AI confirmation tokens, W6 RAG restriction/AI usage
   accounting, W7 deployment config, W26 remaining risks).
   **Remediation Phase 3 is complete, with honestly-documented PARTIALs**
-  (W8–W18, N8; F-A/F-B/F-C investigated and closed). Programme state lives in
-  `docs/audit/remediation-ledger.md`; read that before starting anything.
-  Phase 4 has NOT been started. Full regression (73 test files, 497 tests)
-  confirmed 0 failed / 0 skipped. **If you're picking this up fresh, read
-  `docs/SESSION_HANDOFF_2026-08-18.md` first** for the exact current state
-  and what to do if this work isn't committed yet.
+  (W8–W18, N8; F-A/F-B/F-C investigated and closed).
+  **Remediation Phase 4 is complete, with honestly-documented PARTIALs**
+  (W19, W21–W24 DONE outright; W20, W25 PARTIAL — W20 is a bounded doc
+  reconciliation, not exhaustive; W25's drill wasn't run end-to-end, no
+  postgres client tools on this machine, checked not assumed). Programme
+  state lives in `docs/audit/remediation-ledger.md`; read that before
+  starting anything. Phase 5 has NOT been started. Full regression (76 test
+  files, 519 tests) confirmed 0 failed / 0 skipped. **If you're picking this
+  up fresh, read `docs/SESSION_HANDOFF_2026-08-18.md` first** for the exact
+  current state and what to do if this work isn't committed yet.
 - **Thirteen defects were found and fixed in the original audit**, four
   financial or compliance-affecting. Full detail in
   `docs/audit/2026-08-18-findings.md`.
 - **The test suite now runs its database-gated half.** It was 285 passed /
   43 skipped; after the audit it was 363 passed / 0 skipped, after
   remediation Phase 1 it was 402 passed / 0 skipped, after remediation
-  Phase 2 it was 447 passed / 2 pre-existing failed / 0 skipped, and after
-  remediation Phase 3 it is **497 passed / 0 failed / 0 skipped** (73 test
-  files, run against `fatoora_audit` via `TEST_DATABASE_URL`). The 2
-  pre-existing Phase 2 failures (`lib/billing/plan.test.ts`) are now fixed
-  (F-A). Run convention that changed this phase: 6 files that call
-  `pushTestSchema()` must run in separate `vitest run` invocations, one at a
-  time (running two together races); the other 67 must run together in one
-  invocation with `--no-file-parallelism` (true parallel execution against
-  the same database caused real connection contention, not a code bug).
-  See `handoff.md`'s Phase 3 entry for the full mechanics.
+  Phase 2 it was 447 passed / 2 pre-existing failed / 0 skipped, after
+  remediation Phase 3 it was 497 passed / 0 failed / 0 skipped (73 files),
+  and after remediation Phase 4 it is **519 passed / 0 failed / 0 skipped**
+  (76 test files — 3 added this phase — run against `fatoora_audit` via
+  `TEST_DATABASE_URL`). Run convention unchanged from Phase 3: 6 files that
+  call `pushTestSchema()` must run in separate `vitest run` invocations, one
+  at a time (running two together races); the other 70 must run together in
+  one invocation with `--no-file-parallelism` (true parallel execution
+  against the same database caused real connection contention, not a code
+  bug). See `handoff.md`'s Phase 3 and Phase 4 entries for the full
+  mechanics.
 - Security core verified adversarially: 25 cross-tenant attacks refused,
   privilege escalation refused, invoice totals recomputed server-side, the
   ZATCA chain did not fork under concurrency, RAG leaked nothing under prompt
@@ -167,7 +172,8 @@ deep`), W5 server-minted AI confirmation tokens (`AiConfirmation`), W6 global
 RAG re-index restricted to `OPERATOR_SECRET` + AI usage accounting
 (`AiUsage`), W7 deployment config correctness (`APP_URL` boot check,
 `appUrl()` reset links), W26 closed the remaining RISK findings (F-16
-reconfirmed as no-longer-reproducing; F-12 confirmed accepted-with-basis).
+reconfirmed as no-longer-reproducing; F-12 confirmed accepted-with-basis at
+the time — **since fixed outright in Phase 4/W21, see below**).
 Suite: 447 passed / 2 pre-existing unrelated failures / 0 skipped. Ledger:
 507 GREEN / 1069. Full write-up in `handoff.md`'s 2026-08-18 Phase 2 entry.
 
@@ -181,8 +187,21 @@ owner-blocked (X1, X2) or a deliberately undecided business rule (D9), never
 silently substituted. W16 (failure-injection harness) is DONE for the
 harness itself. F-A/F-B/F-C (carried over from Phase 2's own report) are
 closed. Full detail: `docs/audit/remediation-ledger.md`'s Phase 3 table and
-outcome section, `handoff.md`'s Phase 3 entry, `docs/SESSION_HANDOFF_
-2026-08-18.md`. **Phase 4 has not been started.**
+outcome section, `handoff.md`'s Phase 3 entry.
+
+**Phase 4 is done, with honestly-documented PARTIALs.** W19 (session
+refresh/rotation), W21 (Origin required on state-changing requests, closes
+F-12), W22 (sequence-gap surfacing + Arabic search/sort validation), W23
+(incident-response runbook), W24 (dependency advisories re-checked, no fix
+exists, no change made) are DONE outright. W20 (documentation
+reconciliation) and W25 (backup procedures beyond the drill) are PARTIAL —
+W20 was a bounded pass against 21 named items, not exhaustive; W25
+delivered a working backup/restore procedure and verification script but
+the actual drill wasn't run end to end (no postgres client tools on this
+machine) and Neon's own PITR/backup capability stays owner-blocked (X2).
+Full detail: `docs/audit/remediation-ledger.md`'s Phase 4 table and outcome
+section, `handoff.md`'s Phase 4 entry, `docs/SESSION_HANDOFF_
+2026-08-18.md`. **Phase 5 has not been started.**
 
 **Three decisions are still open and block work:** D1 (VAT-return scope), D7
 (does the absent Control Center gate launch), D8 (is WhatsApp launch scope).
@@ -436,6 +455,20 @@ regression, and the reason is in the code comment beside it.
   `lib/services/invoice-service.test.ts`); each needs its own separate
   `vitest run` invocation (two together race). See `handoff.md`'s Phase 3
   entry for what actually worked.
+- **The Origin/Referer requirement in `proxy.ts` (W21) only fires when the
+  session cookie is present on the request.** A cookie-less state-changing
+  request (cron's bearer secret, Moyasar's webhook token, a bare API client
+  that 401s downstream anyway) is deliberately exempt — the point is to
+  refuse a *cookie-authed* request with no Origin/Referer (the F-12 shape),
+  not to demand Origin on every non-GET request regardless of auth. Do not
+  "harden" this to apply unconditionally; that would break every
+  cookie-less machine caller this app already relies on.
+- **`GET /api/auth/me`'s session refresh (W19) only runs after
+  `hasCurrentSessionVersion` passes, never before or in parallel.**
+  Revocation must always dominate refresh — a token whose `sessionVersion`
+  is stale gets no refresh at all, only rejection. Do not reorder these two
+  checks or make the refresh "best-effort in parallel" with the revocation
+  check; that would let a revoked session extend itself.
 
 ---
 

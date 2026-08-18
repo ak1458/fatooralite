@@ -266,9 +266,14 @@ mechanics below are ready to use once that's decided.
   that was in effect when they were encrypted — losing that key is
   equivalent to losing every tenant's ZATCA signing key.
 - **Test the restore path before you need it.** An untested backup is not a
-  backup. Run a restore drill on a schedule (quarterly is a reasonable
-  starting point) against a scratch Neon branch, and confirm a real
-  application boot + login against the restored data.
+  backup. See `docs/21-backup-restore.md` (Phase 4 / W25) for the actual
+  `pg_dump`/`pg_restore` procedure against `fatoora_restore` and
+  `scripts/restore-verify.ts`'s automated checks (migration currency, core
+  table counts, sequence integrity, PIH chain). Run it on a schedule
+  (quarterly is a reasonable starting point) and confirm a real application
+  boot + login against the restored data. Neon's own PITR/backup capability
+  is a separate, still-unverified question (X2) — that document's §1 states
+  the split explicitly.
 - **Application code/config**: stateless on Vercel — redeploying from git is
   the recovery path; no separate application-layer backup needed.
 

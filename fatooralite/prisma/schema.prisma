@@ -221,12 +221,11 @@ model Invoice {
   @@index([kind, reportingState, reportingDeadline])
   // Drives the reconciler's due-query: invoices stuck in "submitted".
   @@index([status, needsReview, lastSubmitAt])
-  // Postgres does not auto-index foreign key columns. Neither is filtered on
-  // yet (branchId isn't queried anywhere in the app despite the PRD's FR5
-  // calling for branch-scoped invoice lists — the topbar branch selector
-  // doesn't actually filter data yet, a real functional gap, not just a
-  // missing index), but both are FKs that will be filtered on eventually and
-  // an index here is free.
+  // Postgres does not auto-index foreign key columns. `branchId` IS filtered
+  // on since Phase 3 (W10) — getInvoiceList/the invoices API accept it with
+  // a tenant-ownership check — so this index is load-bearing, not
+  // speculative. `customerId` isn't filtered on yet, but is an FK that will
+  // be eventually and an index here is free.
   @@index([customerId])
   @@index([branchId])
   @@index([referencedInvoiceId])

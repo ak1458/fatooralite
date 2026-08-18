@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { num } from "@/lib/db/decimal";
 import { requirePermission } from "@/lib/auth/server";
 import { computeClearanceStats } from "@/lib/services/clearance-stats";
+import { getSequenceIntegrity } from "@/lib/services/sequence-gaps";
 
 export const runtime = "nodejs";
 
@@ -49,5 +50,9 @@ export async function GET(req: Request) {
     time: inv.createdAt.toISOString(),
   }));
 
-  return NextResponse.json({ stats, feed, isLocal });
+  // W22 (A-030): a consumed chain slot with no invoice row behind it means a
+  // record was lost, not a crash — issueInvoice() writes both in one transaction.
+  const sequence = await getSequenceIntegrity(companyId);
+
+  return NextResponse.json({ stats, feed, isLocal, sequence });
 }

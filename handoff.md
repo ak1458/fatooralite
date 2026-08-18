@@ -2612,3 +2612,165 @@ action (X2). Exhaustive per-audit-item reconciliation of W14/W15/W16's full
 item lists against what got tested — the ledger's Phase 3 table states real,
 verified evidence per item; it does not claim every one of the ~70 audit
 items behind these three work items was individually re-verified.
+
+## 2026-08-18 — Remediation Phase 4 (W19–W25)
+
+Branch `audit/production-readiness-2026-08-18`, continuing from Phase 3.
+Scope: the 7 non-blocking-hardening items the roadmap named for this phase,
+nothing from Phase 2/3's territory, no OPEN decision resolved. Architect
+(`architect` subagent) produced a file-level plan first, per the working
+agreement's two-agent convention for a new phase — implemented from it in
+order W24 → W21 → W19 → W22 → W23 → W25 → W20 (riskiest code changes first,
+documentation reconciliation last so it describes post-change reality).
+
+### W24 — dependency advisories, re-checked not assumed
+
+Re-ran `npm audit --json` fresh rather than trusting Phase 3's F-B/M-036
+snapshot. Same 7 high advisories, same two chains
+(`@huggingface/transformers`→`onnxruntime-node`→`adm-zip`/`sharp`;
+`prisma`(dev-only)→`@prisma/config`→`deepmerge-ts`), `fixAvailable: false`
+on every one of them except a *downgrade* offer for `prisma` that isn't a
+real fix. Confirmed `prisma` is still devDependency-only by reading
+`package.json` directly. No dependency change made — dropping the local
+embedding provider would change AI behavior for any deployment without a
+hosted-provider key, which is a product decision, not a patch. Documented a
+standing recommendation (set `EMBEDDING_PROVIDER=openai`/`voyage` in
+production) in `docs/19-operations-runbook.md` §6.
+
+### W21 — Origin required on state-changing requests (closes F-12)
+
+`proxy.ts`'s CSRF check previously skipped entirely when both Origin and
+Referer were absent — F-12, accepted-risk since Phase 2. Fixed by requiring
+Origin/Referer whenever the request carries the session cookie: a
+cookie-authed POST with neither header (the exact F-12 reproduction) is now
+refused (403); cookie-less callers (cron's bearer secret, the Moyasar
+webhook, any bare API client that 401s downstream anyway) stay exempt by
+construction, since the check only fires when a session cookie is present.
+6 new cases in `proxy.test.ts`. One real fixture gap surfaced while writing
+the first test: `NextRequest` doesn't synthesize a `Host` header from the
+URL the way a real server would, so the "Origin matches Host" case needed
+an explicit `host` header to actually exercise that branch — without it,
+both the matching and mismatched Origin cases fell through to the same
+"no Origin, cookie present" 403 path and the test looked like it passed for
+the wrong reason. Caught by asserting the specific status code the *matched*
+case should produce (401 from the auth gate, not 403), not just "not 403."
+Two `page.request.post("/api/auth/logout")` calls in
+`tests/e2e/auth.spec.ts` needed an explicit `origin` header added — Playwright's
+request context shares cookies but not Origin — which makes the test emulate
+a real browser rather than weakening any assertion.
+
+### W19 — session refresh/rotation
+
+Added a sliding refresh at `GET /api/auth/me` (the natural refresh point —
+already called on every app-shell load): a session older than 24h (but
+still valid) gets re-minted from a fresh DB read of the user row, so a role
+change since issuance actually propagates instead of staying frozen for the
+rest of the 7-day window. The one property that mattered most: refresh runs
+strictly *after* `hasCurrentSessionVersion`'s existing revocation check, so
+a token whose `sessionVersion` is already stale gets no refresh at all —
+verified with a dedicated test (`app/api/auth/me/route.test.ts`, "revocation
+dominates refresh") rather than assumed from the code's ordering. `jose`'s
+`setIssuedAt(undefined)` was confirmed (by reading `jwt_claims_set.js`
+directly, not assumed) to default to "now," which is what makes
+`createSessionToken(payload, { issuedAt })` safe to also call with no
+second argument everywhere else in the app unchanged.
+
+### W22 — sequence-gap surfacing + Arabic search/sort validation
+
+`getSequenceIntegrity()` (new: `lib/services/sequence-gaps.ts`) compares
+`InvoiceCounter.next - 1` (slots consumed) against the actual invoice row
+count, reporting `missing` and `extra` separately rather than netting them
+against each other — `issueInvoice()` writes the chain-slot reservation and
+the invoice row in the same transaction, so a missing row behind a consumed
+slot means something was deleted after the fact, not a crash. Wired into
+`GET /api/clearance` and a warning banner on the Compliance Center page.
+Arabic search (`searchInvoices`) and sort (`orderBy: buyerName`) had never
+been explicitly validated against real Postgres before — `lib/db/
+arabic-text.test.ts` inserted names starting أ/خ/م (chosen because they're
+in the same order in the Arabic alphabet as in Unicode codepoints, so a
+passing assertion means something, not an artifact of insertion order) and
+asserted the DB's own collation returns them alphabetically, twice, for
+determinism.
+
+**A timeout, investigated, not bumped blindly**: the first test in
+`sequence-gaps.test.ts` hit vitest's 5000ms default on its first run. Per
+this programme's own standing rule (a timeout that lands exactly at the
+ceiling deserves investigation, not an automatic re-run or a bump), checked
+whether this matched the "genuinely slower" signature from Phase 3's
+SESSION_HANDOFF §3.2 rather than the "actually stuck" signature from §3.4:
+no concurrency or shared mock is involved in this test (nothing to
+deadlock on), it's the first test in the file (pays Prisma's cold-connection
+cost once), and it does 5 sequential round trips. Re-ran twice after adding
+an explicit `20_000` timeout — passed reliably both times — confirming
+"genuinely slower, not stuck," the same conclusion Phase 3 reached for a
+structurally identical pattern, not a rubber-stamped assumption.
+
+### W23 — incident-response runbook
+
+Pure documentation: `docs/20-incident-response.md`. Every mechanism it
+documents already existed and was already tested (`sessionVersion`
+revocation, `AUTH_SECRET`/`OPERATOR_SECRET`/`CRON_SECRET` rotation,
+`Certificate.status`, the `SecurityEvent` query API, `x-request-id`
+correlation) — this closes the gap between "the mechanism exists" and "a
+person under pressure knows which one to reach for and how." Explicitly
+left the Saudi PDPL legal-notification-obligation question to owner/legal
+review rather than asserting a legal duty engineering has no authority to
+determine.
+
+### W25 — backup procedures beyond the drill
+
+Delivered `docs/21-backup-restore.md` (a `pg_dump`/`pg_restore` procedure
+against `fatoora_restore`, independent of Neon's own backup features) and
+`scripts/restore-verify.ts` (migration currency, core-table counts,
+per-company sequence integrity reusing W22's function, PIH chain
+spot-check). Checked for `pg_dump`/`pg_restore` on `PATH` before promising
+anything — neither is installed on this machine — so the actual
+dump→restore→verify drill was **not executed** this session, recorded as
+such rather than faked. The refusal path (wrong database name, missing env
+var) was verified against a dummy URL that never touched a real database.
+Neon's own PITR/backup-encryption/platform-restore capability remains
+UNKNOWN, unchanged, owner-blocked on X2 — this phase's contribution is a
+backup path that doesn't depend on that answer at all, not a resolution of it.
+
+### W20 — documentation reconciliation
+
+Bounded pass, not a rewrite. Real drift found and fixed: `schema.prisma`'s
+comment still claimed `branchId` "isn't queried anywhere in the app" —
+false since Phase 3/W10, and now corrected. More materially,
+`docs/README.md`'s **Product Status** line read "Fully implemented,
+security-hardened, and cryptographically verified" — a direct contradiction
+of the audit's NOT READY verdict sitting one folder away — replaced with an
+accurate line pointing at the audit and `START-HERE.md`. `fatooralite/
+README.md` was still unmodified `create-next-app` boilerplate with zero
+project context; added a pointer rather than a rewrite. Regenerated the
+stale `docs/portal/*.html` snapshot (last built 2026-08-06, predating most
+of this program) via the existing `npm run docs:build` — the architect's
+plan assumed no such script existed; checking `package.json` directly
+before writing a "no generator exists" note in the docs avoided shipping a
+false claim of my own while fixing someone else's. Checked every
+WhatsApp/Excel-import mention in `docs/` for a false "already built" claim
+the plan predicted might exist — found none; recorded as verified-accurate
+rather than silently skipped. Per-item verdicts for all 21 M-167…M-187
+ledger rows, replacing a copy-pasted placeholder note — most PARTIAL
+verdicts name exactly what wasn't re-checked rather than defaulting to GREEN.
+
+### What was deliberately not touched
+
+No OPEN decision (D1–D9) resolved. D5 (the architecture ADR) was flagged by
+the architect as low-risk pure documentation and explicitly excluded from
+this phase's plan rather than bundled in on that judgment alone — left for
+the owner to decide. No ZATCA XSD work (W12/X1), no VAT sign/aggregation
+change (D9), no tax-period locking (D2), no RLS (D6). No existing test
+weakened, skipped, or deleted — the two e2e calls that needed an Origin
+header gained one; every assertion is unchanged.
+
+### Verification
+
+Full regression, both groups (see `docs/SESSION_HANDOFF_2026-08-18.md` for
+the Phase 4 addendum with the exact counts and command reconstruction):
+`npm run lint` (0 errors), `npm audit --audit-level=critical` (unchanged
+advisory set, gate policy unchanged), `npx tsc --noEmit` (clean),
+`npx tsx scripts/validate-zatca.ts` (7/7), the 76-file test suite split per
+the Phase 3 convention (6 schema-pushing files separately, the other 70 —
+3 new this phase, none calling `pushTestSchema()` — together with
+`--no-file-parallelism`), `npm run build`.

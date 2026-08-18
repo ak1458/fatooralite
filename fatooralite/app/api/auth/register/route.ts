@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { registerSchema } from "@/lib/validation/schemas";
 import { registerCompany, RegisterError } from "@/lib/services/auth-service";
-import { createSessionToken, SESSION_COOKIE } from "@/lib/auth/session";
+import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth/session";
 import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
@@ -70,12 +70,6 @@ export async function POST(req: Request) {
     },
     { status: 201 },
   );
-  res.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
   return res;
 }

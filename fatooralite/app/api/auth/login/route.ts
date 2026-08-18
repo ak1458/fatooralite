@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { findUserByEmail } from "@/lib/db/repo";
 import { verifyPassword } from "@/lib/auth/password";
-import { createSessionToken, SESSION_COOKIE } from "@/lib/auth/session";
+import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth/session";
 import { loginSchema } from "@/lib/validation/schemas";
 import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
 
@@ -69,12 +69,6 @@ export async function POST(req: Request) {
   const res = NextResponse.json({
     user: { name: user.name, email: user.email, role: user.role },
   });
-  res.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
   return res;
 }

@@ -16,12 +16,13 @@ Status: PLANNED · IN PROGRESS · DONE · BLOCKED · OPEN (decisions).
 
 | | |
 |---|---|
-| Current phase | **Phase 3 COMPLETE** (with documented PARTIALs) — Phase 4 not started |
+| Current phase | **Phase 4 COMPLETE** (with documented PARTIALs) |
 | Branch | `audit/production-readiness-2026-08-18` |
 | Audit baseline | 461 GREEN / 1069 · 363 tests |
 | After Phase 1 | 481 GREEN / 1069 · 402 tests, 0 skipped |
 | After Phase 2 | see Phase 2 outcome below |
 | After Phase 3 | see Phase 3 outcome below |
+| After Phase 4 | 538 GREEN / 1069 · see Phase 4 outcome below |
 | Never do | modify `neondb` · drop `fatoora_audit` or `fatoora_restore` · migrate to Supabase · push to `main` · change VAT-return behaviour without D1 |
 
 ---
@@ -75,15 +76,15 @@ Status: PLANNED · IN PROGRESS · DONE · BLOCKED · OPEN (decisions).
 
 ## Phase 4 — non-blocking hardening
 
-| ID | Work item | Audit items | Status |
-|---|---|---|---|
-| W19 | Session refresh/rotation | 1 | PLANNED |
-| W20 | Documentation reconciliation | 21 | PLANNED |
-| W21 | Require Origin on state-changing requests | 1 | PLANNED |
-| W22 | Sequence-gap surfacing + Arabic search/sort validation | 3 | PLANNED |
-| W23 | Incident-response runbook | 15 | PLANNED |
-| W24 | Dependency advisories / transformers decision | 1 | PLANNED |
-| W25 | Backup procedures beyond the drill | 10 | PLANNED (depends on X2) |
+| ID | Work item | Audit items | Status | Evidence |
+|---|---|---|---|---|
+| W19 | Session refresh/rotation | 1 | **DONE** | `lib/auth/session.ts` (`iat`, `sessionCookieOptions()`, backdatable `createSessionToken` for tests); sliding refresh in `GET /api/auth/me`, strictly after the revocation check; 3 new tests in `lib/auth/auth.test.ts`, 4 in `app/api/auth/me/route.test.ts` — revocation-dominates-refresh case verified explicitly |
+| W20 | Documentation reconciliation | 21 | **PARTIAL** | Real drifts found and fixed: `schema.prisma`'s stale branchId comment, `docs/README.md`'s false "fully implemented, security-hardened" status line, `fatooralite/README.md`'s zero-context boilerplate, `docs/13-production-readiness-report.md`'s missing supersession banner, stale `docs/portal/` HTML regenerated. Not an exhaustive doc-by-doc diff — see per-item notes on M-167…M-187 in `2026-08-18-ledger.md` for exactly what wasn't re-checked |
+| W21 | Require Origin on state-changing requests | 1 | **DONE** | `proxy.ts` — Origin/Referer now required whenever the session cookie is present, closes F-12; 6 new tests in `proxy.test.ts`; e2e logout calls given a browser-accurate Origin header |
+| W22 | Sequence-gap surfacing + Arabic search/sort validation | 3 | **DONE** | `lib/services/sequence-gaps.ts` (`getSequenceIntegrity`) wired into `GET /api/clearance` + a warning banner on the Compliance Center page; `lib/services/sequence-gaps.test.ts` (4 tests) + `lib/db/arabic-text.test.ts` (5 tests, including an alphabet-order sort assertion against real Postgres collation) |
+| W23 | Incident-response runbook | 15 | **DONE** | `docs/20-incident-response.md` — detection/triage via `SecurityEvent` + `x-request-id`, revocation playbooks for every existing mechanism (session/secret/certificate), incident recording template, customer notification template (legal-obligation question explicitly left to owner/legal review) |
+| W24 | Dependency advisories / transformers decision | 1 | **DONE** | Re-ran `npm audit --json`: same 7 high advisories, still no fix at any version for either chain — confirmed, not assumed. No dependency change; standing recommendation to set a hosted embedding provider in production documented in `docs/19-operations-runbook.md` §6 |
+| W25 | Backup procedures beyond the drill | 10 | **PARTIAL** | `docs/21-backup-restore.md` (logical `pg_dump`/`pg_restore` procedure independent of Neon's own backup features) + `scripts/restore-verify.ts` (migration currency, core-table counts, sequence integrity via W22, PIH chain spot-check) delivered and its refusal path verified. End-to-end drill **not executed** — this machine has no `pg_dump`/`pg_restore` on `PATH` (checked). Neon PITR/backup-encryption/platform-restore stay UNKNOWN, owner-blocked on **X2** |
 
 ## Phase 5 — product / post-launch features
 
@@ -234,3 +235,33 @@ for the full root-cause writeup.
 
 **Next session: start Phase 4**, or resolve D2/D6/D9 first if credit-note
 correctness for real customers is more urgent than Phase 4's items.
+
+---
+
+## Phase 4 outcome (2026-08-18)
+
+7 of 7 planned items (W19–W25) have real delivered work; 5 are DONE outright
+(W19, W21, W22, W23, W24), 2 are PARTIAL with the gap stated honestly (W20 —
+a bounded reconciliation, not an exhaustive doc audit; W25 — gated on
+missing local postgres tooling for the drill and on X2 for Neon's own
+backup capability). Nothing was marked DONE on the basis of an assumption
+that wasn't actually checked: W24's "no fix exists" was re-verified by
+re-running `npm audit --json` this session rather than trusted from Phase
+3's snapshot; W20's WhatsApp/Excel-import "drift" the plan predicted turned
+out not to exist on inspection (recorded as verified-accurate, not silently
+dropped).
+
+No OPEN decision (D1–D9) was resolved or implemented — D5's "write the ADR"
+recommendation was explicitly flagged by the architect as excluded from
+this phase's scope and left for the owner to decide separately.
+
+Full regression: see `docs/SESSION_HANDOFF_2026-08-18.md` §2 (Phase 4
+addendum) for the exact count. 3 new test files added this phase
+(`app/api/auth/me/route.test.ts`, `lib/services/sequence-gaps.test.ts`,
+`lib/db/arabic-text.test.ts`), none call `pushTestSchema()`, all join the
+existing non-schema-pushing batch.
+
+**Next session: start Phase 5**, or resolve D1/D2/D3/D4/D5/D6/D7/D8/D9 first
+if any of those is more urgent for real customers than Phase 5's product
+features. Do not start Phase 5 in the same context as this one — same
+convention as every prior phase transition in this programme.

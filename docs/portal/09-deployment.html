@@ -250,6 +250,40 @@ means a cold-start delay on the first AI request per instance; hosted embeddings
 (<code>openai</code>/<code>voyage</code>) avoid it. <strong>After switching embedding providers, re-ingest</strong>
 (step 8) — vectors from different models are not comparable.</p>
 </blockquote>
+<h3>Payments (optional — Moyasar, KSA)</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>MOYASAR_SECRET_KEY</code></td>
+<td>from the <a href="https://dashboard.moyasar.com">Moyasar dashboard</a> (Settings → API Keys), after KYC</td>
+</tr>
+<tr>
+<td><code>MOYASAR_WEBHOOK_SECRET</code></td>
+<td>shared secret you configure for the invoice callback in the same dashboard</td>
+</tr>
+<tr>
+<td><code>NEXT_PUBLIC_APP_URL</code></td>
+<td>same value as <code>APP_URL</code> above (sitemap/robots read this separate, publicly-exposed var — pre-existing split, not unified)</td>
+</tr>
+</tbody></table>
+<p><strong>Both are optional at launch.</strong> Without <code>MOYASAR_SECRET_KEY</code>, the app runs
+fully live on the Free plan — <code>POST /api/billing/checkout</code> returns a 501
+with a friendly &quot;not yet enabled&quot; message instead of erroring, and nothing
+else in the product depends on payments being configured. Ship first, add
+these when a real Moyasar merchant account exists (requires KSA business
+KYC — only the account owner can create it; see <code>docs/13-production- readiness-report.md</code> §3).</p>
+<p><code>lib/billing/moyasar.ts</code>&#39;s webhook payload parsing was written from
+Moyasar&#39;s docs, not a live test account (none existed at the time it was
+built) — <strong>confirm the actual invoice-webhook JSON shape against one real
+sandbox transaction before enabling live Moyasar keys.</strong> The code parses
+defensively (handles both a direct invoice object and an <code>{id,type,data}</code>
+envelope) specifically because the docs were ambiguous on which one the
+Invoices API&#39;s <code>callback_url</code> actually sends.</p>
 <h3>Optional</h3>
 <table>
 <thead>
@@ -322,6 +356,17 @@ assistant a ZATCA question returns a grounded, cited answer.</p>
 <li><input disabled="" type="checkbox"> <code>AUTH_ENFORCE=true</code> and a strong, unique <code>AUTH_SECRET</code></li>
 <li><input disabled="" type="checkbox"> <code>ENCRYPTION_KEY</code> set (certificate private keys encrypted at rest)</li>
 <li><input disabled="" type="checkbox"> <code>CRON_SECRET</code> set (protects the ZATCA reporting cron endpoint)</li>
+<li><input disabled="" type="checkbox"> <strong>Vercel Hobby plan constraint:</strong> <code>vercel.json</code>&#39;s cron runs once daily
+(<code>0 3 * * *</code>), not every 15 minutes, because Hobby rejects any cron
+more frequent than daily at deploy time. This is a real compliance-
+timing tradeoff, not cosmetic: a B2C invoice issued shortly after the
+daily run sits <code>reportingState: &quot;pending&quot;</code> for up to ~24h before the
+next tick, which can cut ZATCA&#39;s 24h reporting deadline close with
+little buffer. If invoice volume or deadline risk grows, either (a)
+upgrade to Vercel Pro and restore <code>*/15 * * * *</code>, or (b) drive the
+same endpoint from an external scheduler (e.g. a GitHub Actions cron
+workflow calling it with the <code>CRON_SECRET</code> bearer token) — both work
+with zero code changes to the route itself.</li>
 <li><input disabled="" type="checkbox"> <code>SEED_DEMO</code> unset</li>
 <li><input disabled="" type="checkbox"> HTTPS enforced end-to-end (Vercel does this; self-hosted needs a proxy)</li>
 <li><input disabled="" type="checkbox"> Neon: enable branch protection / PITR backups</li>
@@ -352,9 +397,14 @@ decrypting stored certificate private keys without the <code>ENCRYPTION_KEY</cod
 that was in effect when they were encrypted — losing that key is
 equivalent to losing every tenant&#39;s ZATCA signing key.</li>
 <li><strong>Test the restore path before you need it.</strong> An untested backup is not a
-backup. Run a restore drill on a schedule (quarterly is a reasonable
-starting point) against a scratch Neon branch, and confirm a real
-application boot + login against the restored data.</li>
+backup. See <code>docs/21-backup-restore.md</code> (Phase 4 / W25) for the actual
+<code>pg_dump</code>/<code>pg_restore</code> procedure against <code>fatoora_restore</code> and
+<code>scripts/restore-verify.ts</code>&#39;s automated checks (migration currency, core
+table counts, sequence integrity, PIH chain). Run it on a schedule
+(quarterly is a reasonable starting point) and confirm a real application
+boot + login against the restored data. Neon&#39;s own PITR/backup capability
+is a separate, still-unverified question (X2) — that document&#39;s §1 states
+the split explicitly.</li>
 <li><strong>Application code/config</strong>: stateless on Vercel — redeploying from git is
 the recovery path; no separate application-layer backup needed.</li>
 </ul>
@@ -401,7 +451,7 @@ production.</p>
 </tr>
 </tbody></table>
 
-<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/09-deployment.md</div>
+<div class="footer">Fatoora Lite Pro documentation · built 2026-08-18 · source: docs/09-deployment.md</div>
 </main>
 </div>
 </body>

@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
 import { proxy } from "./proxy";
 import { REQUEST_ID_HEADER } from "@/lib/log/request-id";
+import { SESSION_COOKIE } from "@/lib/auth/session";
 
 /**
  * Phase 2 / W4: every response the proxy touches carries a correlation id,
@@ -57,5 +58,63 @@ describe("proxy — invalid UTF-8 in a URL (F-16 regression)", () => {
     const res = await proxy(req);
     expect(res.status).not.toBe(500);
     expect(res.headers.get(REQUEST_ID_HEADER)).toMatch(/^[0-9a-f-]{36}$/);
+  });
+});
+
+describe("proxy — Origin required on state-changing requests (W21, closes F-12)", () => {
+  it("refuses a cookie-authed POST with neither Origin nor Referer (the F-12 reproduction)", async () => {
+    const req = new NextRequest(
+      new Request("http://localhost/api/invoices", {
+        method: "POST",
+        headers: { cookie: `${SESSION_COOKIE}=anything` },
+      }),
+    );
+    const res = await proxy(req);
+    expect(res.status).toBe(403);
+  });
+
+  it("proceeds to the auth gate when Origin matches Host (garbage token still 401s)", async () => {
+    const req = new NextRequest(
+      new Request("http://localhost/api/invoices", {
+        method: "POST",
+        headers: { cookie: `${SESSION_COOKIE}=anything`, origin: "http://localhost", host: "localhost" },
+      }),
+    );
+    const res = await proxy(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("still refuses a cookie-authed POST when Origin is present but mismatched", async () => {
+    const req = new NextRequest(
+      new Request("http://localhost/api/invoices", {
+        method: "POST",
+        headers: { cookie: `${SESSION_COOKIE}=anything`, origin: "http://evil.example" },
+      }),
+    );
+    const res = await proxy(req);
+    expect(res.status).toBe(403);
+  });
+
+  it("exempts a cookie-less POST (machine client) — falls through to a 401, not 403", async () => {
+    const req = new NextRequest(new Request("http://localhost/api/invoices", { method: "POST" }));
+    const res = await proxy(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("exempts the billing webhook — no session cookie, no Origin", async () => {
+    const req = new NextRequest(new Request("http://localhost/api/billing/webhook", { method: "POST" }));
+    const res = await proxy(req);
+    expect(res.status).not.toBe(403);
+  });
+
+  it("does not apply the Origin requirement to GET requests", async () => {
+    const req = new NextRequest(
+      new Request("http://localhost/api/invoices", {
+        method: "GET",
+        headers: { cookie: `${SESSION_COOKIE}=anything` },
+      }),
+    );
+    const res = await proxy(req);
+    expect(res.status).not.toBe(403);
   });
 });

@@ -151,6 +151,16 @@ export async function proxy(req: NextRequest) {
       } catch {
         return withSecurityHeaders(new NextResponse("CSRF origin invalid", { status: 403 }), req, requestId);
       }
+    } else if (req.cookies.get(SESSION_COOKIE)?.value) {
+      // W21 (A-141, closes F-12): a cookie-authed state-changing request with
+      // NEITHER header was previously allowed through — every real browser
+      // sends Origin on a non-GET request, so its total absence alongside a
+      // session cookie means either a non-browser replaying a stolen cookie,
+      // or an ancient browser; both are refused. Cookie-less callers (cron's
+      // bearer secret, Moyasar's webhook token, a bare API client that will
+      // 401 downstream anyway) are deliberately exempt — this check only
+      // fires when a session cookie is actually on the request.
+      return withSecurityHeaders(new NextResponse("Origin header required", { status: 403 }), req, requestId);
     }
   }
 

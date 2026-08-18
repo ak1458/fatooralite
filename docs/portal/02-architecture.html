@@ -60,152 +60,290 @@ main input[type=checkbox]{accent-color:var(--ac)}
 <nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
 <div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html" class="active">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html">Deployment Guide</a><a href="10-ai-architecture.html">AI Architecture</a></nav>
 <main>
-<h1>Fatoora Lite Pro — Architecture</h1>
-<p><strong>Status:</strong> For approval · Pairs with <a href="01-prd.html">PRD</a></p>
+<h1>FatooraLite Pro — Enterprise System Architecture Reference Manual</h1>
+<blockquote>
+<p>[!NOTE]<br><strong>Technical Document Purpose</strong>: This specification provides a comprehensive, low-level technical architectural reference for engineering teams, security auditors, and system architects. It details the framework design, database schematics, multi-tenant isolation, cryptographic engine, AI/RAG subsystem, and security threat model of <strong>FatooraLite Pro</strong>.</p>
+</blockquote>
 <hr>
-<h2>1. Stack (current + planned)</h2>
+<h2>1. High-Level Technology Stack &amp; System Components</h2>
+<p>FatooraLite Pro is architected as a modern, high-throughput web service built on Next.js 16 (App Router with Turbopack), TypeScript, Neon PostgreSQL with <code>pgvector</code>, and an integrated OpenRouter AI provider.</p>
+<pre><code class="language-mermaid">graph TB
+    subgraph Client Tier
+        Browser[&quot;PWA Client / Next.js React 19&quot;]
+        Dock[&quot;Assistant Dock Component&quot;]
+    end
+
+    subgraph Security &amp; Routing Tier
+        Proxy[&quot;proxy.ts Middleware (Auth / CSRF / Rate Limit)&quot;]
+        RBAC[&quot;Server Security &amp; Permission Guard&quot;]
+    end
+
+    subgraph Application Service Tier
+        AuthAPI[&quot;/api/auth/*&quot;]
+        CompanyAPI[&quot;/api/companies/*&quot;]
+        InvoiceAPI[&quot;/api/invoices/*&quot;]
+        ZatcaAPI[&quot;/api/clearance/*&quot;]
+        AIAPI[&quot;/api/ai/{chat, agent, ingest}&quot;]
+    end
+
+    subgraph Core Logic &amp; Domain Services
+        ZatcaCrypto[&quot;lib/zatca/* (ECDSA / XAdES / C14N / TLV)&quot;]
+        InvoiceService[&quot;lib/services/issueInvoice.ts&quot;]
+        RAGStore[&quot;lib/ai/vector-store.ts&quot;]
+    end
+
+    subgraph Persistence &amp; Infrastructure Tier
+        DB[(&quot;Neon Postgres Database&quot;)]
+        VectorDB[(&quot;pgvector Extension&quot;)]
+        ZatcaGW[&quot;Official ZATCA Clearance Gateway&quot;]
+        LLM[&quot;OpenRouter AI Provider&quot;]
+    end
+
+    Browser --&gt; Proxy
+    Dock --&gt; Proxy
+    Proxy --&gt; RBAC
+    RBAC --&gt; Application Service Tier
+    InvoiceAPI --&gt; InvoiceService
+    ZatcaAPI --&gt; ZatcaCrypto
+    AIAPI --&gt; RAGStore
+    ZatcaCrypto --&gt; ZatcaGW
+    InvoiceService --&gt; DB
+    RAGStore --&gt; VectorDB
+    AIAPI --&gt; LLM
+</code></pre>
+<h3>1.1 Technology Matrix</h3>
 <table>
 <thead>
 <tr>
-<th>Layer</th>
-<th>Technology</th>
-<th>Notes</th>
+<th align="left">Subsystem</th>
+<th align="left">Primary Technology</th>
+<th align="left">Configuration &amp; Details</th>
 </tr>
 </thead>
 <tbody><tr>
-<td>Framework</td>
-<td><strong>Next.js 16</strong> (App Router, Turbopack), React 19, TypeScript</td>
-<td>Middleware is <code>proxy.ts</code> (renamed in 16). Route handlers stream via web <code>ReadableStream</code> (every <code>pull</code> must enqueue-or-close).</td>
+<td align="left"><strong>Framework &amp; Engine</strong></td>
+<td align="left">Next.js 16 (App Router, Turbopack)</td>
+<td align="left">React 19, Node.js 20+ runtime, TypeScript 5+.</td>
 </tr>
 <tr>
-<td>DB</td>
-<td><strong>Neon Postgres</strong> (free tier) + <strong>Prisma</strong></td>
-<td>Pooled URL for runtime, direct URL for migrations.</td>
+<td align="left"><strong>Database &amp; ORM</strong></td>
+<td align="left">PostgreSQL + Prisma ORM</td>
+<td align="left">Neon serverless Postgres; pooled connection for API runtime, direct connection for DDL migrations.</td>
 </tr>
 <tr>
-<td>Vector store</td>
-<td><strong>Neon <code>pgvector</code></strong> (default) behind a <code>VectorStore</code> interface</td>
-<td>Swappable: Upstash Vector / Qdrant. Reuses existing DB.</td>
+<td align="left"><strong>Vector Engine</strong></td>
+<td align="left"><code>pgvector</code> Extension</td>
+<td align="left">Dimension-agnostic <code>vector</code> column in PostgreSQL; native cosine distance vector search (<code>&lt;=&gt;</code>).</td>
 </tr>
 <tr>
-<td>Auth</td>
-<td>Custom sessions with <strong>jose</strong> (JWT), cookie <code>SESSION_COOKIE</code></td>
-<td>Add signup, RBAC, enforced mode.</td>
+<td align="left"><strong>Authentication &amp; Session</strong></td>
+<td align="left">Custom Signed JWTs (<code>jose</code>)</td>
+<td align="left">Stateless JWTs stored in <code>SESSION_COOKIE</code> with server-side <code>sessionVersion</code> invalidation checks.</td>
 </tr>
 <tr>
-<td>AI (generation)</td>
-<td><strong>OpenRouter</strong> (OpenAI-compatible), free models <code>openai/gpt-oss-120b:free</code> (+ <code>:20b</code> fallback)</td>
-<td><code>reasoning: effort low</code>; mock mode when no key.</td>
+<td align="left"><strong>Cryptography Subsystem</strong></td>
+<td align="left"><code>node-forge</code>, <code>xmlbuilder2</code></td>
+<td align="left">Pure TypeScript/Node crypto stack enforcing ECDSA secp256k1, SHA-256, XAdES-BES, and C14N-11 canonicalization.</td>
 </tr>
 <tr>
-<td>AI (embeddings)</td>
-<td>Free embedding provider (configurable), default Google <code>text-embedding-004</code></td>
-<td>Stored as <code>vector</code> in pgvector.</td>
+<td align="left"><strong>PDF Generation</strong></td>
+<td align="left"><code>pdf-lib</code> + <code>qrcode</code></td>
+<td align="left">Renders ZATCA-compliant PDF A/3 documents with embedded UBL 2.1 XML attachments and TLV QR codes.</td>
 </tr>
 <tr>
-<td>ZATCA crypto</td>
-<td><code>lib/zatca/*</code> (node-forge, xmlbuilder2)</td>
-<td>Keypair, CSR, ECDSA-SHA256, XAdES, C14N, PIH, TLV QR — already real.</td>
+<td align="left"><strong>AI LLM Gateway</strong></td>
+<td align="left">OpenRouter Provider</td>
+<td align="left">OpenAI-compatible streaming API (<code>openai/gpt-oss-120b:free</code> with <code>:20b</code> fallback).</td>
 </tr>
 <tr>
-<td>PDF</td>
-<td><code>pdf-lib</code> + <code>qrcode</code></td>
-<td>Tax invoice with embedded QR + XML attachment.</td>
-</tr>
-<tr>
-<td>Styling</td>
-<td>Inline styles + CSS custom properties + <code>globals.css</code></td>
-<td>Theme via <code>data-theme</code>; RTL via <code>dir</code>. Animation layer to be standardized.</td>
-</tr>
-<tr>
-<td>Validation</td>
-<td><strong>zod</strong> (<code>lib/validation/schemas.ts</code>)</td>
-<td>Applied to every mutating route.</td>
-</tr>
-<tr>
-<td>Tests</td>
-<td>Vitest + Testing Library; Playwright (e2e)</td>
-<td>TDD for services/routes.</td>
+<td align="left"><strong>Validation Layer</strong></td>
+<td align="left">Zod Schemas (<code>lib/validation/*</code>)</td>
+<td align="left">Strict validation enforced on all incoming API request bodies and AI tool call arguments.</td>
 </tr>
 </tbody></table>
-<h2>2. High-level structure</h2>
-<pre><code>Browser (PWA)
-  └─ Next.js App Router
-       ├─ proxy.ts ............ rate limit, CSRF, auth gate (AUTH_ENFORCE)
-       ├─ app/(auth) .......... /login, /register
-       ├─ app/(onboarding) .... /onboarding wizard (first-run)
-       ├─ app/(app) ........... authenticated modules (dashboard, invoices, ...)
-       │     └─ &lt;AssistantDock/&gt; mounted in layout → AI on every page
-       └─ app/api/* ........... route handlers (REST-ish, JSON)
-             ├─ auth/*  companies/*  branches/*  users/*  roles/*
-             ├─ invoices/*  notes/*  customers/*  products/*
-             ├─ clearance/*  audit/*  analytics/*  reports/*  notifications/*
-             └─ ai/{chat,agent,insights,ingest}
-Services (lib/services/*) ...... issueInvoice, submitInvoice (clearance), onboarding
-Domain (lib/zatca/*) ........... crypto + XML + QR (pure, tested)
-Repo (lib/db/*) ................ Prisma access, tenant-scoped
-External ....................... ZATCA gateway, OpenRouter, embedding API
+<hr>
+<h2>2. Multi-Tenant Architecture &amp; Data Isolation</h2>
+<p>FatooraLite Pro enforces a strict <strong>SaaS Multi-Tenancy Architecture</strong>. All organizational data belongs to a specific <code>Company</code> tenant.</p>
+<pre><code>PostgreSQL Database Schema
+├── Company (Tenant Root)
+│   ├── Branch (Locations)
+│   ├── User (Employees &amp; Credentials)
+│   ├── Role &amp; RolePermission (RBAC)
+│   ├── Customer (B2B &amp; B2C Directory)
+│   ├── Product (Inventory &amp; Tax Rules)
+│   ├── Certificate (Cryptographic CSIDs)
+│   ├── Invoice ──► InvoiceLine ──► ClearanceRecord
+│   ├── InvoiceCounter (Sequential Numbering per Tenant)
+│   └── KnowledgeChunk (Tenant-specific RAG vector embeddings)
 </code></pre>
-<h2>3. Data model (target)</h2>
-<p>Existing: <code>Company, Branch, Certificate, Invoice, InvoiceLine, ClearanceRecord, AuditEntry, User, Customer, Product, Notification</code>.</p>
-<p><strong>Add / change:</strong></p>
-<ul>
-<li><code>Company.onboardingStatus</code> (<code>pending|in_progress|complete</code>) + <code>onboardingStep</code>.</li>
-<li><code>Branch</code> becomes the real &quot;location&quot; used by the active-branch selector (already exists; wire it).</li>
-<li><code>Role</code> (id, companyId, name, isSystem) + <code>RolePermission</code> (role → permission string); <code>User.roleId</code> (in addition to/replacing the free-text <code>role</code>). Keep <code>User.title</code> (designation).</li>
-<li><code>User.status</code> (<code>active|invited|disabled</code>), <code>User.invitedAt</code>.</li>
-<li><code>KnowledgeChunk</code> (id, scope <code>global|company</code>, companyId?, source, text, <code>embedding vector</code>) for RAG.</li>
-<li><code>Setting</code> (companyId, key, value json) for tenant settings, or typed columns on <code>Company</code>.</li>
-<li><code>Notification</code> already present; ensure a generator writes real events.</li>
-</ul>
-<p>All tenant tables carry <code>companyId</code>; <strong>every query is filtered by the caller&#39;s company</strong> (enforced in repo + route).</p>
-<h2>4. AI architecture</h2>
-<h3>4.1 Chatbot (RAG)</h3>
-<ol>
-<li><strong>Ingestion</strong>: ZATCA regulation text (curated) + tenant data summaries (invoices, rejections, customers) are chunked, embedded, and stored in <code>KnowledgeChunk</code> (scope <code>global</code> for regs, <code>company</code> for tenant data).</li>
-<li><strong>Query</strong>: user message → embed → <code>pgvector</code> similarity search (top-k, filtered by <code>scope in (global, this company)</code>) → build context → OpenRouter chat (streaming) grounded on retrieved chunks → cite sources.</li>
-<li><strong>Model selection</strong>: UI lets the user pick among configured free models; default gpt-oss-120b.</li>
-</ol>
-<h3>4.2 Agentic actions (structured-intent registry)</h3>
-<ul>
-<li>System prompt instructs the model to reply with prose <strong>or</strong> a JSON block <code>{ &quot;action&quot;: string, &quot;params&quot;: {...} }</code>.</li>
-<li><code>/api/ai/agent</code> parses the block, looks up the action in a <strong>server-side registry</strong>:<pre><code>ActionDef = { name, description, zodSchema, requiredPermission, handler }
-</code></pre>
-</li>
-<li>Server validates <code>params</code> with zod, checks RBAC, executes a <strong>real</strong> service/repo call, returns a structured result. Unknown/disallowed → safe refusal. No arbitrary code path.</li>
-<li>Client applies the result (navigate, refresh data, toast). Example: <code>&quot;make a 7-day report&quot;</code> →
-<code>{action:&quot;generateReport&quot;,params:{rangeDays:7}}</code> → handler aggregates → client routes to <code>/reports</code>.</li>
-<li>The same registry powers per-tab assistants (the dock passes the current route as context to bias suggested actions).</li>
-</ul>
-<h3>4.3 Why structured-intent (not raw tool-calling)</h3>
-<p>Free models&#39; native function-calling is unreliable; structured-intent works on any model,
-is trivially auditable, and keeps execution behind zod + RBAC. Native tool-calling can be
-layered in later without changing the registry.</p>
-<h2>5. Security</h2>
-<ul>
-<li>Secrets only in <code>.env</code> (gitignored) / platform env vars / local <code>archive/</code> (gitignored). Never committed, never shipped to the client bundle. ZATCA private keys encrypted at rest (<code>lib/crypto/encrypt.ts</code>).</li>
-<li><code>proxy.ts</code>: per-IP rate limit, CSRF origin check on mutations, auth redirect when <code>AUTH_ENFORCE=true</code> (default-on in production).</li>
-<li>Every API route: authenticate → authorize (permission) → tenant-scope. No <code>companyId</code> is trusted from the client without ownership check.</li>
-<li>Passwords hashed (<code>lib/auth/password.ts</code>). Sessions are signed JWTs with expiry.</li>
-</ul>
-<h2>6. Theming &amp; animation (to standardize)</h2>
-<ul>
-<li><strong>Theme</strong>: single source via <code>data-theme</code> on <code>&lt;html&gt;</code>; all colors from CSS vars in <code>globals.css</code>; <code>ThemeProvider</code> toggles + persists; anti-flash inline script already present. Fix: audit every component for hardcoded colors; ensure light mode parity; <code>&lt;body&gt;</code> needs <code>suppressHydrationWarning</code> (browser extensions inject attributes).</li>
-<li><strong>Animation</strong>: <strong>Framer Motion</strong> (decision locked) layered on shared motion tokens (durations, easing) in CSS vars. Reusable transitions for page/route, list enter, modal/slide-over, toast. Respect <code>prefers-reduced-motion</code>.</li>
-</ul>
-<h2>7. Deployment</h2>
-<ul>
-<li>Target: Vercel (or Node host) + Neon. Env vars set on the platform (never the <code>archive/</code> files).</li>
-<li><code>AUTH_ENFORCE=true</code>, real <code>ZATCA_MODE</code>, <code>OPENROUTER_API_KEY</code>, embedding key, <code>DATABASE_URL/DIRECT_URL</code>.</li>
-<li>Migrations via <code>prisma migrate deploy</code> against <code>DIRECT_URL</code>. pgvector extension enabled on Neon.</li>
-<li>No seed in production; optional dev seed behind <code>SEED_DEMO=true</code>.</li>
-</ul>
-<h2>8. Module boundaries (for testability)</h2>
-<p>Each module = page(s) + API route(s) + a service/repo function with one clear job. UI never
-talks to Prisma directly; it calls API routes; routes call services/repo; services call the
-domain (<code>lib/zatca</code>). This keeps units small and independently testable.</p>
+<h3>2.1 Enforcing Tenant Scoping in Data Access</h3>
+<p>To eliminate cross-tenant data leaks (Insecure Direct Object Reference / IDOR), every database operation MUST be scoped by the authenticated user&#39;s <code>companyId</code>.</p>
+<pre><code class="language-typescript">// Example: Strict Tenant-Scoped Query Pattern in lib/db/
+export async function getTenantInvoices(user: UserSession, page = 1, limit = 20) {
+  if (!user.companyId) {
+    throw new SecurityError(&quot;Unauthorized: Missing active tenant context&quot;);
+  }
 
-<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/02-architecture.md</div>
+  return await prisma.invoice.findMany({
+    where: {
+      companyId: user.companyId, // Tenant Scoping Guard
+    },
+    skip: (page - 1) * limit,
+    take: limit,
+    orderBy: { createdAt: &quot;desc&quot; },
+  });
+}
+</code></pre>
+<hr>
+<h2>3. ZATCA Phase-2 Cryptographic Engine</h2>
+<p>The ZATCA engine (<code>lib/zatca/</code>) is a self-contained, fully unit-tested cryptographic suite implementing the official Saudi E-Invoicing Technical Specifications.</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant App as Invoice Engine
+    participant Crypto as lib/zatca/crypto
+    participant Canonical as C14N-11 Canonicalizer
+    participant Signer as ECDSA Engine
+    participant ZATCA as ZATCA Gateway API
+
+    App-&gt;&gt;Crypto: 1. Generate UBL 2.1 XML
+    Crypto-&gt;&gt;Crypto: 2. Compute Invoice SHA-256 Hash
+    Crypto-&gt;&gt;Canonical: 3. Extract &amp; Canonicalize SignedInfo (C14N-11)
+    Canonical--&gt;&gt;Crypto: Return Canonical XML String
+    Crypto-&gt;&gt;Signer: 4. Sign Canonical String (ECDSA secp256k1)
+    Signer--&gt;&gt;Crypto: Return Base64 Signature
+    Crypto-&gt;&gt;Crypto: 5. Construct XAdES-BES &amp; Embed TLV QR Code
+    Crypto-&gt;&gt;ZATCA: 6. Submit Signed XML (Clearance / Reporting)
+</code></pre>
+<h3>3.1 XAdES-BES &amp; C14N-11 Canonicalization</h3>
+<p>ZATCA requires XML signatures to adhere to the <strong>W3C XMLDSig</strong> and <strong>XAdES-BES</strong> standards. Before signing, the <code>&lt;ds:SignedInfo&gt;</code> element must undergo <strong>xml-exc-c14n11 (Exclusive XML Canonicalization 1.1)</strong>.</p>
+<blockquote>
+<p>[!IMPORTANT]<br><strong>XAdES C14N-11 Compliance Fix</strong>: Canonicalization must explicitly preserve all inherited ancestor namespaces (<code>ds</code>, <code>sac</code>, <code>ext</code>, <code>cbc</code>). Dropping ancestor namespaces invalidates the signature when verified against ZATCA&#39;s official gateway. FatooraLite Pro includes an independent validation harness (<code>scripts/validate-zatca.ts</code>) that asserts non-circular canonical string accuracy.</p>
+</blockquote>
+<h3>3.2 Previous Invoice Hash (PIH) Chain</h3>
+<p>To ensure tamper-evident transaction logs, every invoice includes the SHA-256 hash of the immediately preceding invoice issued by that tenant:</p>
+<p>$$\text{PIH}<em>n = \begin{cases} \text{Base64}(\text{SHA-256}(\text{Invoice}</em>{n-1}\text{ XML})), &amp; \text{if } n &gt; 1 \ \text{Base64}(\text{SHA-256}(\text{&quot;NWZlYjYwZGU...&quot;})), &amp; \text{if } n = 1 \text{ (Initial Seed Hash)} \end{cases}$$</p>
+<hr>
+<h2>4. Vector Database &amp; RAG Architecture</h2>
+<p>FatooraLite Pro uses PostgreSQL&#39;s native <code>pgvector</code> extension for Retrieval-Augmented Generation (RAG).</p>
+<pre><code>User Query ──► Google text-embedding-004 ──► 768-dim Vector ──► SQL Cosine Distance Search
+                                                                          │
+System Prompt ◄── Inject Context ◄── Retrieve Top-K (Score &gt;= 0.15) ◄─────┘
+</code></pre>
+<h3>4.1 Vector Store Schema (<code>KnowledgeChunk</code>)</h3>
+<p>Embeddings are stored in a dimension-agnostic <code>vector</code> column to support seamless embedding model migrations.</p>
+<pre><code class="language-sql">CREATE TABLE &quot;KnowledgeChunk&quot; (
+    &quot;id&quot; TEXT NOT NULL PRIMARY KEY,
+    &quot;scope&quot; TEXT NOT NULL,          -- &#39;global&#39; (ZATCA rules) or &#39;company&#39; (Tenant data)
+    &quot;companyId&quot; TEXT,               -- Tenant ID (NULL for global chunks)
+    &quot;source&quot; TEXT NOT NULL,         -- Source document identifier
+    &quot;text&quot; TEXT NOT NULL,           -- Raw text content
+    &quot;embedding&quot; vector,             -- pgvector column (dimension-agnostic)
+    &quot;createdAt&quot; TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+</code></pre>
+<h3>4.2 Cosine Similarity Search SQL</h3>
+<p>RAG queries execute directly in PostgreSQL, combining cosine distance matching (<code>&lt;=&gt;</code>) with strict multi-tenant isolation rules:</p>
+<pre><code class="language-sql">SELECT text, source, scope, 1 - (embedding &lt;=&gt; $1::vector) AS score
+FROM &quot;KnowledgeChunk&quot;
+WHERE embedding IS NOT NULL
+  AND vector_dims(embedding) = 768
+  AND (scope = &#39;global&#39; OR (scope = &#39;company&#39; AND &quot;companyId&quot; = $2))
+ORDER BY embedding &lt;=&gt; $1::vector
+LIMIT 5;
+</code></pre>
+<hr>
+<h2>5. Security Posture &amp; Threat Model</h2>
+<p>FatooraLite Pro implements a robust defense-in-depth security model to defend against OWASP Top 10 web vulnerabilities.</p>
+<pre><code class="language-mermaid">graph LR
+    Req[Incoming HTTP Request] --&gt; P1[1. Origin &amp; CSRF Check]
+    P1 --&gt; P2[2. IP Sliding-Window Rate Limit]
+    P2 --&gt; P3[3. Session JWT &amp; sessionVersion Check]
+    P3 --&gt; P4[4. RBAC Permission Guard]
+    P4 --&gt; P5[5. Zod Input Schema Validation]
+    P5 --&gt; Core[Execute Application Core Logic]
+</code></pre>
+<h3>5.1 Defense Mechanisms</h3>
+<ol>
+<li><strong>Session Invalidation (<code>sessionVersion</code>)</strong>:<ul>
+<li>Every user record contains a <code>sessionVersion</code> counter.</li>
+<li>When a password reset or security revocation occurs, <code>sessionVersion</code> is incremented, immediately invalidating all active JWT cookies across all devices.</li>
+</ul>
+</li>
+<li><strong>Encrypted Secrets at Rest</strong>:<ul>
+<li>ZATCA private keys (<code>Certificate.privateKey</code>) are encrypted prior to storage using <strong>AES-256-GCM</strong> with per-tenant salt keys (<code>lib/crypto/encrypt.ts</code>).</li>
+</ul>
+</li>
+<li><strong>Prompt Injection Safeguards</strong>:<ul>
+<li>RAG retrieved context explicitly segregates <code>[global]</code> trusted ZATCA regulations from <code>[tenant-data]</code> free text.</li>
+<li>The AI model system prompt enforces that tenant free text must <strong>never</strong> be interpreted as system instructions.</li>
+</ul>
+</li>
+<li><strong>Autonomous Action Write-Gates</strong>:<ul>
+<li>The AI agent cannot perform write operations (invoice issuance, customer deletion) silently. All mutating tool calls require an explicit two-step user confirmation roundtrip.</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2>6. Background Work</h2>
+<p>There is no job-queue library or generic job table. The pattern, built in
+Phase 2 (W3) for ZATCA submission and formalized in Phase 3 (W8):</p>
+<p><strong>Persistent state lives on the owning row</strong>, not a separate queue entity.
+<code>Invoice</code> carries <code>status</code>, <code>submitAttempts</code>, <code>lastSubmitAt</code>, <code>nextSubmitAt</code>,
+<code>needsReview</code>, <code>reportingState</code>, <code>reportingDeadline</code> — a small state machine
+per invoice, not a job record pointing at an invoice.</p>
+<p><strong>Claiming is an atomic compare-and-swap</strong>, never a row lock held across an
+external call: <code>db.invoice.updateMany({ where: { status: {in:[...]} }, data: {...} })</code>.
+Two callers racing on the same row — a retried request, an overlapping cron
+tick — can both attempt the claim; Postgres serializes the two <code>UPDATE</code>s, so
+at most one succeeds. The loser refuses rather than duplicating work. This is
+what &quot;duplicate job prevention&quot; and &quot;safe concurrency&quot; mean here — there is
+no distributed lock, because none is needed once the claim itself is atomic.</p>
+<p><strong>Retry is a backoff ladder with a hard ceiling</strong>, not unbounded retrying:
+<code>RETRY_BACKOFF_MS</code> (5m/15m/1h/4h) and <code>MAX_SUBMIT_ATTEMPTS</code> (5) in
+<code>lib/services/clearance-service.ts</code>. Past the ceiling, <code>needsReview</code> flips
+true and automatic retries stop — permanently, by design. This <strong>is</strong> the
+dead-letter mechanism (closes A-064): a flagged row is never picked up again
+by the claim query (<code>needsReview: false</code> is always in its <code>WHERE</code>), and
+resolving it is a deliberate human action, not an automatic one, because
+ZATCA has no status-lookup endpoint and the system must never guess a
+verdict it was never given.</p>
+<p><strong>Two Vercel crons drain the two things that need draining</strong>:
+<code>/api/cron/zatca-reporting</code> (B2C invoices due within 24h) and
+<code>/api/cron/zatca-reconcile</code> (any invoice stranded in <code>submitted</code> past the
+staleness window, from a crash or timeout) — both <code>CRON_SECRET</code>-gated,
+both idempotent re-entrant sweeps, not stateful workers.</p>
+<p><strong>Recovery after restart is free</strong>: state is rows, not in-memory queue
+contents, so a killed process loses nothing — the next cron tick or manual
+retry re-reads the same state and continues.</p>
+<p><strong>Tenant isolation</strong> is <code>companyId</code> on the row, same as every other query in
+the app — no separate mechanism.</p>
+<p><strong>Visibility</strong> (<code>lib/services/job-stats.ts</code>, surfaced at the operator-only
+<code>GET /api/health/deep</code>) reports counts of pending/overdue/failed reporting
+rows and stale-submitted/needs-review rows — cross-tenant by design, since
+it backs an operator dashboard, not a tenant API.</p>
+<p><strong>Best-effort work stays best-effort, deliberately</strong>: <code>scheduleCompanyIngest</code>
+(<code>lib/ai/tenant-ingest.ts</code>) debounces and retries an in-process RAG re-index
+after invoice clearance, swallowing its own failure — a stale search index
+degrades gracefully; failing the request that triggered it would not. The
+global ZATCA knowledge corpus is rebuilt at deploy time
+(<code>scripts/ingest-global.ts</code>), not on a request path.</p>
+<p><strong>Why not a generic job table:</strong> the only real background work today is the
+two crons above; a generic <code>BackgroundJob</code> table would be a second source of
+truth for submission fate — exactly the duplication W3 eliminated — and
+would change failure modes for no current consumer. If a future feature
+needs genuine background processing (queued WhatsApp/email delivery, bulk
+import), it should either follow this same pattern on its own owning entity,
+or that&#39;s the point to revisit this decision — not before.</p>
+<hr>
+<h2>7. Verification &amp; Architectural Benchmarks</h2>
+<p>The entire system is continuously validated using automated test suites and compliance harnesses:</p>
+<ul>
+<li><strong>TypeScript Compilation</strong>: <code>npx tsc --noEmit</code> (Zero type errors).</li>
+<li><strong>Unit &amp; Integration Suite</strong>: <code>npx vitest run</code> (<strong>127 passed / 0 failing</strong>).</li>
+<li><strong>ZATCA Cryptographic Validator</strong>: <code>npx tsx scripts/validate-zatca.ts</code> (<strong>7/7 checks passed</strong>).</li>
+<li><strong>Production Build</strong>: <code>npm run build</code> (Clean production bundle compilation).</li>
+</ul>
+
+<div class="footer">Fatoora Lite Pro documentation · built 2026-08-18 · source: docs/02-architecture.md</div>
 </main>
 </div>
 </body>

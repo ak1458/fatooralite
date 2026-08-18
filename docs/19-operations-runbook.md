@@ -182,12 +182,56 @@ upgrade or downgrade is exactly what caused the false "fix" `npm audit fix
 --force` would have applied for F-B (a major, unnecessary Prisma downgrade
 that wouldn't even have removed the exposure).
 
+**W24 re-check (Phase 4, 2026-08-18):** re-ran `npm audit --json` fresh.
+Same 7 high advisories as the Phase 3 baseline, same two chains, still no
+clean fix:
+
+- `@huggingface/transformers@4.2.0` (latest published version — checked
+  `npm view @huggingface/transformers versions`) still pulls
+  `onnxruntime-node` → `adm-zip` (GHSA-xcpc-8h2w-3j85) and → `sharp`
+  (GHSA-f88m-g3jw-g9cj). `npm audit`'s own `fixAvailable: false` for all
+  three confirms no released version of the dependency chain resolves the
+  range transformers depends on.
+- `prisma@6.19.3` (devDependency, confirmed again by reading `package.json`
+  directly) → `@prisma/config` → `deepmerge-ts` (GHSA-ggr8-5vv4-36mx).
+  `npm audit`'s only offered `fixAvailable` is a downgrade to `prisma@6.12.0`
+  flagged `isSemVerMajor: true` — i.e. not a fix, a regression, and the
+  reachability analysis from F-B (devDependency-only, `@prisma/client` has
+  zero deps, the vulnerable path needs a `prisma.config.ts` this repo
+  doesn't have) is unchanged, so it's still not worth taking.
+
+**Decision: no dependency change.** Dropping the local embedding provider
+to silence the transformers advisories would change AI behavior for any
+deployment without a hosted-provider API key configured — that's a product
+decision, not a patch, and out of scope here. The standing recommendation
+to the owner: set `EMBEDDING_PROVIDER=openai` or `voyage` in production
+(neither pulls transformers/onnxruntime-node/sharp/adm-zip at all — the
+import in `lib/ai/embeddings.ts` is dynamic and only executes when the
+`local` provider is selected), and revisit dropping the local provider
+entirely the next time the AI embedding path is deliberately touched. The
+CI gate stays at `--audit-level=critical` — raise it to `high` only when
+one of these two chains actually gets a fix, or the local provider is
+removed. Re-check again at the next dependency-touching phase; do not leave
+this indefinitely un-revisited.
+
 ---
 
 ## 7. What this runbook deliberately does not cover
 
-Incident-response process beyond emergency patching (W23, Phase 4). Formal
-backup procedures beyond the migration drill and manual pre-migration
-snapshots (W25, depends on X2, Phase 4). Desktop/server compatibility — this
-is a hosted SaaS with no desktop distribution. Neon environment separation
-*execution* (§1 — owner action, not performed here).
+**Incident-response process beyond emergency patching** — now covered by
+`docs/20-incident-response.md` (Phase 4 / W23): detection/triage via
+`SecurityEvent` queries and `x-request-id` correlation, revocation
+playbooks for every existing mechanism, incident recording, and a customer
+notification template (legal-obligation question left to the owner/legal
+review).
+
+**Formal backup procedures beyond the migration drill and manual
+pre-migration snapshots** — now covered by `docs/21-backup-restore.md`
+(Phase 4 / W25): a logical `pg_dump`/`pg_restore` procedure that doesn't
+depend on Neon's own backup features, plus `scripts/restore-verify.ts`.
+Neon's own PITR/backup-encryption/platform-restore capability stays
+**UNVERIFIED**, stated explicitly — that confirmation is X2, owner-blocked.
+
+Desktop/server compatibility — this is a hosted SaaS with no desktop
+distribution. Neon environment separation *execution* (§1 — owner action,
+not performed here).

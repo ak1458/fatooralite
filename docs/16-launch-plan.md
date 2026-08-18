@@ -602,3 +602,56 @@ blocks an agent from self-granting that consent by editing its own
 `settings.json`) meant the schema-pushing DB-gated test files needed a human
 to literally run the command by hand at several points in this phase, not
 just once.
+
+---
+
+## Remediation Phase 4 — 2026-08-18
+
+7 planned items (W19–W25), non-blocking hardening per the roadmap. Full
+write-up in `handoff.md`'s 2026-08-18 Phase 4 entry; per-item evidence in
+`docs/audit/remediation-ledger.md`'s Phase 4 table and Phase 4 outcome
+section.
+
+**W19, W21, W22, W23, W24 are DONE outright.** W19 (session refresh/
+rotation) adds a sliding refresh at `GET /api/auth/me`, re-minted from a
+fresh DB read so a role change actually propagates instead of staying
+frozen for the token's remaining life — strictly after the existing
+`sessionVersion` revocation check, so revocation always dominates. W21
+(Origin required on state-changing requests) closes F-12 by requiring
+Origin/Referer whenever the session cookie is present, with cookie-less
+machine clients (`cron`, the Moyasar webhook) exempt by construction. W22
+adds `getSequenceIntegrity` (a consumed chain slot with no invoice row
+behind it means a record was lost, not a crash — `issueInvoice` writes both
+in one transaction) surfaced on the Compliance Center page, plus explicit
+Arabic search/sort validation against real Postgres collation (previously
+assumed, never checked). W23 is a pure-documentation close:
+`docs/20-incident-response.md` turns five already-existing revocation
+mechanisms into an actual playbook. W24 re-ran `npm audit` fresh rather than
+trusting Phase 3's snapshot — same 7 advisories, still no fix at either
+chain; no dependency change, a standing recommendation to set a hosted
+embedding provider in production documented instead.
+
+**W20 and W25 are PARTIAL, honestly.** W20 (documentation reconciliation)
+found and fixed real drift — a stale schema comment claiming branchId isn't
+queried (false since Phase 3/W10), and, more materially, `docs/README.md`
+asserting "Fully implemented, security-hardened, and cryptographically
+verified" as the **Product Status** line, directly contradicted by the
+audit's NOT READY verdict — but this was a bounded reconciliation pass
+against 21 named items, not an exhaustive line-by-line diff of every doc;
+the items not deeply re-checked are named as such rather than marked GREEN
+by default. W25 (backup procedures) delivers a working `pg_dump`/
+`pg_restore` procedure and `scripts/restore-verify.ts` (its refusal path
+verified against a dummy URL), but the actual dump→restore→verify drill
+was **not executed** — this machine has no postgres client tools installed,
+checked rather than assumed. Neon's own PITR/backup-encryption/
+platform-restore capability stays unverified, owner-blocked on X2, exactly
+as it was before this phase.
+
+No OPEN decision (D1–D9) was touched. D5 (the architecture ADR) was
+explicitly flagged by the architect as excluded from this phase's plan
+rather than bundled in — a call left to the owner, not made here.
+
+Full regression: see `docs/SESSION_HANDOFF_2026-08-18.md`'s Phase 4
+addendum for the exact count and the run mechanics (three new test files
+added, all joining the existing non-schema-pushing batch — none call
+`pushTestSchema()`).

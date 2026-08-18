@@ -76,6 +76,7 @@ zero code changes at call sites.</p>
   providers/
     openai-compat.ts     # generic OpenAI-compatible adapter (fetch-based)
     openrouter.ts        # OpenRouter instance (models-array routing, free-model tuning)
+    groq.ts              # GroqCloud instance (low-latency demo path)
     openai.ts            # OpenAI instance
     anthropic.ts         # official @anthropic-ai/sdk adapter (Messages API)
   embeddings.ts          # EmbeddingProvider factory (local | openai | voyage)
@@ -95,9 +96,10 @@ zero code changes at call sites.</p>
 <p>The internal wire format is OpenAI-style (<code>role</code>, <code>tool_calls</code> with JSON-string
 arguments) because the tool registry already speaks it. Adapters translate:</p>
 <ul>
-<li><strong>OpenRouter / OpenAI</strong> share <code>providers/openai-compat.ts</code> (same protocol).
-OpenRouter adds its <code>models: [primary, fallback]</code> routing and
-<code>reasoning: {effort: &quot;low&quot;}</code> tuning for free reasoning models.</li>
+<li><strong>OpenRouter / Groq / OpenAI</strong> share <code>providers/openai-compat.ts</code> (same
+protocol). OpenRouter adds its <code>models: [primary, fallback]</code> routing and
+<code>reasoning: {effort: &quot;low&quot;}</code> tuning for free reasoning models; Groq takes a
+single <code>model</code>, so it declares no fallback.</li>
 <li><strong>Anthropic</strong> (<code>providers/anthropic.ts</code>, official SDK) maps:<ul>
 <li><code>system</code> messages → the <code>system</code> parameter</li>
 <li>assistant <code>tool_calls</code> → <code>tool_use</code> content blocks</li>
@@ -121,6 +123,10 @@ OpenRouter adds its <code>models: [primary, fallback]</code> routing and
 <td><code>AI_PROVIDER=openrouter</code>, <code>OPENROUTER_API_KEY=…</code></td>
 </tr>
 <tr>
+<td>Live demo — Groq</td>
+<td><code>AI_PROVIDER=groq</code>, <code>GROQ_API_KEY=…</code>, optionally <code>GROQ_MODEL=llama-3.3-70b-versatile</code></td>
+</tr>
+<tr>
 <td>Enterprise — Anthropic</td>
 <td><code>AI_PROVIDER=anthropic</code>, <code>ANTHROPIC_API_KEY=…</code>, optionally <code>AI_MODEL=claude-opus-4-8</code></td>
 </tr>
@@ -129,6 +135,11 @@ OpenRouter adds its <code>models: [primary, fallback]</code> routing and
 <td><code>AI_PROVIDER=openai</code>, <code>OPENAI_API_KEY=…</code>, optionally <code>AI_MODEL=…</code></td>
 </tr>
 </tbody></table>
+<p>Groq is <a href="https://console.groq.com">groq.com</a> — LPU inference hosting for open
+models — not xAI&#39;s Grok. It is here for latency: the assistant has to answer
+<em>and</em> run tools fast enough to demo live, which the free OpenRouter tier does
+not reliably do. Whichever model is set must support tool calling, or the
+in-chat actions silently degrade to plain chat.</p>
 <p>That is the entire migration. Call sites (<code>/api/ai</code>, <code>/api/ai/agent</code>,
 <code>/api/ai/insights</code>) import only <code>lib/ai/provider</code>.</p>
 <hr>
@@ -288,7 +299,7 @@ stream: streaming through the tool loop requires parsing streamed tool-call delt
 in all three provider adapters. The dedicated Q&amp;A endpoint (<code>POST /api/ai</code>) does
 stream tokens. Revisit if dock latency becomes a complaint.</p>
 
-<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/10-ai-architecture.md</div>
+<div class="footer">Fatoora Lite Pro documentation · built 2026-08-18 · source: docs/10-ai-architecture.md</div>
 </main>
 </div>
 </body>

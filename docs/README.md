@@ -32,4 +32,11 @@ This folder is the **single source of truth** for what FatooraLite Pro is, how e
 ---
 
 **Domain:** Saudi Arabia ZATCA "Fatoora" Phase-2 (Integration Phase) E-Invoicing Compliance.  
-**Product Status:** Fully implemented, security-hardened, and cryptographically verified.
+**Product Status:** Implemented and internally verified (crypto signing, RBAC, multi-tenant
+isolation — see `docs/audit/2026-08-18-production-audit.md`). **NOT production-ready as of the
+2026-08-18 audit** — no real ZATCA round trip has ever been performed (owner-blocked on **X1**).
+Current state, what's left, and what's owner-blocked: `START-HERE.md` (repo root), not this line.
+
+> **Docs 00–10 above are the original master suite**, last regenerated into `docs/portal/`
+> 2026-08-18. Docs 11 onward, and everything under `docs/audit/`, are not part of that portal
+> build (`scripts/build-docs.mjs` only covers 00–10) — read them directly as markdown.
