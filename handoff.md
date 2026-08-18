@@ -1865,3 +1865,101 @@ it silently wiped the two-tenant fixture out from under a later drill; re-seed
 before any run that depends on it. Second, `pkill` does not kill `next start` on
 Windows — use `netstat -ano | grep :PORT` and `taskkill //PID`. A stale server on
 3999 made a verified fix look like it had not worked.
+
+---
+
+## 2026-08-18 (later) — Remediation programme: plan, then Phase 1 only
+
+Turned the audit's 506 unresolved items into a controlled programme rather than
+a to-do list, then executed exactly one phase.
+
+Planning artifacts, all in `docs/audit/`: `remediation-roadmap.md` (8 phases,
+every work item with dependencies, risk, complexity and launch impact),
+`remediation-ledger.md` (**the file a new session starts from**),
+`decision-register.md` (8 decisions, each with question / current behaviour /
+why it matters / authoritative basis / options / recommendation / engineering
+impact / what happens if deferred), and `2026-08-18-classification.md`.
+
+### W1 — Arabic invoice PDF
+
+Inspected before choosing. The decisive finding: pdf-lib's `CustomFontEmbedder`
+calls `font.layout(text, fontFeatures).glyphs`, which is fontkit's full OpenType
+layout — so the shaper is already there, and Arabic joining works the moment a
+real font is embedded. Verified against Amiri: isolated ب = glyph 56, connected
+ببب = 1589/3999/3958 (initial/medial/final), lam-alef ligates to one glyph.
+
+That killed the HTML→PDF option. Chromium on serverless would have been ~300 MB
+and a new runtime to buy shaping the codebase already had. Chose embedded
+Unicode font + fontkit, keeping the existing single-file pdf-lib layout.
+
+What fontkit does *not* do is bidi. Measured:
+
+    "Acme شركة"   -> A c m e ش ر ك ة      Arabic left in logical order
+    "شركة Acme"   -> e m c A ة ك ر ش      Latin reversed
+    "فاتورة 123"  -> 3 2 1 ة ر و ت ا ف    digits reversed
+
+It applies one direction to the whole string. So `lib/pdf/bidi.ts` splits text
+into single-direction runs (neutrals resolved from their surroundings, base
+direction from the first strong character, UBA rules P2/P3 and N1/N2 reduced to
+one embedding level) and `generate.ts` draws each run separately. fontkit's
+per-run behaviour is correct once the run is unambiguous.
+
+Latin still uses Helvetica; only Arabic runs use Amiri. That was the point —
+English output had to be unchanged, and a font check per run also means an
+unencodable character now falls back instead of throwing, which is what actually
+closes A-166.
+
+One trap worth remembering: the font is read with `process.cwd()`, which Next's
+tracer cannot see. Without `outputFileTracingIncludes` it works locally and fails
+in production. That is in `next.config.ts` and in the invariants.
+
+Labels are now bilingual (ZATCA expects Arabic on the human-readable invoice).
+A *mirrored* RTL page layout is deliberately NOT claimed — A-189/A-190/A-191 stay
+PARTIAL. Arabic renders correctly; the page is still laid out left-to-right, and
+that is a design change, not a rendering fix.
+
+### W2 — Security/actor audit trail
+
+New `SecurityEvent` model rather than overloading `AuditEntry`, which stores
+invoice documents keyed to an invoice and has no actor, tenant or outcome. 20
+event types across auth, authz, users/roles, certificates and licence changes.
+No foreign keys on `companyId`/`actorId` on purpose: the record of a deletion
+cannot be cascaded away by that deletion, and `actorEmail` is denormalised so the
+row stays readable afterwards.
+
+Two rules the code enforces rather than trusts: recording never breaks the action
+it describes (writes are swallowed; there is a test that injects a failing client
+and asserts the call still resolves), and `redact()` drops any key matching
+`pass|secret|token|key|cookie|...` rather than expecting each call site to
+remember.
+
+`GET /api/security-events` is the read surface, tenant-scoped through
+`requirePermission`. An audit trail nobody can query is storage, not an audit
+trail — that was the whole reason the audit refused to half-build this.
+
+Verified through real HTTP, not just unit tests: 15 live checks covering login
+success/failure, logout, permission denial, tenant mismatch (which records
+`attemptedCompanyId` — otherwise the log says someone was refused but not what
+they reached for), user create/role-change/delete, IP and user-agent capture,
+no password anywhere in the log, cross-tenant read refused 403, and an
+unknown-account login failure recorded but invisible to every tenant.
+
+### Cost me time
+
+The full suite failed 13 tests on its first run after W2 with
+`PrismaClientInitializationError: Can't reach database server`. Every one of those
+files passed in isolation and in subsets. A second full run: **402 passed, 57
+files, zero failures.** It was transient Neon connectivity, not code — but I only
+knew that because I re-ran instead of "fixing" a phantom. Worth remembering that
+this suite talks to a remote database and will occasionally lie to you.
+
+Also: `prisma generate` fails with EPERM while `next start` is running — the
+server holds the query-engine DLL. Stop the server first.
+
+### Deliberately not done
+
+D1, D7 and D8 were analysed and left OPEN. D1 has an authoritative basis now —
+Saudi time-of-supply is the earliest of delivery, invoice issue or payment, and
+is never contingent on authority clearance, which means the current
+`cleared`/`reported` filter is very likely wrong for a VAT return. I did not
+change it. That is a tax decision.

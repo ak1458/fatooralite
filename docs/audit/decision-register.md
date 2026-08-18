@@ -1,0 +1,305 @@
+# Decision register — Fatoora Lite Pro remediation
+
+Eight decisions surfaced by the 2026-08-18 production audit. **None has been
+implemented.** Each carries a recommendation; behaviour changes only on written
+owner approval.
+
+Status key: OPEN (awaiting owner) · APPROVED · REJECTED · DEFERRED.
+
+---
+
+## D1 — VAT-return scope · **OPEN** · needed for Phase 1
+
+**QUESTION**
+Should the VAT return include invoices that have been *issued* but not yet
+cleared or reported by ZATCA?
+
+**CURRENT BEHAVIOUR**
+`app/api/reports/route.ts` filters `status: { in: ["cleared", "reported"] }`.
+An issued, signed invoice that is still `signed` or `submitted` — or that was
+`rejected` — contributes nothing to `totalTaxable`, `totalVat` or the CSV export.
+
+**WHY IT MATTERS**
+Three ordinary situations put a genuine taxable supply outside the return:
+
+1. A B2C simplified invoice sits `pending` for up to 24 hours by design before
+   the reporting cron drains it.
+2. Any invoice issued during a ZATCA gateway outage.
+3. Any tenant signing with a local certificate, which cannot clear at all — the
+   state every tenant is in before completing ZATCA onboarding.
+
+If the figure is used to file, output VAT is under-declared. If it is only an
+internal dashboard, it is merely misleading.
+
+**AUTHORITATIVE BASIS**
+Saudi VAT sets the *time of supply* (tax point) as the **earliest** of: goods or
+services delivered, tax invoice issued, or payment received. Output VAT is
+declared in the tax period containing that event. Nothing in the time-of-supply
+rules makes the tax point contingent on any clearance or approval action by the
+authority — clearance is an e-invoicing transmission obligation, a separate duty
+from the declaration obligation. See sources at the foot of this file.
+
+On that basis the current filter is **very likely wrong** for a VAT return: it
+conditions a declaration on a transmission status.
+
+**OPTIONS**
+
+| | Option | Consequence |
+|---|---|---|
+| A | Include every issued invoice (`draft` excluded), regardless of ZATCA status | Matches the tax point. Figures rise; the return becomes filing-grade |
+| B | Keep the current filter | Under-declares in the three cases above |
+| C | Report both figures side by side — "declarable" and "cleared by ZATCA" — and label them | Correct *and* preserves the compliance-status view. Larger UI change |
+| D | Keep the filter but rename the screen to "ZATCA clearance summary" and state plainly it is not a VAT return | Cheapest honest fix; no VAT return feature until later |
+
+**RECOMMENDATION — Option C, with A as the fallback.**
+A VAT-return figure should follow the tax point; a clearance figure is genuinely
+useful too, and today's number is that second thing wearing the first one's
+label. If C is too large now, do A and keep a separate clearance view. Confirm
+with your tax adviser before filing anything from this screen — I am not a
+substitute for that.
+
+**ENGINEERING IMPACT**
+A: one-line `where` change plus tests. C: adds a second aggregate, an API field
+and a UI label change. Both are small; the risk is entirely in getting the
+*policy* right, which is why it is here.
+
+**IF DEFERRED**
+The screen keeps producing a number that looks like a VAT return and is not one.
+Nothing else is blocked. Reports stay unchanged; no silent alteration will occur.
+
+---
+
+## D2 — Tax-period closing/locking · **OPEN** · Phase 3
+
+**QUESTION** Should a filed VAT period be lockable, preventing new or amended
+invoices from being dated into it?
+
+**CURRENT BEHAVIOUR** No concept of a closed period (M-283). An invoice can be
+issued with any past `issueDate`, which after the F-18 fix lands it in that past
+period and changes a figure that may already have been filed.
+
+**WHY IT MATTERS** Retroactive changes to a filed period are exactly what an
+audit trail and a period lock exist to prevent. Credit notes — not back-dated
+invoices — are the correct mechanism for correcting a filed period.
+
+**AUTHORITATIVE BASIS** General VAT practice; ZATCA defines credit/debit notes as
+the correction mechanism. No specific citation gathered — flag for tax adviser.
+
+**OPTIONS** (A) no locking; (B) soft warning when dating into a past period;
+(C) hard lock per period with an explicit unlock action, audited.
+
+**RECOMMENDATION** B now, C when N8 (credit/debit flows) lands. A hard lock
+before credit notes work end to end would leave users with no correction path.
+
+**ENGINEERING IMPACT** B is small. C needs a `TaxPeriod` table, an admin action
+and audit events (depends on W2).
+
+**IF DEFERRED** Filed figures remain silently mutable. Risk grows once real
+customers file.
+
+---
+
+## D3 — Commercial model / pricing · **OPEN** · Phase 2
+
+**QUESTION** Final Pro price, whether an annual plan exists, and the limit set.
+
+**CURRENT BEHAVIOUR** `PRO_PRICE_HALALAS = 14_900` (149 SAR/month), documented
+in code as a placeholder. Trial = 25 invoices / 1 branch / 2 seats. No annual
+plan, no coupons.
+
+**WHY IT MATTERS** Checkout cannot go live against a placeholder. Moyasar is
+integrated and inert.
+
+**AUTHORITATIVE BASIS** None — commercial. Gated on the Phase 7 market research
+already in `START-HERE.md`.
+
+**OPTIONS** Ship monthly-only at a researched price; add annual with a discount;
+defer checkout and onboard the first customers manually.
+
+**RECOMMENDATION** Manual onboarding for the first cohort, price settled from
+the market research before checkout is enabled. Tier *boundaries* are one table
+in `entitlements.ts` and cheap to move; the price is the researched part.
+
+**ENGINEERING IMPACT** Price is a constant. An annual plan needs a second
+Moyasar product and a period calculation. Small to medium.
+
+**IF DEFERRED** No paid self-serve signup. Trial and manual onboarding still work.
+
+---
+
+## D4 — Legal copy · **OPEN** · Phase 2
+
+**QUESTION** Who supplies reviewed text for `/terms`, `/privacy`,
+`/refund-policy`, `/cancellation-policy`, `/data-retention`, `/acceptable-use`?
+
+**CURRENT BEHAVIOUR** All present, all carrying DRAFT banners with bracketed
+placeholders.
+
+**WHY IT MATTERS** Publishing draft legal text with placeholders to paying Saudi
+customers is a liability, and the pages are already publicly routable.
+
+**AUTHORITATIVE BASIS** Saudi PDPL applies to customer personal data. Requires
+qualified review — not an engineering judgement.
+
+**OPTIONS** Commission review; adapt vetted templates; keep DRAFT banners and
+delay public launch.
+
+**RECOMMENDATION** Commission review before any public signup. Until then keep
+the banners — they are honest, and removing them without review would be worse
+than leaving them.
+
+**ENGINEERING IMPACT** Content only. No code.
+
+**IF DEFERRED** Public launch blocked. Private/manual onboarding is unaffected.
+
+---
+
+## D5 — Hybrid vs standalone architecture evaluation · **OPEN** · Phase 4
+
+**QUESTION** Record the architecture decision the product already embodies.
+
+**CURRENT BEHAVIOUR** Unambiguously a hybrid web SaaS (Next.js on Vercel + Neon).
+Master Audit §32 asks for a written evaluation of the alternative; none exists
+(M-601…M-616).
+
+**WHY IT MATTERS** Only for defensibility. The audit found **no architectural
+reason to change** — and specifically **no reason to migrate Neon to Supabase**.
+Tenant isolation, licensing enforcement, patching and central management all
+tested well precisely *because* the server is controlled.
+
+**AUTHORITATIVE BASIS** N/A.
+
+**OPTIONS** Write the evaluation; skip it.
+
+**RECOMMENDATION** Write a short ADR recording the decision and its reasoning.
+Do not reopen the architecture.
+
+**ENGINEERING IMPACT** Documentation only.
+
+**IF DEFERRED** 16 ledger items stay MISSING for a decision that is in fact made.
+
+---
+
+## D6 — Postgres RLS as defence in depth · **OPEN** · Phase 3
+
+**QUESTION** Add row-level security beneath the application's tenant scoping?
+
+**CURRENT BEHAVIOUR** Isolation is enforced in application code only (M-016).
+The audit attacked it 25 ways and it held.
+
+**WHY IT MATTERS** Today one missed `where companyId` in one new route is a
+cross-tenant leak. RLS makes the database refuse it regardless.
+
+**AUTHORITATIVE BASIS** N/A — defence in depth.
+
+**OPTIONS** (A) none — rely on code plus tests; (B) RLS on tenant-scoped tables
+with a per-request session variable; (C) RLS on the highest-value tables only
+(Invoice, Customer, Product, Certificate).
+
+**RECOMMENDATION** C, after W17 separates production from development. It is
+meaningful insurance, but it changes every query path and must not be attempted
+while production and dev share one database.
+
+**ENGINEERING IMPACT** Medium-large: policies, a connection-level tenant
+setting, and Prisma integration. Real regression risk.
+
+**IF DEFERRED** Isolation stays code-only. Mitigated by the regression suite.
+
+---
+
+## D7 — Customer Control Center launch requirement · **OPEN** · needed for Phase 1
+
+**QUESTION** Does the absent Customer Control Center block launch?
+
+**CURRENT BEHAVIOUR** Does not exist (M-052…M-074, 23 items). There is
+deliberately **no platform-admin role** — `START-HERE.md` records this as a
+security decision, and three IDOR fixes depend on *every* role being
+tenant-scoped.
+
+**WHY IT MATTERS** Two authorities conflict. The Master Audit lists the Control
+Center as a §31 production gate. The codebase treats its absence as a security
+property. Building it introduces the first cross-tenant privileged role into a
+system whose isolation currently tests clean *because* no such role exists.
+
+**AUTHORITATIVE BASIS** None external. Internal conflict between the audit
+specification and a recorded architecture decision.
+
+**OPTIONS**
+
+| | Option | Consequence |
+|---|---|---|
+| A | Launch without it; support via database access and direct contact | Fastest. Support is manual and unaudited; does not scale past a handful of customers |
+| B | Build the full Control Center before launch | 23 items, XL effort, and a new privileged boundary to secure |
+| C | Build a **read-only** operator view first (licence state, version, last seen, ZATCA status), no cross-tenant writes | Most support value for the least new attack surface |
+
+**RECOMMENDATION — C, and it does not block the first cohort.**
+With a small number of customers, A is survivable; the moment support requires
+opening a database console against live data, it is not. C is the smallest thing
+that removes that need. Whichever is chosen, it must land **after W2**, so every
+privileged read is audited from its first day.
+
+**ENGINEERING IMPACT** A: none. C: medium — a separate operator role, its own
+authz path, audited reads. B: XL.
+
+**IF DEFERRED** Support means direct database access — the exact activity the
+missing audit trail (W2) cannot record.
+
+---
+
+## D8 — WhatsApp launch scope · **OPEN** · needed for Phase 1
+
+**QUESTION** Is WhatsApp invoice delivery required for launch?
+
+**CURRENT BEHAVIOUR** **Zero code in the repository** (M-299…M-313, 16 items).
+
+**WHY IT MATTERS** Three separate reasons:
+
+1. It was in the original Fatoora Lite requirements and the intended customer
+   workflow, and the roadmap treats it as a differentiator.
+2. The Master Audit's **mandatory end-to-end flow terminates in "Send
+   WhatsApp"** (M-501). As written that flow **cannot pass**, so the final
+   production gate is unreachable until this is decided.
+3. There is currently **no delivery channel at all** — no WhatsApp and no email
+   invoice delivery (M-260). A customer can produce an invoice PDF and has no
+   in-product way to send it.
+
+Point 3 is the one that matters most and is easy to miss: this is not "a nice
+integration is missing", it is "the product cannot deliver its output".
+
+**AUTHORITATIVE BASIS** Product requirement, not regulatory. ZATCA does not
+mandate a delivery channel; it mandates clearance/reporting and that the buyer
+receives the invoice.
+
+**OPTIONS**
+
+| | Option | Consequence |
+|---|---|---|
+| A | Build WhatsApp Business API before launch | Matches the original requirement and the E2E flow. L effort, needs a Meta business account and template approval — itself an external dependency with lead time |
+| B | Ship email delivery (N7) for launch, WhatsApp post-launch | Small effort, Resend already integrated. Customers can deliver invoices. E2E flow must be formally amended |
+| C | Neither — manual download and send | Leaves point 3 unresolved |
+
+**RECOMMENDATION — B, and amend the E2E definition explicitly.**
+Email delivery is small, uses an integration already present, and removes the
+"cannot deliver its output" problem. WhatsApp then becomes a Phase 3 feature
+driven by customer demand rather than a launch blocker — and its Meta approval
+lead time stops sitting on the critical path. If WhatsApp is contractually
+promised to anyone, that changes the answer to A.
+
+**ENGINEERING IMPACT** B: small (N7, ~S, plus opt-in handling). A: large (N3, L)
+plus external onboarding. Either way the E2E flow text must be updated to match
+whatever is decided, rather than left permanently failing.
+
+**IF DEFERRED** M-501, M-600, M-722 and X4 stay FAILED/BLOCKED, and the final
+production gate cannot close.
+
+---
+
+## Sources (D1)
+
+- [ZATCA — Value Added Tax](https://zatca.gov.sa/en/RulesRegulations/VAT/Pages/default.aspx)
+- [ZATCA — E-Invoicing Detailed Guideline v2](https://zatca.gov.sa/en/E-Invoicing/Introduction/Guidelines/Documents/E-Invoicing_Detailed__Guideline.pdf)
+- [Understanding the Time of Supply for VAT in Saudi Arabia](https://quickdiceerp.com/blog/time-of-supply-for-vat-in-saudi-arabia)
+- [Grant Thornton — Indirect tax, Saudi Arabia](https://www.grantthornton.global/en/insights/indirect-tax-guide/indirect-tax---Saudi-Arabia/)
+
+The time-of-supply position above is drawn from these; **confirm with a
+qualified Saudi tax adviser before filing from any figure this product produces.**

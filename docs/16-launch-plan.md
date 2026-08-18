@@ -484,3 +484,28 @@ Arabic PDF rendering (needs a shaping engine, not a patch), the security audit
 trail (needs a migration and a read surface), and the VAT-return scope question
 (a tax decision, not an engineering one) are all documented in the report with
 the reasoning, rather than half-built.
+
+---
+
+## Remediation Phase 1 — 2026-08-18
+
+Programme planned in full (`docs/audit/remediation-roadmap.md`), then **one phase
+executed**. Delivered W1 (Arabic invoice PDF) and W2 (security/actor audit
+trail), the two P0 blockers that were solvable in this repository.
+
+Ledger moved **461 → 481 GREEN** of 1069. Test suite **363 → 402 passed, 0
+skipped**. All five CI gates green.
+
+W1 chose an embedded Unicode font over an HTML→PDF pipeline because pdf-lib
+already runs fontkit's OpenType shaper — the joining behaviour was there, only
+the font and a bidi pass were missing. That avoided putting Chromium into a
+serverless deployment for a capability the codebase nearly had.
+
+Three RTL items stay PARTIAL rather than being claimed: Arabic text renders
+correctly everywhere, but a *mirrored* right-to-left page layout is a design
+change and was not done.
+
+Phase 2 (W3 idempotency/reconciliation, W4 observability, W5, W6, W7, W26) is
+planned and **not started**. Three decisions — D1 VAT-return scope, D7 Control
+Center launch requirement, D8 WhatsApp launch scope — are analysed with
+recommendations and await the owner.

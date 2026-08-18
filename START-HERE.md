@@ -38,13 +38,17 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
 
 - **A full production audit was run on 2026-08-18** against both audit
   specifications (1069 items). Report and ledger in `docs/audit/`. Verdict:
-  **NOT READY**, on two blockers that are not engineering work in this repo —
-  no ZATCA round trip has ever been performed, and Arabic invoice PDFs cannot
-  be generated.
+  **NOT READY**. One of its two blockers is now fixed (Arabic invoice PDFs);
+  the other — no ZATCA round trip has ever been performed — is owner-blocked
+  on a Fatoora portal OTP.
+- **Remediation Phase 1 is complete** (W1 Arabic PDF, W2 security audit trail).
+  Programme state lives in `docs/audit/remediation-ledger.md`; read that before
+  starting anything. Phase 2 has NOT been started.
 - **Thirteen defects were found and fixed**, four financial or
   compliance-affecting. Full detail in `docs/audit/2026-08-18-findings.md`.
 - **The test suite now runs its database-gated half.** It was 285 passed /
-  43 skipped; it is now **363 passed / 0 skipped**. Two of those suites had
+  43 skipped; after the audit it was 363 passed / 0 skipped, and after
+  remediation Phase 1 it is **402 passed / 0 skipped**. Two of those suites had
   never executed at all (`plan.test.ts` collided on a unique VAT number), so
   18 licensing assertions had never run.
 - Security core verified adversarially: 25 cross-tenant attacks refused,
@@ -76,7 +80,7 @@ All five CI gates pass, in the order CI runs them:
 cd fatooralite
 npm run lint                       # 0 errors — was failing for a long time; keep it green
 npm audit --audit-level=critical
-npx vitest run                     # 285 passed / 43 skipped (DB-gated)
+npx vitest run                     # 402 passed / 0 skipped with TEST_DATABASE_URL set
 npx tsx scripts/validate-zatca.ts  # 7/7 local checks
 npm run build
 ```
@@ -133,7 +137,30 @@ clearing an `any` cast. Prefer both over another reading pass.
 
 ## What is left
 
-### 0. Audit blockers *(do these first — see `docs/audit/`)*
+### 0. Remediation programme *(see `docs/audit/remediation-ledger.md` — start there)*
+
+**Phase 1 is done.** Arabic invoice PDFs now render (embedded Amiri + fontkit
+shaping + a bidi pass), and a real security/actor audit trail exists with a
+query API. Suite: 402 passed, 0 skipped. Ledger: 481 GREEN / 1069.
+
+**Phase 2 is next and has not been started:** W3 idempotency + ZATCA submission
+reconciliation + retry policy, W4 observability, W5 server-minted AI
+confirmation tokens, W6 global RAG re-index restriction + AI usage accounting,
+W7 deployment config correctness, W26 close the remaining RISK findings.
+
+**Three decisions are open and block work:** D1 (VAT-return scope), D7 (does the
+absent Control Center gate launch), D8 (is WhatsApp launch scope). All three are
+analysed with recommendations in `docs/audit/decision-register.md`; none has been
+implemented.
+
+Still outstanding from the audit, unchanged:
+
+1. ~~**Arabic invoice PDFs fail outright.**~~ **FIXED in Phase 1 (W1).** What
+   remains is a *mirrored* RTL page layout (A-189/A-190/A-191) — Arabic text
+   renders correctly, but the invoice page is still laid out left-to-right.
+   That is a design change, not a rendering fix.
+
+<details><summary>Original Phase 1 blocker text (for history)</summary>
 
 1. **Arabic invoice PDFs fail outright.** `WinAnsi cannot encode "ش" (0x0634)`.
    English invoices render; any Arabic or mixed-script buyer name returns 500.
@@ -142,11 +169,10 @@ clearing an `any` cast. Prefer both over another reading pass.
    *and* a shaping engine — pdf-lib does no Arabic shaping — realistically an
    HTML→PDF pipeline. Do not "fix" it by substituting placeholder characters;
    silently altering a name on a tax document is worse than failing.
-2. **No security audit trail.** `AuditEntry` is written at four call sites, all
-   invoice artifacts. Nothing records logins, failed logins, permission denials,
-   password resets, role changes or certificate issuance. Needs a migration
-   (actor/tenant columns) plus a query surface — writing rows nothing can read
-   would only make the gap look closed.
+2. ~~**No security audit trail.**~~ **FIXED in Phase 1 (W2)** — see
+   `docs/audit/security-event-log.md`.
+
+</details>
 3. **No observability.** No error tracking, structured logging, metrics or
    alerting; 28 raw `console.*` call sites.
 4. **No AI usage accounting**, and any tenant owner can trigger a *global* RAG
@@ -274,6 +300,25 @@ regression, and the reason is in the code comment beside it.
 - **No AI attribution anywhere in the repo** — no `Co-Authored-By`, no
   "Generated with", no robot sign-offs. Enforced by `.githooks/commit-msg`;
   enable with `git config core.hooksPath .githooks`.
+- **Invoice PDFs draw text run by run, not in one `drawText` call.** fontkit
+  applies a single direction to whatever string it is given, so a mixed
+  "Acme شركة" leaves the Arabic in logical order and "شركة Acme" reverses the
+  Latin. `lib/pdf/bidi.ts` splits the string into single-direction runs and
+  `generate.ts` places them; collapsing that back into one call silently
+  corrupts every mixed-script invoice. Latin keeps Helvetica and Arabic uses the
+  embedded Amiri, so English output is unchanged.
+- **`assets/fonts/*.ttf` must stay in `outputFileTracingIncludes`.** The font is
+  read at runtime via `process.cwd()`, which Next's tracer cannot see. Drop the
+  entry in `next.config.ts` and Arabic PDFs work locally and fail in production.
+- **`SecurityEvent` has no foreign keys, deliberately.** An audit record must
+  outlive what it describes — the record of a user being deleted cannot be
+  cascaded away by that deletion. Nothing purges it either; retention is an open
+  decision (`docs/audit/decision-register.md`), and it is safer to keep too much
+  than to delete early.
+- **Recording a security event must never break the request it describes.**
+  `recordSecurityEvent` swallows its own failures on purpose, and `redact()`
+  drops sensitive-looking keys rather than trusting call sites. Do not "improve"
+  either by letting errors propagate.
 - **Logging out signs the user out on every device.** `POST /api/auth/logout`
   increments `User.sessionVersion`. The JWT carries no per-session id, so
   per-device logout is not possible without a schema change; for software
