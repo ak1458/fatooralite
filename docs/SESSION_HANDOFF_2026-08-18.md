@@ -10,7 +10,7 @@ current state, not a summary of intentions. `START-HERE.md` points here.
 | | |
 |---|---|
 | Branch | `audit/production-readiness-2026-08-18` |
-| Latest commit | `1c93593` (Phase 2) — **Phase 3's work is NOT committed yet**, see §4 |
+| Latest commit | `97135cf` — Phase 3's work is committed, not pushed to `main` |
 | Phase 2 | **COMPLETE**, committed as `1c93593`. 447 passed / 2 pre-existing failures / 0 skipped at the time. Ledger: 507 GREEN / 1069 |
 | Phase 3 | **COMPLETE and fully verified.** All 12 planned items (W8–W18, N8) delivered with evidence; F-A/F-B/F-C investigated and closed; one additional real bug (a test race condition, not in F-A/B/C's original scope) found and fixed during final verification. Full regression: **73 test files, 497 tests, 0 failed, 0 skipped** |
 | Never do | modify `neondb` · drop `fatoora_audit`/`fatoora_restore` · migrate to Supabase · push to `main` · start Phase 4 without reading this file |
@@ -131,44 +131,20 @@ suspiciously close to *whatever* timeout you set, across multiple different
 timeout values, is a signal to stop raising the number and actually
 instrument it — that pattern means something real is stuck, not slow.
 
-## 4. What's uncommitted, and what to do about it
+## 4. Commit status
 
-Everything from this Phase 3 session is uncommitted. `git status` from the
-repo root shows (paths relative to repo root):
-
-Modified: `docs/02-architecture.md`, `docs/audit/2026-08-18-ledger.md`,
-`docs/audit/decision-register.md`, `docs/16-launch-plan.md`,
-`START-HERE.md`, `handoff.md`, and ~20 files under `fatooralite/` (services,
-routes, components, `prisma/schema.prisma`, several `.test.ts` files).
-
-Untracked (new): `docs/19-operations-runbook.md`,
-`docs/audit/2026-08-18-performance-bench.md`,
-`docs/SESSION_HANDOFF_2026-08-18.md` (this file), 9 new test files, 2 new
-migrations (`20260818160000_check_constraints`,
-`20260818170000_credit_debit_note_linking`), `lib/testing/`, `lib/time/`,
-`scripts/migration-drill.ts`, `scripts/bench-concurrent.ts`.
-
-The two scratch helper scripts this session used to run the DB-gated suites
-(`fatooralite/scripts/_tmp-run-pushers.js`,
-`fatooralite/scripts/_tmp-run-batch.js`) have already been **deleted** —
+**Done.** Everything from this Phase 3 session is committed as `97135cf`
+(59 files changed) — no AI attribution, not pushed to `main`, working tree
+clean. The two scratch helper scripts this session used to run the DB-gated
+suites (`fatooralite/scripts/_tmp-run-pushers.js`,
+`fatooralite/scripts/_tmp-run-batch.js`) were deleted before committing —
 they were throwaway tooling (unescaped `require()` imports, fails lint on
-purpose so they'd never accidentally ship), not meant to be committed. If
-you need the same run pattern again, §5 has the exact commands to
-reconstruct an equivalent script, or just run them inline.
+purpose so they'd never accidentally ship). §5 has the exact commands to
+reconstruct an equivalent script if a future session needs the same run
+pattern.
 
-**This session's remaining action, if it has turns left: commit.** No
-further verification is needed first — §2 is the confirmed final result.
-
-1. `git add` the real files (everything above — nothing needs excluding
-   this time, the scratch scripts are already gone).
-2. Review with `git status` / `git diff --stat` before committing — normal
-   hygiene, not because anything specific is expected to be wrong.
-3. Commit with a real, descriptive message — **no AI attribution** (no
-   `Co-Authored-By`, no "Generated with", per `CLAUDE.md`). Do not push to
-   `main`.
-
-If a fresh session is reading this and the commit was never made, do it now
-following the three steps above — there's nothing else blocking it.
+There is nothing left to commit for Phase 3. `git status` on the repo root
+returns clean.
 
 ## 5. Reconstructing the test-run commands (only needed for future re-verification)
 
