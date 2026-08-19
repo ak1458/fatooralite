@@ -178,7 +178,13 @@ than leaving them.
 
 ---
 
-## D5 — Hybrid vs standalone architecture evaluation · **OPEN** · Phase 4
+## D5 — Hybrid vs standalone architecture evaluation · **APPROVED — Option A** · Phase 4
+
+**Owner decision (2026-08-19):** Option A — write the ADR. Delivered:
+`docs/audit/adr-001-hybrid-architecture.md`. Documentation only, as scoped;
+no architecture changed. (Phase 4's session declined this same shortcut
+unilaterally despite its low engineering impact — recorded here because
+this session had explicit, current owner sign-off, which that one didn't.)
 
 **QUESTION** Record the architecture decision the product already embodies.
 
@@ -231,7 +237,28 @@ setting, and Prisma integration. Real regression risk.
 
 ---
 
-## D7 — Customer Control Center launch requirement · **OPEN** · needed for Phase 1
+## D7 — Customer Control Center launch requirement · **APPROVED — Option C** · needed for Phase 1
+
+**Owner decision (2026-08-19):** Option C — a read-only operator view only;
+the full Customer Control Center (Option B) is explicitly NOT authorized.
+Implemented: `GET /api/operator/companies` — gated by the same
+`OPERATOR_SECRET` bearer-credential pattern W6's global RAG re-index
+already established (no tenant session, however privileged, can reach it —
+this app still has no platform-admin User role, by design). Returns
+license state (plan/status/trial/period), ZATCA status (latest
+certificate's kind/status), last-seen (most recent `SecurityEvent` per
+company), onboarding status, and reports "version" as `n/a` (single-
+deployed-version web app — see the M-098…M-123 N/A block in
+`START-HERE.md`). Every read is recorded as a `SecurityEvent` — both a
+denied attempt and a successful one — per D7's "audited privileged reads"
+requirement. No POST/PATCH exists or is planned; a write path is exactly
+the surface Option B (not chosen) would have needed. Tests:
+`app/api/operator/companies/route.test.ts` (new — no-credential refused,
+forged-token refused, a tenant owner's own session cookie refused, correct
+credential succeeds with the scoped fields, both outcomes audited).
+N1/N2/N5/N9/N11 (Phase 5, the full Control Center and its dependents) stay
+BLOCKED — this does not build them, and building them would still resolve
+D7 further than this session's authorization covers.
 
 **QUESTION** Does the absent Customer Control Center block launch?
 
