@@ -132,4 +132,8 @@ export const ICONS: Record<string, IconShape[]> = {
   plus: [{ t: "path", d: "M12 5v14M5 12h14" }],
   filter: [{ t: "path", d: "M3 5h18l-7 8v6l-4 2v-8Z" }],
   cloud: [{ t: "path", d: "M4 17.5a4.5 4.5 0 0 1 1-8.9 6 6 0 0 1 11.6-1.6A4.5 4.5 0 0 1 18 17.5Z" }],
+  mail: [
+    { t: "rect", x: 3, y: 5, width: 18, height: 14, rx: 2 },
+    { t: "path", d: "m3 7 9 6 9-6" },
+  ],
 };

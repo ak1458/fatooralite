@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { sar } from "@/lib/format";
+import { Modal, modalPrimary } from "@/components/common/Modal";
 
 interface Line { id: string; description: string; quantity: number; unitPrice: number; vatRate: number; netAmount: number; vatAmount: number }
 interface Record_ { id: string; action: string; status: string; responseCode: string | null; message: string | null; createdAt: string }
@@ -35,6 +36,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [submitting, setSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState<string | null>(null);
   const [showXml, setShowXml] = useState(false);
+  const [showSendConfirm, setShowSendConfirm] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendMsg, setSendMsg] = useState<string | null>(null);
 
   const { state, retry } = useAsyncData<InvoiceDetail>(
     async (signal) => {
@@ -45,6 +49,21 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     },
     [id],
   );
+
+  async function sendToCustomer() {
+    setSending(true);
+    setSendMsg(null);
+    try {
+      const res = await fetch(`/api/invoices/${id}/send`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      setSendMsg(res.ok ? (data.delivery === "mock" ? "Email logged (no live provider configured)." : "Email sent.") : data.error || `Send failed (${res.status}).`);
+      if (res.ok) setShowSendConfirm(false);
+    } catch {
+      setSendMsg("Connection error.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function submitToZatca() {
     setSubmitting(true);
@@ -89,6 +108,14 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   <a href={`/api/invoices/${inv.id}/pdf`} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 15px", borderRadius: 10, border: "1px solid var(--bd)", background: "var(--s2)", color: "var(--t2)", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>
                     <Icon name="doc" size={14} sw={2} /> PDF
                   </a>
+                  <button
+                    onClick={() => setShowSendConfirm(true)}
+                    disabled={inv.status === "draft"}
+                    title={inv.status === "draft" ? "Draft invoices cannot be emailed" : undefined}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 15px", borderRadius: 10, border: "1px solid var(--bd)", background: "var(--s2)", color: "var(--t2)", fontSize: 12.5, fontWeight: 600, cursor: inv.status === "draft" ? "not-allowed" : "pointer", opacity: inv.status === "draft" ? 0.5 : 1 }}
+                  >
+                    <Icon name="mail" size={14} sw={2} /> Email to customer
+                  </button>
                   {(inv.status === "signed" || inv.status === "rejected") && (
                     <button onClick={submitToZatca} disabled={submitting}
                       style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 15px", borderRadius: 10, border: "none", background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: submitting ? 0.7 : 1 }}>
@@ -98,7 +125,24 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
               {submitMsg && <div style={{ marginTop: 12, fontSize: 12.5, color: "var(--t2)" }}>{submitMsg}</div>}
+              {sendMsg && <div style={{ marginTop: 12, fontSize: 12.5, color: "var(--t2)" }}>{sendMsg}</div>}
             </Card>
+
+            <Modal open={showSendConfirm} onClose={() => setShowSendConfirm(false)} title="Email invoice to customer">
+              <p style={{ fontSize: 13.5, color: "var(--t2)", marginBottom: 18 }}>
+                Send invoice <strong>{inv.invoiceNumber}</strong> as a PDF attachment to the email address on file for{" "}
+                {inv.buyerName || "this customer"}. The recipient is fixed by the invoice&apos;s linked customer record —
+                it cannot be changed here.
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button onClick={() => setShowSendConfirm(false)} style={{ background: "transparent", border: "1px solid var(--bd)", color: "var(--t2)", cursor: "pointer", fontSize: 13, fontFamily: "inherit", padding: "9px 16px", borderRadius: 10 }}>
+                  Cancel
+                </button>
+                <button onClick={sendToCustomer} disabled={sending} style={{ ...modalPrimary, opacity: sending ? 0.7 : 1 }}>
+                  {sending ? "Sending…" : "Send email"}
+                </button>
+              </div>
+            </Modal>
 
             <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18, alignItems: "start" }}>
               {/* Lines + totals */}

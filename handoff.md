@@ -2774,3 +2774,127 @@ advisory set, gate policy unchanged), `npx tsc --noEmit` (clean),
 the Phase 3 convention (6 schema-pushing files separately, the other 70 —
 3 new this phase, none calling `pushTestSchema()` — together with
 `--no-file-parallelism`), `npm run build`.
+
+## 2026-08-19 — Remediation Phase 5 (N4, N6, N7 — scoped subset of N1–N11)
+
+Branch `audit/production-readiness-2026-08-18`, continuing from Phase 4.
+Architect planning first, per the working agreement — and the plan's most
+important output wasn't a task list, it was the sizing call: of the
+roadmap's 11 candidate items, 6 are blocked (N1/N3 decision-gated on
+D7/D8; N2/N5/N9/N11 transitively blocked on N1), N8 was already Phase 3's,
+and N10 is a rollup mostly satisfied by the others. That left N4, N6, N7 —
+and even N4 got cut down from its full roadmap scope during planning
+(before any code existed), not discovered as oversized partway through.
+
+### N7 — email invoice delivery
+
+`lib/email/send.ts` gained attachment support (Resend's `attachments`
+field takes base64 `content`, confirmed by reading the send call, not
+assumed). `POST /api/invoices/:id/send`'s one real design decision: the
+recipient is read exclusively from the invoice's linked `Customer.email` —
+never from the request body. Wrote the test to actually try smuggling a
+different address in (`{ to: "attacker@evil.example" }` in the POST body)
+and assert the mock sender only ever saw the real customer's address — a
+test that just checks "sending succeeds" wouldn't have caught a route that
+accidentally trusted the body.
+
+### N6 — feature flags, designed around D7 rather than through it
+
+The roadmap's own audit items for this feature (A-214…A-221) include "admin
+can see enabled features per customer" — which presupposes a cross-tenant
+admin surface, exactly the thing D7 hasn't authorized building. Resolved by
+keeping the entire write path off HTTP: `scripts/set-flag.ts` is the only
+way to change a flag, same posture as the existing `scripts/ingest-global.ts`
+(an operator with database access, not a platform-admin role). This closes
+7 of 8 items outright and leaves A-218 honestly PARTIAL (`--list` exists,
+no UI) rather than forcing a false GREEN or silently dropping the item.
+`GET /api/flags` reads the session directly (like `/api/auth/me`) and
+repeats that route's revocation check — a route created after W19 needs to
+know that pattern exists, not reinvent session reading from scratch.
+
+### N4 — CSV import/export, scoped down at planning time
+
+The full roadmap scope (Excel support, invoice import, async large files,
+a column-mapping UI) was deliberately not attempted — each for a concrete
+reason, not "ran out of time":
+
+- **No `.xlsx`.** A parser dependency is exactly the advisory-surface
+  category this repo's CI posture (`--audit-level=critical`, not `high`)
+  exists because of — checked the actual `@huggingface/transformers` →
+  `onnxruntime-node` → `adm-zip`/`sharp` chain's history (Phase 4/W24) before
+  concluding a new parser dependency would be the same mistake again.
+- **No invoice import.** Every invoice must go through `issueInvoice()` —
+  signing, the PIH hash chain, server-assigned sequential numbers. Importing
+  historical invoices either forks that chain or mass-issues back-dated
+  legal documents; both are business-rule decisions this session has no
+  authority to make (same class as D9's credit-note sign question).
+- **No column-mapping UI.** Fixed headers plus a downloadable template.
+- **No async pipeline.** Read `lib/services/job-stats.ts` before assuming
+  W8 built a queue — it counts existing cron-drained invoice states, not a
+  substrate to hang an async import on. Synchronous with hard caps (1MB,
+  500 rows) instead, tested at the boundary.
+
+What shipped: `lib/import/csv.ts`, a hand-rolled RFC-4180 character
+scanner — no regex-based splitting (unpredictable backtracking on
+adversarial input) and, per the point above, no dependency. Every row gets
+a verdict (`create`/`skip-duplicate`/`error`); a commit refuses entirely —
+inserting nothing — if any row errors, and inserts every `create` row in
+one `createMany` call, so "partial failure" and "rollback" (M-294/M-295)
+are true by construction rather than by cleanup code. Gate order on both
+import routes: `requirePermission → requireFeature("bulkImport", the
+existing Pro-only declaration) → csvImport flag (default OFF) → rate limit
+→ size caps`. Export (`GET /api/export/{customers,products}`) is
+deliberately **not** gated the same way — it's a read path, same class as
+PDF download, and the formula-injection mitigation (`lib/csv/format.ts`,
+a leading apostrophe on cells starting `=+-@`) is what the export side
+actually needed, not access control.
+
+### The FeatureFlag migration, and a real pre-existing finding it surfaced
+
+Added migration `20260819090000_feature_flags`. Applying it to
+`fatoora_audit` hit `P3005` from `prisma migrate deploy` — the test
+database's `_prisma_migrations` bookkeeping table doesn't track history
+the way `db push --force-reset` (what every schema-pushing test file uses)
+leaves it, since `db push` doesn't write migration-history rows at all.
+Used `prisma db push` directly instead (the same mechanism this database
+has always been kept in sync with), then re-ran `scripts/migration-drill.ts`
+against a fully empty schema to confirm the migration itself applies
+cleanly via the real `migrate deploy` path too — 0 failures, same as
+Phase 3's N8 verification.
+
+While live-testing the customers/products/invoice-detail UI in a browser
+(not just the automated suite) against the local dev server, found that
+`GET /api/invoices` 500s — `Invoice.billingReferenceId does not exist`,
+`SecurityEvent` table missing. Checked `prisma migrate status` against
+`neondb` (read-only, no write attempted): **7 migrations pending, dating
+back to Phase 1's `20260818120000_security_event_log`.** Every remediation
+phase from 1 through 4 built and verified exclusively against
+`fatoora_audit`; `neondb` — the actual shared dev/demo database — has never
+received any of those migrations. This is not a Phase 5 regression (the
+missing columns predate this session by four phases) and was not fixed
+this session: `neondb` is explicitly off-limits without owner
+authorization ("never modify `neondb`", repeated in every session's
+instructions), and applying 7 migrations to a database described as
+still-shared-with-production is not a call to make unilaterally. Flagged
+for the owner rather than silently worked around — the live dev/demo app's
+invoice list has been broken since Phase 1 and nothing in the automated
+test suite would ever have caught it, because the suite never touches
+`neondb`. The `flags.lookup_failed` warnings this same gap produced for
+`FeatureFlag` are a demonstration of the fail-closed design working
+correctly, not a new bug — `isFlagEnabled` caught the error, logged it, and
+returned the code default, exactly as designed.
+
+### What was deliberately not touched
+
+No OPEN decision (D1–D9) resolved. N1/N3 and everything depending on them
+stayed unbuilt rather than being implemented "just enough" to look done.
+No existing test weakened, skipped, or deleted.
+
+### Verification
+
+`npm run lint` (0 errors), `npx tsc --noEmit` (clean), `npm run build`
+(clean), `npm audit --audit-level=critical` (unchanged). Migration applied
+to `fatoora_audit` only, verified via `scripts/migration-drill.ts` (0
+failures against a fresh empty schema). Full test suite counts and the
+`neondb` drift finding: see `docs/SESSION_HANDOFF_2026-08-18.md`'s Phase 5
+addendum.

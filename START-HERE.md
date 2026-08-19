@@ -50,12 +50,19 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
   **Remediation Phase 4 is complete, with honestly-documented PARTIALs**
   (W19, W21–W24 DONE outright; W20, W25 PARTIAL — W20 is a bounded doc
   reconciliation, not exhaustive; W25's drill wasn't run end-to-end, no
-  postgres client tools on this machine, checked not assumed). Programme
-  state lives in `docs/audit/remediation-ledger.md`; read that before
-  starting anything. Phase 5 has NOT been started. Full regression (76 test
-  files, 519 tests) confirmed 0 failed / 0 skipped. **If you're picking this
-  up fresh, read `docs/SESSION_HANDOFF_2026-08-18.md` first** for the exact
-  current state and what to do if this work isn't committed yet.
+  postgres client tools on this machine, checked not assumed).
+  **Remediation Phase 5 is complete, as a deliberately scoped subset**
+  (N4 CSV import/export, N6 feature flags, N7 email invoice delivery
+  DONE; N1/N2/N3/N5/N9/N11 BLOCKED on OPEN decisions D7/D8, not attempted;
+  N10 closed as a rollup). Programme state lives in
+  `docs/audit/remediation-ledger.md`; read that before starting anything.
+  Phase 6 has NOT been started. Full regression (87 test files, 575 tests)
+  confirmed 0 failed / 0 skipped. **A real, pre-existing gap was found this
+  phase and is NOT yet fixed: `neondb` is missing 7 migrations dating back
+  to Phase 1 — see `docs/SESSION_HANDOFF_2026-08-18.md` §3.7 before running
+  `npm run dev` against it.** **If you're picking this up fresh, read
+  `docs/SESSION_HANDOFF_2026-08-18.md` first** for the exact current state
+  and what to do if this work isn't committed yet.
 - **Thirteen defects were found and fixed in the original audit**, four
   financial or compliance-affecting. Full detail in
   `docs/audit/2026-08-18-findings.md`.
@@ -64,15 +71,16 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
   remediation Phase 1 it was 402 passed / 0 skipped, after remediation
   Phase 2 it was 447 passed / 2 pre-existing failed / 0 skipped, after
   remediation Phase 3 it was 497 passed / 0 failed / 0 skipped (73 files),
-  and after remediation Phase 4 it is **519 passed / 0 failed / 0 skipped**
-  (76 test files — 3 added this phase — run against `fatoora_audit` via
-  `TEST_DATABASE_URL`). Run convention unchanged from Phase 3: 6 files that
-  call `pushTestSchema()` must run in separate `vitest run` invocations, one
-  at a time (running two together races); the other 70 must run together in
-  one invocation with `--no-file-parallelism` (true parallel execution
-  against the same database caused real connection contention, not a code
-  bug). See `handoff.md`'s Phase 3 and Phase 4 entries for the full
-  mechanics.
+  after remediation Phase 4 it was 519 passed / 0 failed / 0 skipped (76
+  files), and after remediation Phase 5 it is **575 passed / 0 failed / 0
+  skipped** (87 test files — 11 added this phase — run against
+  `fatoora_audit` via `TEST_DATABASE_URL`). Run convention unchanged from
+  Phase 3: 6 files that call `pushTestSchema()` must run in separate
+  `vitest run` invocations, one at a time (running two together races); the
+  other 81 must run together in one invocation with `--no-file-parallelism`
+  (true parallel execution against the same database caused real connection
+  contention, not a code bug). See `handoff.md`'s Phase 3–5 entries for the
+  full mechanics.
 - Security core verified adversarially: 25 cross-tenant attacks refused,
   privilege escalation refused, invoice totals recomputed server-side, the
   ZATCA chain did not fork under concurrency, RAG leaked nothing under prompt
@@ -200,8 +208,23 @@ delivered a working backup/restore procedure and verification script but
 the actual drill wasn't run end to end (no postgres client tools on this
 machine) and Neon's own PITR/backup capability stays owner-blocked (X2).
 Full detail: `docs/audit/remediation-ledger.md`'s Phase 4 table and outcome
-section, `handoff.md`'s Phase 4 entry, `docs/SESSION_HANDOFF_
-2026-08-18.md`. **Phase 5 has not been started.**
+section, `handoff.md`'s Phase 4 entry.
+
+**Phase 5 is done, as a deliberately scoped subset of the roadmap's 11
+candidate items.** N4 (CSV import/export of customers/products, scoped down
+to exclude xlsx/invoice-import/async — see the ledger for exact reasons),
+N6 (feature flags, designed with no HTTP write path to stay clear of D7),
+and N7 (email invoice delivery) are DONE. N1/N2/N3/N5/N9/N11 are BLOCKED —
+N1 and N3 are gated on OPEN decisions D7/D8 and building either would
+resolve the decision by fiat; N2/N5/N9/N11 depend on N1. N8 was already
+Phase 3's. N10 is closed as a rollup, not built (see the ledger). **A real
+gap was found this phase and is not fixed**: `neondb` is missing 7
+migrations dating back to Phase 1 (see the invariant below and
+`docs/SESSION_HANDOFF_2026-08-18.md` §3.7) — found by live-testing in a
+browser, not by the automated suite. Full detail: `docs/audit/
+remediation-ledger.md`'s Phase 5 table and outcome section, `handoff.md`'s
+Phase 5 entry, `docs/SESSION_HANDOFF_2026-08-18.md`. **Phase 6 has not been
+started.**
 
 **Three decisions are still open and block work:** D1 (VAT-return scope), D7
 (does the absent Control Center gate launch), D8 (is WhatsApp launch scope).
@@ -305,9 +328,10 @@ identifiers deployment depends on.
 
 ### Smaller, not phase-sized
 
-- Four entitlement flags — `bulkImport`, `apiKeys`, `customBranding`,
-  `advancedReports` — are declared and enforced with **nothing behind them**.
-  Honest placeholders; do not put them in marketing copy.
+- `bulkImport` now has something behind it (Phase 5 / N4 — CSV import of
+  customers/products). Three entitlement flags remain honest placeholders —
+  `apiKeys`, `customBranding`, `advancedReports` — declared and enforced with
+  **nothing behind them**. Do not put them in marketing copy.
 - No e2e test proves a trial tenant is refused the 26th invoice through the
   real UI, or that an expired tenant can still export.
 - Bundle size per route was never reviewed.
@@ -469,6 +493,23 @@ regression, and the reason is in the code comment beside it.
   is stale gets no refresh at all, only rejection. Do not reorder these two
   checks or make the refresh "best-effort in parallel" with the revocation
   check; that would let a revoked session extend itself.
+- **`FeatureFlag` rows have no HTTP write path — `scripts/set-flag.ts` is
+  the only way to change one.** This is deliberate, not an oversight: a
+  flag-management UI would need a way to see/set another tenant's flags,
+  which is exactly the cross-tenant privileged surface D7 hasn't authorized
+  building. Do not add a `POST`/`PATCH /api/flags` route "for convenience" —
+  that would resolve D7 by the back door. `GET /api/flags` stays read-only
+  and own-company-only.
+- **`neondb` is missing 7 migrations, dating back to Phase 1's
+  `20260818120000_security_event_log`** (confirmed via `prisma migrate
+  status`, Phase 5, 2026-08-19 — see `docs/SESSION_HANDOFF_2026-08-18.md`
+  §3.7). Every remediation phase verified exclusively against
+  `fatoora_audit`; `neondb` — the shared dev/demo database — was never
+  actually migrated forward. `GET /api/invoices` currently 500s against it
+  as a direct, visible result. **Do not run `prisma migrate deploy` against
+  `neondb` without explicit owner authorization** — it is still described
+  as shared with production. This is not a "fix it while you're in there"
+  situation; it needs a deliberate, owner-approved deploy.
 
 ---
 

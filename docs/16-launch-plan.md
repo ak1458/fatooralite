@@ -655,3 +655,58 @@ Full regression: see `docs/SESSION_HANDOFF_2026-08-18.md`'s Phase 4
 addendum for the exact count and the run mechanics (three new test files
 added, all joining the existing non-schema-pushing batch — none call
 `pushTestSchema()`).
+
+---
+
+## Remediation Phase 5 — 2026-08-19
+
+The roadmap named 11 candidate product features (N1–N11) for this phase.
+Architect planning (per the working agreement's two-agent convention)
+established up front that most were not actually buildable this phase: **N1**
+(Customer Control Center) and **N3** (WhatsApp) are each gated on an OPEN
+decision (D7, D8) — building either would resolve that decision by fiat,
+which this program's own rules forbid doing unilaterally. **N2, N5, N9, N11**
+all depend on N1 in the roadmap's own dependency column, so they're
+transitively blocked with it. **N8** was already handled in Phase 3 and
+wasn't Phase 5's to redo. That left **N4** (CSV import/export), **N6**
+(feature flags) and **N7** (email invoice delivery) as the actually-buildable
+set — all three shipped, plus **N10** closed as a rollup (mostly satisfied by
+N4/N7, one item — "External APIs" — recorded as underspecified rather than
+invented scope).
+
+**N7 (email invoice delivery)** extends the existing `lib/email/send.ts`
+with PDF attachment support and adds `POST /api/invoices/:id/send`. Its
+single load-bearing design decision: the recipient comes exclusively from
+the invoice's linked `Customer.email`, never the request body — this
+removes the "free email relay to any address" abuse shape by construction,
+not by validation. Not plan-gated (same read-path reasoning as PDF
+download).
+
+**N6 (feature flags)** had to be designed around D7 rather than through it:
+one audit item (A-218, "admin can see enabled features per customer")
+presupposes a cross-tenant admin surface this program has no authority to
+build. The resolution — flags are set only via `scripts/set-flag.ts`, an
+operator-with-database-access tool, never over HTTP — keeps the whole
+feature D7-neutral while still closing 7 of 8 A-214…A-221 items outright
+(A-218 stays honestly PARTIAL). Precedence is env override (a kill switch)
+over per-company row over code default; a DB failure resolves to the code
+default rather than erroring.
+
+**N4 (CSV import/export)** was deliberately cut down from the roadmap's full
+scope during planning, not mid-implementation: no `.xlsx` support (would
+need a parser dependency this repo's CI posture exists specifically to
+avoid — see the transformers/adm-zip/sharp advisory history), no invoice
+import (would either fork the ZATCA signing/PIH chain or mass-issue
+back-dated legal documents — an undecided business rule, same class as D9),
+no column-mapping UI (fixed headers + a template instead), no async
+pipeline for large files (no job queue exists to hang one off — confirmed by
+reading W8, which turned out to be stats over cron-drained states, not a
+queue). What shipped: synchronous CSV import/export of customers and
+products, gated `requirePermission → requireFeature("bulkImport", Pro-only)
+→ per-company csvImport flag (default OFF) → rate limit → 1MB/500-row caps`,
+with a hand-rolled RFC-4180 parser (zero new dependencies) and a commit that
+refuses entirely — inserting nothing — if any row fails validation.
+
+No OPEN decision (D1–D9) was touched. Full regression, migration
+verification, and exact counts: `docs/SESSION_HANDOFF_2026-08-18.md`'s
+Phase 5 addendum.

@@ -82,6 +82,7 @@ model Company {
   roles          Role[]
   invoiceCounter InvoiceCounter?
   subscription   Subscription?
+  featureFlags   FeatureFlag[]
 }
 
 /// One row per tenant. Plan limits are enforced in lib/billing/plan.ts, not
@@ -491,6 +492,27 @@ model Notification {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, read, createdAt])
+}
+
+/// N6 — per-tenant feature availability. Deliberately NOT a security
+/// boundary (A-220): every route consulting a flag runs requirePermission/
+/// requireFeature first, independently. Rows are written only by
+/// scripts/set-flag.ts (an operator with database access), never over HTTP —
+/// there is deliberately no platform-admin role in this app (see D7 in
+/// docs/audit/decision-register.md), so a flag-management UI is out of scope
+/// until that's resolved. A missing row means "use the code default" — see
+/// lib/flags/flags.ts.
+model FeatureFlag {
+  id        String   @id @default(cuid())
+  companyId String
+  flag      String
+  enabled   Boolean
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, flag])
 }
 
 /// Vector store for the AI assistant's retrieval (RAG). `scope=global` rows hold

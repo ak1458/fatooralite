@@ -216,7 +216,47 @@ this indefinitely un-revisited.
 
 ---
 
-## 7. What this runbook deliberately does not cover
+## 7. Feature flags (Phase 5 / N6)
+
+Per-tenant feature availability, backed by `FeatureFlag` (`companyId, flag,
+enabled`). **Not a security boundary** (A-220) — every route consulting a
+flag runs `requirePermission`/`requireFeature` first and independently; a
+flag only ever narrows further availability, never grants access an RBAC
+check would otherwise refuse.
+
+**No HTTP write path exists on purpose.** There is deliberately no
+platform-admin role in this app (see D7, `docs/audit/decision-register.md`)
+— building a flag-management UI would itself creep into that contested
+territory. Flags are set with database access, the same posture as
+`scripts/ingest-global.ts`:
+
+```bash
+npx tsx scripts/set-flag.ts --list                              # every company, every flag
+npx tsx scripts/set-flag.ts --list --company <id|vatNumber>      # one company
+npx tsx scripts/set-flag.ts --company <id|vatNumber> --flag csvImport --on --actor you@company.com
+npx tsx scripts/set-flag.ts --company <id|vatNumber> --flag csvImport --clear --actor you@company.com
+```
+
+Every change is audited (`SecurityEvent`, action `feature_flag.changed`) —
+`--actor <email>` is required so the row is attributable.
+
+**Resolution precedence** (`lib/flags/flags.ts`): an env override
+(`FEATURE_<FLAG_NAME>=true|false`, a global kill switch — A-217's rollback
+path) beats a per-company `FeatureFlag` row, which beats the code default in
+`lib/flags/registry.ts`. A database error resolves to the code default,
+logged via `log.warn`, never thrown — a flag lookup must not be able to take
+a request down.
+
+Current flags: `emailInvoiceDelivery` (default ON), `csvImport` (default
+OFF — dark-launched per company). `GET /api/flags` returns the resolved set
+for the caller's own company only (no parameters, so no cross-tenant read is
+possible by construction) — the UI uses it to decide what to render, never
+what to enforce; enforcement always happens server-side, independently, on
+the route the flag gates.
+
+---
+
+## 8. What this runbook deliberately does not cover
 
 **Incident-response process beyond emergency patching** — now covered by
 `docs/20-incident-response.md` (Phase 4 / W23): detection/triage via

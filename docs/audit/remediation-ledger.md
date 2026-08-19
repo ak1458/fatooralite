@@ -16,13 +16,14 @@ Status: PLANNED · IN PROGRESS · DONE · BLOCKED · OPEN (decisions).
 
 | | |
 |---|---|
-| Current phase | **Phase 4 COMPLETE** (with documented PARTIALs) |
+| Current phase | **Phase 5 COMPLETE** (scoped subset — see Phase 5 outcome) |
 | Branch | `audit/production-readiness-2026-08-18` |
 | Audit baseline | 461 GREEN / 1069 · 363 tests |
 | After Phase 1 | 481 GREEN / 1069 · 402 tests, 0 skipped |
 | After Phase 2 | see Phase 2 outcome below |
 | After Phase 3 | see Phase 3 outcome below |
 | After Phase 4 | 538 GREEN / 1069 · see Phase 4 outcome below |
+| After Phase 5 | 560 GREEN / 1069 · see Phase 5 outcome below |
 | Never do | modify `neondb` · drop `fatoora_audit` or `fatoora_restore` · migrate to Supabase · push to `main` · change VAT-return behaviour without D1 |
 
 ---
@@ -91,19 +92,19 @@ Status: PLANNED · IN PROGRESS · DONE · BLOCKED · OPEN (decisions).
 Full analysis (business value, security impact, launch requirement, dependency,
 complexity, recommended phase) is in `remediation-roadmap.md` §Phase 5.
 
-| ID | Feature | Audit items | Launch required? | Status |
-|---|---|---|---|---|
-| N1 | Customer Control Center | 23 | **Contested — D7** | PLANNED |
-| N2 | Support ticketing + KB | 18 | No | PLANNED |
-| N3 | WhatsApp integration | 16 | **Contested — D8** | PLANNED |
-| N4 | Excel/CSV import | 15 | No (strong adoption lever) | PLANNED |
-| N5 | Support diagnostics report | 17 | No | PLANNED |
-| N6 | Feature flags | 9 | No | PLANNED |
-| N7 | Email invoice delivery | 1 | **Recommended for launch if D8 defers N3** | PLANNED |
-| N8 | Credit/debit/refund/cancellation flows | 5 | Probably, for real customers | PLANNED → Phase 3 |
-| N9 | Operations surfaces | 7 | No | PLANNED |
-| N10 | Remaining integrations | 4 | No | PLANNED |
-| N11 | Admin job visibility | 1 | No | PLANNED |
+| ID | Feature | Audit items | Launch required? | Status | Evidence |
+|---|---|---|---|---|---|
+| N1 | Customer Control Center | 23 | **Contested — D7** | **BLOCKED — decision-gated** | Building it resolves D7 by fiat (grants the contested cross-tenant privileged role); not attempted |
+| N2 | Support ticketing + KB | 18 | No | **BLOCKED — depends on N1** | Nothing to build until D7 resolves |
+| N3 | WhatsApp integration | 16 | **Contested — D8** | **BLOCKED — decision-gated** | Not attempted. N7 landing strengthens D8's Option B (email at launch, WhatsApp post-launch) but does not decide it |
+| N4 | Excel/CSV import | 15 | No (strong adoption lever) | **DONE (scoped first cut)** | CSV-only (not xlsx — a parser dependency this repo's audit posture deliberately avoids) synchronous import/export of customers and products, `lib/import/csv.ts` (hand-rolled RFC-4180 parser, no dependency) + `lib/import/import-service.ts` (preview/commit, transactional `createMany`, refuses entirely on any row error). Gated `requirePermission → requireFeature("bulkImport", Pro-only) → csvImport flag (default OFF) → rate limit → size/row caps`. 33 new tests across parser/service/4 routes. **Deliberately excluded, recorded not silently dropped**: invoice import (would fork the ZATCA signing/PIH chain or mass-issue back-dated documents — undecided business rule, same class as D9), xlsx parsing, column-mapping UI, async/large-file import (no job queue exists), "opening data" import (M-286, no spec exists anywhere) |
+| N5 | Support diagnostics report | 17 | No | **BLOCKED — depends on N1** | Nothing to build until D7 resolves |
+| N6 | Feature flags | 9 | No | **DONE (D7-safe design)** | `FeatureFlag` table (migration `20260819090000`), `lib/flags/flags.ts` (env override > per-company row > code default, DB failure → default), `scripts/set-flag.ts` (the only write path — no HTTP write route, deliberately, to stay clear of D7's contested admin-UI territory), `GET /api/flags` (own-company-only read). Not a security boundary by design (A-220) — every gated route still runs its own permission/feature check independently. 11 new tests. **A-218 ("admin can see enabled features per customer") stays PARTIAL — `--list` only, no cross-tenant UI, pending D7** |
+| N7 | Email invoice delivery | 1 | **Recommended for launch if D8 defers N3** | **DONE** | `lib/email/send.ts` extended with attachment support (Resend's base64 `content` field); `POST /api/invoices/:id/send` — recipient comes exclusively from the invoice's linked `Customer.email`, never the request body (eliminates the free-email-relay abuse vector by construction); rate-limited, flag-gated, refuses drafts and customers with no email on file. 13 new tests, including an explicit "attacker-supplied recipient is ignored" case. Not plan-gated (read-path reasoning, same class as PDF download) |
+| N8 | Credit/debit/refund/cancellation flows | 5 | Probably, for real customers | Unchanged — Phase 3 | Not Phase 5 work; see Phase 3's table. Refund/cancellation stay MISSING, D9 stays OPEN |
+| N9 | Operations surfaces | 7 | No | **BLOCKED — depends on N1** | Nothing to build until D7 resolves |
+| N10 | Remaining integrations | 4 | No | **Closed, not built — rollup** | M-676 (Excel/CSV) and M-677 (Email) are substantively satisfied by N4/N7 landing; M-675 (WhatsApp) stays D8-blocked; M-678 ("External APIs") has no concrete requirement anywhere in the audit or roadmap — recorded as underspecified rather than invented |
+| N11 | Admin job visibility | 1 | No | **BLOCKED — depends on N1** | W8 half is done; the N1 half is not |
 
 ## Phase 6 — external verification (owner action)
 
@@ -265,3 +266,74 @@ existing non-schema-pushing batch.
 if any of those is more urgent for real customers than Phase 5's product
 features. Do not start Phase 5 in the same context as this one — same
 convention as every prior phase transition in this programme.
+
+---
+
+## Phase 5 outcome (2026-08-19)
+
+Of the roadmap's 11 candidate items (N1–N11), planning established up front
+that 6 were not buildable this phase at all: N1 and N3 are each gated on an
+OPEN decision (D7, D8 respectively) — implementing either would resolve
+that decision by fiat, forbidden by this programme's own rules. N2, N5, N9
+and N11 each name N1 in the roadmap's own dependency column, so they're
+blocked transitively. N8 was already delivered (PARTIAL) in Phase 3 and
+wasn't re-touched. That left **N4, N6, N7** as the actual scope, plus
+**N10**, closed as a rollup rather than built.
+
+**N6 and N7 are DONE outright.** N7 (email invoice delivery) closes M-260;
+its one load-bearing design decision — the recipient comes exclusively from
+the invoice's linked `Customer.email`, never the request body — was tested
+explicitly by attempting to smuggle a different address through the API and
+asserting it was ignored. N6 (feature flags) closes 7 of 8 A-214…A-221
+items outright; A-218 (a cross-tenant admin view of flags) stays PARTIAL on
+purpose, since building it would itself encroach on D7's contested
+territory — the whole feature was designed around that constraint (no HTTP
+write path; `scripts/set-flag.ts`, an operator-with-database-access tool,
+is the only way to change a flag).
+
+**N4 is DONE for a deliberately scoped first cut**, decided during planning
+before any code existed, not discovered as oversized mid-implementation.
+Delivered: synchronous CSV import/export of customers and products, a
+hand-rolled dependency-free RFC-4180 parser, preview-then-commit with an
+all-or-nothing transactional insert, and the first real enforcement test
+for the `bulkImport` entitlement (previously an honest placeholder with
+nothing behind it). Excluded and why, each recorded rather than silently
+dropped: `.xlsx` support (would add exactly the kind of parser-dependency
+advisory surface this repo's CI posture exists to avoid), invoice import
+(would fork the ZATCA signing/PIH chain or mass-issue back-dated documents —
+an undecided business rule, same class as D9), a column-mapping UI (fixed
+headers + template instead), and an async pipeline for large files (no job
+queue exists — confirmed by reading W8's actual implementation before
+assuming otherwise).
+
+**N10 is closed, not built.** M-676 (Excel/CSV) and M-677 (Email) are
+satisfied by N4/N7 landing; M-675 (WhatsApp) stays blocked on D8; M-678
+("External APIs") has no concrete specification anywhere in the audit or
+roadmap and was recorded as underspecified rather than given invented scope.
+
+**No OPEN decision (D1–D9) was resolved or implemented this phase.**
+
+**A new, real finding surfaced by browser-testing this phase's UI (not by
+the automated suite, which never touches it): `neondb` — the shared
+dev/demo database — is missing 7 migrations dating back to Phase 1**,
+including `SecurityEvent` (W2) and several `Invoice` columns (Phase 3).
+`GET /api/invoices` currently 500s against the live dev/demo deployment as
+a direct result. This predates Phase 5 by three phases and was not caused
+by this session; not fixed this session either, since `neondb` is
+explicitly off-limits without owner authorization. Flagged for the owner:
+`docs/SESSION_HANDOFF_2026-08-18.md` §3.7 has the full detail and the exact
+migrations needed. The new `FeatureFlag` table (Phase 5's own migration)
+was applied to `fatoora_audit` only, verified via `scripts/migration-drill.ts`
+(0 failures against a fresh empty schema).
+
+Full regression confirmed clean before closing this phase: **87 test
+files, 575 tests, 0 failed, 0 skipped** (6 schema-pushing files run
+separately, the other 81 — 11 new this phase — run together with
+`--no-file-parallelism`; see `docs/SESSION_HANDOFF_2026-08-18.md` §2 for
+the exact count reconciliation).
+
+**Next session: start Phase 6**, or resolve any of D1–D9 / apply the
+pending `neondb` migrations first if either is more urgent for real
+customers than Phase 6's items. Do not start Phase 6 in the same context as
+this one — same convention as every prior phase transition in this
+programme.

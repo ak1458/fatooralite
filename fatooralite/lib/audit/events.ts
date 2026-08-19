@@ -47,6 +47,8 @@ export const SECURITY_EVENTS = {
   aiIndexRebuilt: "ai.index.rebuilt",
   zatcaSubmissionRetried: "zatca.submission.retried",
   zatcaSubmissionExhausted: "zatca.submission.exhausted",
+  invoiceEmailSent: "invoice.email_sent",
+  featureFlagChanged: "feature_flag.changed",
 } as const;
 
 export type SecurityEventName = (typeof SECURITY_EVENTS)[keyof typeof SECURITY_EVENTS];
