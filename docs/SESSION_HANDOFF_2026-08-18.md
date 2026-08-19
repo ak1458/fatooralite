@@ -474,3 +474,60 @@ Next engineering-executable work is either owner-triggered (any of
 X1–X3, Meta Business verification for D8, legal review for D4) or a new
 increment the owner explicitly requests (e.g., adopting `queryAsTenant` at
 a first real call site). Do not start a new phase without being asked.
+
+---
+
+## 9. 48-hour launch-readiness pass (2026-08-19, third session this day)
+
+Explicit P0/P1-only scope: no new features, no polishing. Read the current
+state (this file, ledger, register, START-HERE) fresh, confirmed
+`git status` clean at `8a5371b`, re-ran all 4 non-DB CI gates fresh (lint,
+audit, ZATCA validate, build — all green, unchanged), and treated the
+last full regression (§8's 612/612) as still valid since nothing had
+changed since it ran.
+
+**P0 queue (2 items) — both DONE:**
+
+1. Baseline gate re-verification (above).
+2. `docs/18-production-checklist.md` — the owner-facing pre-deploy doc —
+   was dated 2026-08-05 and had never been touched by any remediation
+   phase (W20's doc-reconciliation pass covered other files, not this
+   one). It actively misstated current reality: wrong branch name, wrong
+   test count, two "open gaps" that were fixed phases ago (audit trail —
+   W2; branch scoping — W10), bulk import listed as unbuilt when N4
+   shipped it, no mention of the three new `WHATSAPP_*` env vars or the
+   Meta Business blocker, legal copy described as raw brackets when D4
+   already drafted real text. Rewritten to match actual current state.
+   Commit `fa6b22d`.
+
+**P1 queue: none found actionable.** Checked and explicitly deferred, all
+for the reason "high implementation risk and not required for launch,"
+per this session's own instruction:
+
+- RLS app-wide adoption (D6) — stays an opt-in, unused-in-production
+  mechanism. Retrofitting it into the main app client risks
+  `issueInvoice()`'s chain-critical transaction; not attempted.
+- Operator-route rate limiting — would be inconsistent with its own
+  reference pattern (`/api/ai/ingest`, unrated since Phase 2) and the
+  credential is brute-force-infeasible regardless. P2.
+- W25's backup/restore drill — `pg_dump`/`pg_restore` confirmed still
+  absent from this environment (checked again, not assumed). Installing
+  DB client tools mid-crunch is exactly the kind of tangent this session
+  was told to avoid; the documented logical-backup procedure plus
+  `migration-drill.ts`'s tested restore-equivalent already stand.
+- `bench-concurrent.ts` (unrun performance validation at 20k-invoice
+  volume) — the underlying correctness mechanism (the `FOR UPDATE` row
+  lock) is architecture-invariant regardless of table size and already
+  proven correct at small scale (`clearance-crash.test.ts`, the original
+  audit's 8-concurrent-issue check). This would measure throughput
+  headroom, not fix a correctness gap — P2.
+
+**No code changed this session — documentation only.** Working tree clean
+at `fa6b22d`. All 5 CI gates green (4 re-run fresh, vitest's 612/612 carried
+forward from §8 since untouched).
+
+**Next session**: same as §8's closing note — nothing further is
+actionable without an owner action or an explicit new request. If asked to
+continue "launch readiness" again without new owner input, re-deriving
+this same P0/P1 queue will reach the same conclusion; start from this
+section instead.
