@@ -651,3 +651,56 @@ the natural next step is one real, manually-verified send (not
 automated — per the instructions, this should happen only after the
 mocked tests are green, which they are). Otherwise nothing further is
 actionable without an owner action.
+
+---
+
+## 11. X2 Neon verification + final production-readiness check (2026-08-19)
+
+Read-only pass. **No application code was modified** — the only changes are
+this section and the ledger's new "X2 verification" table.
+
+**X2:** 6 of 12 checks verified directly against the production database;
+3 are console-only and remain owner-blocked; 1 (retention) is
+owner-reported and unconfirmed here. Full per-check table with evidence is
+in `docs/audit/remediation-ledger.md` — not duplicated. Two findings worth
+carrying forward:
+
+1. **Prod/test share one Neon compute.** `neondb`, `fatoora_audit`,
+   `fatoora_restore` and `postgres` all sit on endpoint
+   `ep-frosty-bar-ajlzdhux`. The W17 separation gap is now confirmed
+   rather than suspected, and the concrete consequence is that a
+   *branch-level* PITR restore would act on all four at once.
+2. **One migration is genuinely pending on production**:
+   `20260819100000_row_level_security` (D6). Deliberately **not applied** —
+   modifying `neondb` requires per-action owner approval, and it is
+   already step 4 of the documented deploy sequence. Verified
+   non-breaking: RLS reads `false` on all four target tables in prod
+   today, and D6's migration is additive by design.
+
+**Live deployment — the significant finding of this pass.**
+`https://fatooralite.vercel.app` is up and healthy: `/api/health` 200
+(`database: connected`, `environment: production`), `/api/invoices`,
+`/api/flags`, `/api/companies`, and both `/api/operator/*` routes all 401
+unauthenticated, `/dashboard` 307 → login. Auth boundaries behave
+correctly.
+
+**But it is running stale code.** Its `/terms` page still serves the
+`[Placeholder: describe how using…]` text that D4 *replaced* this session.
+Since this branch has never been pushed (the branch does not exist on
+`origin`; `main` is 28 commits behind), the deployed build predates the
+entire D1–D9 decision implementation, the OpenWA work, and the D4 legal
+drafts. **Nothing on that live site reflects the remediation programme.**
+Treat the live URL as the old product until a deploy happens.
+
+**Config cross-check** (local `.env`, names only — Vercel's production
+environment is separate and unreadable here, CLI logged out): required
+`CRON_SECRET`, `APP_URL`, `NEXT_PUBLIC_APP_URL` are **absent locally**, as
+is `OPERATOR_SECRET` (which correctly makes both operator routes fail
+closed). These are not local defects — they are the Vercel-side variables
+blocker #7 of `docs/18-production-checklist.md` already names. `AUTH_SECRET`
+is 44 chars (over the 32 minimum), `AUTH_ENFORCE` is literal `true`,
+`ZATCA_MODE` is `sandbox` — all correct for a non-production machine.
+
+**Tests/gates:** none re-run, deliberately. No application code changed,
+so per this pass's own instruction the 639-test suite was not re-executed;
+the last full green run (§10) stands unchanged.

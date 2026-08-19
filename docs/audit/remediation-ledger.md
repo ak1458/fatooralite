@@ -112,9 +112,38 @@ complexity, recommended phase) is in `remediation-roadmap.md` §Phase 5.
 | ID | Track | Audit items | Status |
 |---|---|---|---|
 | X1 | ZATCA OTP → CSID → real round trip | 48 | BLOCKED ON OWNER |
-| X2 | Neon PITR / backup / platform restore | 12 | BLOCKED ON OWNER |
+| X2 | Neon PITR / backup / platform restore | 12 | **PARTIALLY VERIFIED 2026-08-19** — 6 of 12 checks verified read-only from the database itself; 3 remain console-only (plan, self-service restore, encryption-at-rest); 1 owner-reported (retention). See "X2 verification" below |
 | X3 | Moyasar merchant + sandbox transaction | 1 | BLOCKED ON OWNER |
 | X4 | Mandatory end-to-end flow | 11 | BLOCKED (needs X1 + D8) — D8 resolved 2026-08-19, X1 still owner-blocked, so still BLOCKED overall |
+
+### X2 verification (2026-08-19, read-only)
+
+No Neon MCP connector or API key was available this session, so nothing was
+read from the Neon *console*. What follows was obtained by querying the
+production database directly, read-only — no setting altered, no branch or
+database created or deleted, no migration applied.
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1 | Which project/branch backs prod | **PARTIAL** | Endpoint `ep-frosty-bar-ajlzdhux`, database `neondb`, PostgreSQL **17.10**. Project name `fatooralite` / primary branch `main` are **owner-reported** from an earlier console visit, not independently verified here |
+| 2 | Prod separated from dev/test | **VERIFIED — they are NOT separated** | `pg_database` on the prod endpoint lists `neondb`, `fatoora_audit`, `fatoora_restore`, `postgres` — all four on the **same Neon compute/branch**. Separate databases, shared endpoint |
+| 3 | Neon plan | **OWNER ACTION REQUIRED** | Not derivable from SQL |
+| 4 | Backup/PITR retention | **OWNER-REPORTED, unverified here** | Owner previously reported "history retention 6 hours". Not confirmable from SQL. If accurate, 6h is a **narrow** recovery window for a production accounting system |
+| 5 | PITR restore self-service | **OWNER ACTION REQUIRED** | Console/plan-dependent |
+| 6 | Encryption at rest | **OWNER ACTION REQUIRED** | Platform property, not a SQL-visible fact |
+| 7 | Production DB identity | **VERIFIED** | `current_database()` = `neondb`, server PostgreSQL 17.10 |
+| 8 | No accidental prod/test sharing | **VERIFIED — sharing exists at compute level** | Same as #2. The practical consequence worth stating plainly: a **branch-level** Neon PITR restore would act on all four databases together, not on `neondb` alone. Database-level logical restore (`docs/21-backup-restore.md`, W25) is unaffected |
+| 9 | 18/18 prior migrations intact | **VERIFIED** | `_prisma_migrations`: 18 rows, `unfinished=0`, `rolled_back=0`. Prod data intact and untouched (1 company / 2 invoices / 3 users — the seeded demo tenant) |
+| 10 | Anything genuinely pending? | **YES — 1 pending, deliberately NOT applied** | `prisma migrate status` reports `20260819100000_row_level_security` (D6, created this session) as not yet applied. Applying it to `neondb` needs per-action owner approval under this programme's standing rule, and it is already step 4 of the documented deploy sequence. **RLS is confirmed OFF on all four target tables in production** (`pg_class.relrowsecurity = false` for Invoice/Customer/Product/Certificate), which is consistent and non-breaking — D6's migration is additive by design |
+| 11 | Neon settings altered? | **NO** | None touched |
+| 12 | Branches/databases deleted? | **NO** | None |
+
+**Net X2 position:** the engineering-verifiable half is now done and green
+(identity, migration integrity, data intact). What remains is genuinely
+console-only — plan, self-service-restore availability, and
+encryption-at-rest — plus independent confirmation of the 6-hour retention
+figure. The prod/dev separation gap (W17) is no longer "suspected"; it is
+**confirmed**, with the specific mechanism recorded above.
 
 **Re-checked 2026-08-19 (scope-check session)**: all four tracks confirmed still BLOCKED, none actionable by engineering, each needing owner credentials/access. **Re-checked again 2026-08-19 (decision-implementation session, same day, separate session)**: X1/X2/X3 unchanged — still need a Fatoora portal OTP, Neon console access, and Moyasar KYC respectively, none of which an engineering session can provide. X4 specifically needed D8 as well as X1; D8 is now resolved (see Phase 7 below) but X1 is not, so X4 remains BLOCKED — resolving one of its two dependencies doesn't unblock it alone.
 
