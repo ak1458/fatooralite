@@ -58,11 +58,13 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
   `docs/audit/remediation-ledger.md`; read that before starting anything.
   Phase 6 has NOT been started. Full regression (87 test files, 575 tests)
   confirmed 0 failed / 0 skipped. **A real, pre-existing gap was found this
-  phase and is NOT yet fixed: `neondb` is missing 7 migrations dating back
-  to Phase 1 — see `docs/SESSION_HANDOFF_2026-08-18.md` §3.7 before running
-  `npm run dev` against it.** **If you're picking this up fresh, read
-  `docs/SESSION_HANDOFF_2026-08-18.md` first** for the exact current state
-  and what to do if this work isn't committed yet.
+  phase — `neondb` was missing 7 migrations dating back to Phase 1 — and
+  is now RESOLVED (2026-08-19, same day, with explicit owner approval):
+  `prisma migrate deploy` ran clean, verified, `GET /api/invoices` returns
+  200. See `docs/SESSION_HANDOFF_2026-08-18.md` §3.7 for the full
+  investigation-then-resolution record.** **If you're picking this up
+  fresh, read `docs/SESSION_HANDOFF_2026-08-18.md` first** for the exact
+  current state and what to do if this work isn't committed yet.
 - **Thirteen defects were found and fixed in the original audit**, four
   financial or compliance-affecting. Full detail in
   `docs/audit/2026-08-18-findings.md`.

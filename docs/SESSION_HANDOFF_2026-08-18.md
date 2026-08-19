@@ -18,14 +18,15 @@ covers through Phase 5, run 2026-08-19.
 | Phase 3 | **COMPLETE and fully verified**, committed as `97135cf`. 73 test files, 497 tests, 0 failed, 0 skipped at the time |
 | Phase 4 | **COMPLETE, with honestly-documented PARTIALs**, committed as `7dec667`+`8995a81`. 76 test files, 519 tests, 0 failed, 0 skipped at the time |
 | Phase 5 | **COMPLETE — a deliberately scoped subset.** Of the roadmap's N1–N11, only N4/N6/N7 were buildable this phase (N1/N3 decision-gated on D7/D8; N2/N5/N9/N11 transitively blocked on N1; N8 already Phase 3's; N10 closed as a rollup). All three of N4/N6/N7 shipped. See §2 for the test count |
-| Never do | modify `neondb` · drop `fatoora_audit`/`fatoora_restore` · migrate to Supabase · push to `main` · start Phase 6 without reading this file |
+| `neondb` migration drift | **RESOLVED, 2026-08-19, with explicit owner approval.** All 18/18 migrations now applied to `neondb`. See §3.7 |
+| Never do | modify `neondb` **without explicit owner approval, per-action** (the drift fix in §3.7 was one such approved action, not a standing exception) · drop `fatoora_audit`/`fatoora_restore` · migrate to Supabase · push to `main` · start Phase 6 without reading this file |
 
-**New this phase, read before doing anything with `neondb`:** §3.7 below —
-`neondb` (the shared dev/demo database) is missing 7 migrations dating back
-to Phase 1, discovered by live-testing in a browser, not by the automated
-suite (which only ever runs against `fatoora_audit`). Not fixed this
-session — flagged for the owner. `GET /api/invoices` currently 500s against
-`neondb` (dev/demo) as a direct result.
+**Updated (2026-08-19, post-Phase-5):** §3.7's finding — `neondb` missing 7
+migrations dating back to Phase 1 — is now **RESOLVED**. The owner reviewed
+the migration-safety report and explicitly approved `prisma migrate
+deploy`; it ran clean (exactly the 7 expected migrations, no anomalies),
+verified against live data, and `GET /api/invoices` now returns 200. Full
+detail at the bottom of §3.7.
 
 ## 2. Test verification — this is the final result
 
@@ -149,6 +150,76 @@ working as intended, not a new bug: `isFlagEnabled` catches the
 default — confirmed live (`csvImport` correctly resolved `false`, hiding
 the Import button; the customers/products pages rendered correctly with no
 uncaught error).
+
+#### RESOLVED — 2026-08-19, same day, follow-up session, explicit owner approval
+
+The owner was shown a migration-safety report covering exactly the 7 points
+this section's investigation established (migration contents, current
+`neondb` state, additive/reversible/destructive classification, whether
+`migrate deploy` would touch only these 7, production-risk assessment, the
+exact command) and explicitly approved running it. Before running,
+additionally verified (read-only, no writes) two things the original
+investigation hadn't checked yet:
+
+1. **No out-of-band drift.** Queried `information_schema`/`pg_constraint`
+   directly for the 4 new tables, 7 new `Invoice` columns, and the CHECK
+   constraint names — none existed yet, confirming `migrate deploy` would
+   hit no `already exists` collisions.
+2. **CHECK-constraint pre-flight.** `20260818160000_check_constraints` adds
+   9 `CHECK` constraints; ran the actual boundary queries against live
+   `neondb` data (e.g. `SELECT COUNT(*) FROM "InvoiceLine" WHERE
+   "quantity" <= 0`) for every one of them. **Zero violations across all
+   nine** — the migration was safe to apply to the data actually present,
+   not just safe in the abstract. (`neondb` currently holds only demo-seed
+   data: 1 Company, 2 Invoice rows — real customer data has never been
+   written there, which is exactly why this drift went unnoticed for four
+   phases.)
+
+**Ran exactly `npx prisma migrate deploy`** (not `db push` — that
+distinction matters here, see §3.6's note on why `fatoora_audit` needed the
+opposite choice; `neondb`'s `_prisma_migrations` table was intact, unlike
+`fatoora_audit`'s, so `migrate deploy` worked cleanly on the first attempt).
+Output: exactly the 7 expected migrations applied, in order, no warnings,
+no anomalies, no checksum mismatches.
+
+**Post-deploy verification, all read-only queries:**
+- `prisma migrate status` → `Database schema is up to date!`, 18/18.
+- All 4 new tables (`SecurityEvent`, `AiConfirmation`, `AiUsage`,
+  `FeatureFlag`), all 7 new `Invoice` columns, all 9 `CHECK` constraints,
+  and the new indexes/FKs confirmed present via direct
+  `information_schema`/`pg_constraint`/`pg_indexes` queries.
+- **Data integrity**: `Company` count still 1, `Invoice` count still 2,
+  same row ids as before the migration, new columns correctly defaulted
+  (`submitAttempts: 0`, `needsReview: false` on both existing rows) — the
+  migration added structure, touched no existing data.
+- **Live path**: started `npm run dev` (against `neondb`), logged in via
+  `curl` (with the `Origin` header W21 requires), `GET /api/invoices` →
+  **200**, real invoice data returned, no error. `GET /api/flags` → **200**
+  with real resolved values (no more `flags.lookup_failed` warnings — the
+  table now exists, so resolution reads it instead of falling back).
+  Grepped the dev server log for `does not exist` — zero matches, versus
+  the 2+ occurrences per request before the deploy.
+- **Test suite**: application code did not change in this follow-up
+  session (only the `neondb` schema did, via the already-committed Phase 5
+  migration file) — the 575/575 regression already confirmed at Phase 5's
+  close remains the accurate count. Re-ran the subset of tests most
+  directly exercising the migrated tables/columns (invoices routes,
+  `SecurityEvent`-writing paths, flags, reconciliation/clearance) against
+  `fatoora_audit` as a sanity check — unaffected by the `neondb` change
+  (separate database), all green. All 5 CI gates (lint, audit, `tsc`,
+  `validate-zatca`, build) re-run clean.
+
+Two throwaway investigation scripts (`_tmp-check-neondb.ts`,
+`_tmp-verify-neondb.ts`) were used for the read-only queries above and
+deleted immediately after each use — never committed, same convention as
+Phase 3's scratch run scripts.
+
+**No code, migration file, or test was changed to resolve this** — the fix
+was entirely "run the migration that was already written and already
+applied to `fatoora_audit`, against the one remaining database that needed
+it." The invariant stands unchanged for future sessions: `neondb` writes
+still require explicit, per-action owner approval — this was one approved
+action, not a standing exception.
 
 ## 4. Commit status
 

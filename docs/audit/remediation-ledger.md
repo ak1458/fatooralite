@@ -315,16 +315,28 @@ roadmap and was recorded as underspecified rather than given invented scope.
 
 **A new, real finding surfaced by browser-testing this phase's UI (not by
 the automated suite, which never touches it): `neondb` — the shared
-dev/demo database — is missing 7 migrations dating back to Phase 1**,
+dev/demo database — was missing 7 migrations dating back to Phase 1**,
 including `SecurityEvent` (W2) and several `Invoice` columns (Phase 3).
-`GET /api/invoices` currently 500s against the live dev/demo deployment as
-a direct result. This predates Phase 5 by three phases and was not caused
-by this session; not fixed this session either, since `neondb` is
-explicitly off-limits without owner authorization. Flagged for the owner:
-`docs/SESSION_HANDOFF_2026-08-18.md` §3.7 has the full detail and the exact
-migrations needed. The new `FeatureFlag` table (Phase 5's own migration)
-was applied to `fatoora_audit` only, verified via `scripts/migration-drill.ts`
-(0 failures against a fresh empty schema).
+`GET /api/invoices` 500'd against the live dev/demo deployment as a direct
+result. This predated Phase 5 by three phases and was not caused by this
+session. Not fixed in the same session it was found, since `neondb` is
+explicitly off-limits without owner authorization — flagged instead, with
+a migration-safety report (7 migrations named, contents classified,
+additive/reversible/destructive assessed, CHECK-constraint data verified
+against live rows, exact command given, nothing executed).
+
+**RESOLVED same day, follow-up session (2026-08-19), with explicit owner
+approval.** `prisma migrate deploy` ran clean against `neondb` — exactly
+the 7 expected migrations, no anomalies. Verified: `migrate status` reports
+18/18; all new tables/columns/constraints/indexes present via direct
+`information_schema` queries; existing data untouched (`Company` still 1
+row, `Invoice` still 2 rows, same ids, correct column defaults); `GET
+/api/invoices` now returns 200 with real data; `GET /api/flags` resolves
+from the table instead of falling back. 87 tests across the routes/paths
+that touch the migrated schema re-run clean against `fatoora_audit`
+(unaffected — separate database) as a sanity check; all 5 CI gates re-run
+clean. Full investigation-then-resolution record:
+`docs/SESSION_HANDOFF_2026-08-18.md` §3.7.
 
 Full regression confirmed clean before closing this phase: **87 test
 files, 575 tests, 0 failed, 0 skipped** (6 schema-pushing files run
