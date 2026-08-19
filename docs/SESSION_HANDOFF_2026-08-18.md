@@ -19,7 +19,8 @@ covers through Phase 5, run 2026-08-19.
 | Phase 4 | **COMPLETE, with honestly-documented PARTIALs**, committed as `7dec667`+`8995a81`. 76 test files, 519 tests, 0 failed, 0 skipped at the time |
 | Phase 5 | **COMPLETE — a deliberately scoped subset.** Of the roadmap's N1–N11, only N4/N6/N7 were buildable this phase (N1/N3 decision-gated on D7/D8; N2/N5/N9/N11 transitively blocked on N1; N8 already Phase 3's; N10 closed as a rollup). All three of N4/N6/N7 shipped. See §2 for the test count |
 | `neondb` migration drift | **RESOLVED, 2026-08-19, with explicit owner approval.** All 18/18 migrations now applied to `neondb`. See §3.7 |
-| Never do | modify `neondb` **without explicit owner approval, per-action** (the drift fix in §3.7 was one such approved action, not a standing exception) · drop `fatoora_audit`/`fatoora_restore` · migrate to Supabase · push to `main` · start Phase 6 without reading this file |
+| Phase 6 & 7 | **SCOPE-CHECKED, 2026-08-19 — 0 implementable.** X1–X4 (Phase 6) are all owner/external-access-blocked; D1–D9 (Phase 7) are all OPEN and this session was instructed not to resolve them unilaterally. Nothing was built, nothing changed. Full detail in §7 |
+| Never do | modify `neondb` **without explicit owner approval, per-action** (the drift fix in §3.7 was one such approved action, not a standing exception) · drop `fatoora_audit`/`fatoora_restore` · migrate to Supabase · push to `main` · resolve D1–D9 unilaterally · start Phase 8 without reading this file |
 
 **Updated (2026-08-19, post-Phase-5):** §3.7's finding — `neondb` missing 7
 migrations dating back to Phase 1 — is now **RESOLVED**. The owner reviewed
@@ -304,3 +305,59 @@ pending `neondb` migrations first if either is more urgent for real
 customers than Phase 6's items. Do not start Phase 6 in the same context as
 this one — same convention as every prior phase transition in this
 programme.
+
+---
+
+## 7. Phase 6 & Phase 7 scope-check (2026-08-19, this session)
+
+A follow-up session was opened specifically to run Phase 6 and Phase 7. It
+read this file, `docs/audit/remediation-ledger.md`,
+`docs/audit/2026-08-18-ledger.md`, `START-HERE.md`,
+`docs/audit/remediation-roadmap.md`, and `docs/audit/decision-register.md`
+before touching anything, then verified `git status` was clean on
+`audit/production-readiness-2026-08-18` at `94585b1` (it was).
+
+**Finding: neither phase has any item an engineering session can execute.**
+Phase 6 (`remediation-roadmap.md`'s "External verification / owner action")
+is X1 ZATCA / X2 Neon / X3 Moyasar / X4 mandatory E2E — every one needs
+either a credential/access this session doesn't hold (a Fatoora portal OTP,
+Neon console access, Moyasar merchant KYC) or, for X4, both X1 and D8 first.
+Phase 7 is the decision register, D1–D9, all nine still OPEN — and this
+session's instructions explicitly prohibited resolving any of them
+unilaterally, which implementing any listed option would do by definition.
+Full per-item reasoning is in `docs/audit/remediation-ledger.md`'s new
+"Phase 6 & Phase 7 outcome (2026-08-19)" section — not duplicated here.
+
+**Verification performed anyway**, since "nothing to build" isn't the same
+as "nothing to check": all 5 CI gates re-run fresh — lint (0 errors), `npm
+audit --audit-level=critical` (7 high / 0 critical, same as every prior
+phase), `npx tsx scripts/validate-zatca.ts` (7/7 PASS), `npm run build`
+(clean) — and the full 87-file regression suite re-run under the same
+two-group convention as Phases 3–5 (6 schema-pushing files separately, 81
+together with `--no-file-parallelism`). Result: **575/575 passed, 0 failed,
+0 skipped** — the exact Phase 5 baseline, reproduced, not assumed.
+
+**One process note for whoever runs this next**: the first attempt at the
+81-file batch was started in the background while a schema-pushing file was
+then started in the foreground — both against the live `fatoora_audit` at
+the same time. That produced a real `db push --force-reset` failure (a
+`Subscription_companyId_fkey` violation from the two processes racing each
+other's schema-drop and data-write). This is the same "don't run the
+6-schema-pushers and the 81-batch concurrently" rule §3 of this file already
+states — this session's mistake in applying it, not a new discovery. Stopped
+the background run, re-sequenced strictly (6 files one at a time, then the
+81-file batch alone), and the re-run was clean throughout. No production
+code was implicated.
+
+**Nothing was implemented.** No code, schema, or ledger status changed. The
+only artifacts of this session are documentation: this section, the
+corresponding section in `docs/audit/remediation-ledger.md`, and an update
+to `START-HERE.md`'s current-state summary — committed separately from any
+future Phase 6/7 engineering work, since there was none to bundle it with.
+
+**Next session**: this scope check doesn't need re-doing until something
+upstream moves — an owner action on any of X1–X3 (X4 needs X1 and D8 both),
+or an owner decision recorded in `decision-register.md` for any of D1–D9.
+If neither has happened, re-running "Phase 6 and Phase 7" will reach the
+same conclusion; start from `docs/audit/remediation-ledger.md`'s "Phase 6 &
+Phase 7 outcome" section instead of re-deriving it.

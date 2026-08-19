@@ -169,6 +169,14 @@ clearing an `any` cast. Prefer both over another reading pass.
 
 ## What is left
 
+**Note on numbering:** section 0 below uses the remediation programme's own
+phase numbers (1–8, defined in `docs/audit/remediation-roadmap.md`). Sections
+1–6 further down use an older, unrelated numbering from the pre-audit product
+roadmap (`docs/12-master-roadmap.md`/`docs/16-launch-plan.md`) — e.g. "Phase
+7 — market research" there is *not* the remediation programme's Phase 7
+(decisions D1–D9). The two schemes collided before this note was added;
+check which document a "Phase N" reference belongs to before acting on it.
+
 ### 0. Remediation programme *(see `docs/audit/remediation-ledger.md` — start there)*
 
 **Phase 1 is done.** Arabic invoice PDFs now render (embedded Amiri + fontkit
@@ -225,8 +233,17 @@ migrations dating back to Phase 1 (see the invariant below and
 `docs/SESSION_HANDOFF_2026-08-18.md` §3.7) — found by live-testing in a
 browser, not by the automated suite. Full detail: `docs/audit/
 remediation-ledger.md`'s Phase 5 table and outcome section, `handoff.md`'s
-Phase 5 entry, `docs/SESSION_HANDOFF_2026-08-18.md`. **Phase 6 has not been
-started.**
+Phase 5 entry, `docs/SESSION_HANDOFF_2026-08-18.md`.
+**Phase 6 and Phase 7 were opened 2026-08-19 and immediately scope-checked:
+0 of their combined 81 items (X1–X4's 72 + D1–D9's 9) are implementable by
+an engineering session** — Phase 6 needs owner credentials/access this
+session doesn't hold (Fatoora OTP, Neon console, Moyasar KYC), Phase 7 is
+the decision register and this session was explicitly instructed not to
+resolve D1–D9 unilaterally. Nothing was built or changed; all 5 CI gates
+and the full 575-test regression were re-run clean to confirm the baseline
+held. Full reasoning in `docs/audit/remediation-ledger.md`'s "Phase 6 &
+Phase 7 outcome (2026-08-19)" section. **The next engineering-executable
+work needs an owner action first** — see "Blocked on the owner" below.
 
 **Three decisions are still open and block work:** D1 (VAT-return scope), D7
 (does the absent Control Center gate launch), D8 (is WhatsApp launch scope).

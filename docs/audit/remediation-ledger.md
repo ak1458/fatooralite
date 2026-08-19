@@ -16,7 +16,7 @@ Status: PLANNED · IN PROGRESS · DONE · BLOCKED · OPEN (decisions).
 
 | | |
 |---|---|
-| Current phase | **Phase 5 COMPLETE** (scoped subset — see Phase 5 outcome) |
+| Current phase | **Phase 6 & Phase 7 SCOPE-CHECKED, 2026-08-19 — 0 engineering items implementable** (see outcome below) |
 | Branch | `audit/production-readiness-2026-08-18` |
 | Audit baseline | 461 GREEN / 1069 · 363 tests |
 | After Phase 1 | 481 GREEN / 1069 · 402 tests, 0 skipped |
@@ -24,7 +24,8 @@ Status: PLANNED · IN PROGRESS · DONE · BLOCKED · OPEN (decisions).
 | After Phase 3 | see Phase 3 outcome below |
 | After Phase 4 | 538 GREEN / 1069 · see Phase 4 outcome below |
 | After Phase 5 | 560 GREEN / 1069 · see Phase 5 outcome below |
-| Never do | modify `neondb` · drop `fatoora_audit` or `fatoora_restore` · migrate to Supabase · push to `main` · change VAT-return behaviour without D1 |
+| After Phase 6/7 attempt | **560 GREEN / 1069 — unchanged.** Nothing was implemented; see outcome below for why |
+| Never do | modify `neondb` · drop `fatoora_audit` or `fatoora_restore` · migrate to Supabase · push to `main` · change VAT-return behaviour without D1 · resolve D1–D9 unilaterally |
 
 ---
 
@@ -115,6 +116,8 @@ complexity, recommended phase) is in `remediation-roadmap.md` §Phase 5.
 | X3 | Moyasar merchant + sandbox transaction | 1 | BLOCKED ON OWNER |
 | X4 | Mandatory end-to-end flow | 11 | BLOCKED (needs X1 + D8) |
 
+**Re-checked 2026-08-19**: all four tracks confirmed still BLOCKED, none actionable by engineering this session (each needs owner credentials/access this session was never given, or — X4 — depends on X1 and D8 as well). See "Phase 6/7 outcome" below.
+
 ## Phase 7 — decisions
 
 | ID | Decision | Status | Needed by |
@@ -128,6 +131,8 @@ complexity, recommended phase) is in `remediation-roadmap.md` §Phase 5.
 | D7 | Control Center launch requirement | OPEN | Phase 1 |
 | D8 | WhatsApp launch scope | OPEN | Phase 1 |
 | D9 | Credit/debit note amount sign & reconciliation | OPEN | needed to close N8 |
+
+**Re-checked 2026-08-19**: all nine decisions confirmed still OPEN. None was resolved — implementing any option listed in `decision-register.md` for any of D1–D9 would resolve that decision by fiat, which this session was explicitly instructed not to do. See "Phase 6/7 outcome" below.
 
 ## Phase 8 — final production verification
 
@@ -349,3 +354,106 @@ pending `neondb` migrations first if either is more urgent for real
 customers than Phase 6's items. Do not start Phase 6 in the same context as
 this one — same convention as every prior phase transition in this
 programme.
+
+---
+
+## Phase 6 & Phase 7 outcome (2026-08-19)
+
+A session was opened to run Phase 6 and Phase 7 together, per the programme's
+own next-step pointer above. Before touching anything, it re-derived the full
+scope of both phases from three independent sources — this file, `remediation-
+roadmap.md`, and `decision-register.md` — and cross-checked them against each
+other. All three agree exactly:
+
+**Phase 6 (`remediation-roadmap.md` — "External verification / owner
+action") has four tracks, X1–X4, and every one requires something this
+session has no way to provide:**
+
+| Track | What it actually needs | Why engineering can't do it |
+|---|---|---|
+| X1 — ZATCA (48 items) | A Fatoora portal OTP → compliance CSID → production CSID → a real gateway round trip | The OTP is issued to the business's own registered contact through ZATCA's portal; there is no API or credential this session holds that can obtain one. Everything on the engineering side of X1 (signing, C14N-11, XAdES, PIH chain, local BR-KSA validation) was already built and verified in Phases 1–3 — confirmed by re-reading `2026-08-18-ledger.md`'s M-188…M-226 rows, most already GREEN, the rest explicitly UNKNOWN/MISSING *specifically because* they need the round trip, not because code is missing |
+| X2 — Neon (12 items) | Console-level confirmation of PITR, backup encryption, and platform-level restore | These are properties of the Neon account/project, readable only from its web console or an API key this session was never given. W25 (Phase 4) already built the logical `pg_dump`/`pg_restore` procedure as a hedge — that was the engineering-side ceiling, already reached |
+| X3 — Moyasar (1 item) | A merchant account (KYC + bank details) and one live sandbox transaction | KYC is an identity/business-verification process the owner has to complete directly with Moyasar; the integration code itself is already complete and inert, waiting for exactly this |
+| X4 — Mandatory E2E (11 items) | X1 (above) **and** D8 (below) both resolved first | Transitively blocked twice over — nothing to attempt until either upstream item moves |
+
+**Zero of the 72 items across X1–X4 were actionable this session.** Not "hard" — genuinely outside what an engineering session can do without the credentials or access those items name.
+
+**Phase 7 (`remediation-roadmap.md` — "Human / business decisions") is the
+decision register, D1–D9, and every one is still OPEN:**
+
+D1 (VAT-return scope), D2 (tax-period locking), D3 (pricing), D4 (legal
+copy), D5 (architecture ADR), D6 (Postgres RLS), D7 (Control Center launch
+requirement), D8 (WhatsApp launch scope), D9 (credit/debit note sign
+convention) — each carries a fully worked recommendation in
+`decision-register.md`, and none has been implemented, this session
+included. The task instructions governing this session were explicit: *do
+not resolve D1–D9 unilaterally*. Every option listed under every D-item
+**is** a resolution of that decision — there is no "implement it, but
+non-committally" version of, say, changing `/api/reports`'s `where` clause
+(D1) or shipping a shared VAT-aggregation helper (D9). Doing either would
+decide the question by writing code, which is exactly what was ruled out.
+D5 is the one item that looks lowest-risk (its own engineering impact is
+"documentation only" — write an ADR recording a decision the codebase
+already embodies) — but Phase 4's session already considered and explicitly
+declined this same shortcut ("D5's 'write the ADR' recommendation was
+explicitly flagged by the architect as excluded from this phase's scope and
+left for the owner to decide separately"); this session held that same line
+rather than re-opening it on its own judgement.
+
+**Zero of the 9 decisions were actionable this session**, for the same
+reason across all nine: implementing any of them requires deciding them.
+
+**Net result: Phase 6 and Phase 7, as scoped by this programme's own
+roadmap, contain no work an engineering session can perform.** This was
+confirmed by reading the scope, not assumed from the phase names — the
+external-access requirement (X1–X4) and the unilateral-decision prohibition
+(D1–D9) are both independently sufficient to block every single item, and
+together leave nothing.
+
+**What this session did instead of inventing scope:**
+
+- Re-verified the working tree was clean and the branch unchanged
+  (`audit/production-readiness-2026-08-18`, `git status` clean, HEAD at
+  `94585b1`) before and after.
+- Re-ran all 5 CI gates fresh rather than trusting the Phase 5 snapshot:
+  `npm run lint` (0 errors), `npm audit --audit-level=critical` (7 high / 0
+  critical — same accepted-risk advisories as every prior phase, re-checked
+  not assumed), `npx tsx scripts/validate-zatca.ts` (7/7 local checks
+  PASS), `npm run build` (clean), and the full regression suite.
+- The full regression suite — 87 files, run under the same two-group
+  convention as every phase since Phase 3 (6 schema-pushing files run
+  separately, the other 81 together with `--no-file-parallelism`) —
+  reproduced the exact Phase 5 baseline: **575/575 passed, 0 failed, 0
+  skipped** (39/39 across the 6 schema-pushing files: `vector-store.test.ts`
+  1, `server.test.ts` 8, `plan.test.ts` 19, `repo.test.ts` 4,
+  `clearance-service.test.ts` 4, `invoice-service.test.ts` 3; 536/536 across
+  the other 81 files). Nothing regressed, because nothing was changed.
+- One real mistake made and caught mid-session, worth recording: the first
+  attempt at the 81-file batch was started in the background, and while it
+  was still running, the first schema-pushing file was started in the
+  foreground against the same live `fatoora_audit` — the exact "don't run
+  these concurrently" hazard this file's own Phase 3–5 entries already
+  document. It produced a real, reproducible symptom (a `db push
+  --force-reset` failing with a `Subscription_companyId_fkey` violation,
+  because the two processes' schema-drop and data-write raced each other).
+  The background run was stopped, the sequencing corrected (all 6
+  schema-pushing files run one at a time, then the 81-file batch alone), and
+  the re-run was clean on every file. No application code was at fault; this
+  is recorded so a future session doesn't waste time re-diagnosing the same
+  race if it reappears.
+- The ledger count is unchanged at **560 GREEN / 1069** — no item's status
+  changed, because no code changed and no decision was resolved.
+
+**No code, schema, migration, or ledger status was changed by this session.**
+The only changes are this section and the corresponding entries in
+`START-HERE.md` and `docs/SESSION_HANDOFF_2026-08-18.md`, recording that
+Phase 6 and Phase 7 were opened, scope-checked against their own governing
+documents, and found to contain nothing an engineering session can execute
+— not that they were skipped or deferred.
+
+**Next session**: nothing changes until the owner acts. Either (a) provide
+a Fatoora portal OTP / Neon console access / Moyasar KYC to unblock any of
+X1–X3 (X4 additionally needs D8), or (b) resolve any of D1–D9 by writing a
+decision into `decision-register.md`'s Status field. Until one of those
+happens, re-running this same scope check will reach the same conclusion —
+don't re-derive it from scratch; start from this section.
