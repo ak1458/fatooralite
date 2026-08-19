@@ -5,6 +5,7 @@ import { hasTestDb, testClient } from "@/lib/db/test-db";
 import { issueInvoice } from "@/lib/services/invoice-service";
 import { generateKeyPair } from "@/lib/zatca/index";
 import type { InvoiceInput } from "@/lib/zatca/types";
+import { createSessionToken, SESSION_COOKIE } from "@/lib/auth/session";
 
 /**
  * Phase 3 / N8 — credit/debit notes were modelled (InvoiceInput,
@@ -15,13 +16,14 @@ import type { InvoiceInput } from "@/lib/zatca/types";
  * an original standard invoice, issue a credit note referencing it, and
  * check every layer — DB link, chain integrity, and the actual signed XML.
  *
- * What this test deliberately does NOT assert: that VAT totals/reports
- * subtract the credit note's amount from the period total. They don't —
- * see docs/audit/decision-register.md D9, filed rather than fixed, per the
- * phase's "don't invent business rules" instruction.
+ * D9 (docs/audit/decision-register.md) is now resolved (Option B) and this
+ * file's first test also proves the previously-missing half: that
+ * GET /api/reports nets a credit note out of the period total instead of
+ * inflating it, via lib/zatca/reconciliation.ts's shared netSign/sumNet.
  */
 let db: PrismaClient;
 let companyId: string;
+let cookie: string;
 // ZATCA VAT format: /^3\d{13}3$/ — must both start AND end with 3.
 const VAT = "300000000000873";
 
@@ -41,10 +43,19 @@ beforeAll(async () => {
       token: "test-token", secret: "test-secret",
     },
   });
+
+  const user = await db.user.create({
+    data: { companyId, email: "credit-note-probe@team.example", name: "Credit Note Probe", role: "owner" },
+  });
+  cookie = `${SESSION_COOKIE}=${await createSessionToken({
+    userId: user.id, email: user.email, name: user.name, role: user.role,
+    companyId, sessionVersion: user.sessionVersion,
+  })}`;
 }, 180_000);
 
 afterAll(async () => {
   if (!db) return;
+  await db.user.deleteMany({ where: { email: "credit-note-probe@team.example" } });
   await db.company.deleteMany({ where: { vatNumber: VAT } });
   await db.$disconnect();
 });
@@ -97,6 +108,19 @@ describe.skipIf(!hasTestDb)("credit note issuance end-to-end (N8)", () => {
     expect(xml).toContain("<cac:BillingReference>");
     expect(xml).toContain(`<cbc:ID>${originalRow.invoiceNumber}</cbc:ID>`);
     expect(xml).toContain("<cbc:Note>Returned goods</cbc:Note>");
+
+    // --- D9: the credit note nets the original OUT of the VAT return
+    // instead of doubling it. Both rows are "signed" (not cleared/reported),
+    // so this checks the "declarable" figure, which includes signed invoices
+    // by design (D1) — a signed-but-not-yet-cleared document is still a real
+    // taxable supply at its issue date.
+    const { GET } = await import("@/app/api/reports/route");
+    const res = await GET(
+      new Request(`http://localhost/api/reports?companyId=${companyId}&month=2026-08`, { headers: { cookie } }),
+    );
+    const report = (await res.json()) as { declarable: { totalTaxable: number; totalVat: number } };
+    expect(report.declarable.totalTaxable).toBe(0);
+    expect(report.declarable.totalVat).toBe(0);
   }, 40_000);
 
   it("resolving the same billingReferenceId twice still points both notes at one original (not last-write-wins)", async () => {

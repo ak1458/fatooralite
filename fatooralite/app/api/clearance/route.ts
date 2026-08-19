@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     select: {
       kind: true, status: true, vatAmount: true, grandTotal: true,
       issueDate: true, issueTime: true, resultCode: true,
-      invoiceNumber: true, buyerName: true, createdAt: true,
+      invoiceNumber: true, buyerName: true, createdAt: true, documentType: true,
     },
     orderBy: { createdAt: "desc" },
   });

@@ -36,6 +36,17 @@ describe("computeClearanceStats", () => {
     expect(s.vatCollected).toBe(15);
   });
 
+  it("nets a credit note out of vatCollected instead of inflating it (D9)", () => {
+    const invoices: ClearanceInvoice[] = [
+      { kind: "standard", status: "cleared", vatAmount: 150, documentType: "invoice", ...hoursAgoIssue(40) },
+      { kind: "standard", status: "cleared", vatAmount: 150, documentType: "credit", ...hoursAgoIssue(1) },
+    ];
+    const s = computeClearanceStats(invoices);
+    // A full credit note against the only invoice must net vatCollected to
+    // zero, not 300 (the bug: summing both as positive).
+    expect(s.vatCollected).toBe(0);
+  });
+
   it("flags simplified invoices near and past the 24h reporting deadline", () => {
     const invoices: ClearanceInvoice[] = [
       { kind: "simplified", status: "signed", vatAmount: 1, ...hoursAgoIssue(20) }, // near (18-24h)

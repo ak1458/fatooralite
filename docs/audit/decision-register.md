@@ -9,7 +9,21 @@ Status key: OPEN (awaiting owner) · APPROVED · REJECTED · DEFERRED.
 
 ---
 
-## D1 — VAT-return scope · **OPEN** · needed for Phase 1
+## D1 — VAT-return scope · **APPROVED — Option C** · needed for Phase 1
+
+**Owner decision (2026-08-19):** Option C — report both the "declarable"
+(every issued, non-draft invoice — the tax point) and "cleared" (cleared/
+reported by ZATCA only) figures side by side, clearly labelled. Implemented:
+`GET /api/reports` now returns `declarable`/`cleared` blocks (legacy
+top-level `totalTaxable`/`totalVat`/`totalInvoices` kept, unchanged meaning,
+for existing consumers); the CSV export lists every non-draft invoice with
+two labelled total rows; the AI assistant's `getReport` tool returns the
+same two-figure shape. Both figures are net of credit/debit notes (D9).
+Tests: `app/api/reports/route.test.ts` (existing, unchanged, still green),
+`lib/services/credit-note.test.ts` (new assertion). Still confirm with a
+qualified Saudi tax adviser before filing from either figure — this
+implements the register's recommendation, it does not substitute for that
+review.
 
 **QUESTION**
 Should the VAT return include invoices that have been *issued* but not yet
@@ -70,7 +84,16 @@ Nothing else is blocked. Reports stay unchanged; no silent alteration will occur
 
 ---
 
-## D2 — Tax-period closing/locking · **OPEN** · Phase 3
+## D2 — Tax-period closing/locking · **APPROVED — Option B** · Phase 3
+
+**Owner decision (2026-08-19):** Option B — a soft, non-blocking warning
+only; no period lock (Option C stays not chosen). Implemented:
+`lib/time/riyadh.ts`'s `isPastReportingPeriod()` flags an `issueDate` whose
+calendar month has already elapsed (Riyadh time); `POST /api/invoices`
+attaches a `warnings` array to its response when true, issuance still
+succeeds (201) either way. Tests:
+`app/api/invoices/past-period-warning.test.ts` (new — proves no warning in
+the current month, a warning-but-still-201 for a back-dated month).
 
 **QUESTION** Should a filed VAT period be lockable, preventing new or amended
 invoices from being dated into it?
@@ -295,7 +318,41 @@ production gate cannot close.
 
 ---
 
-## D9 — Credit/debit note amount sign & reconciliation · **OPEN** · needed to close N8
+## D9 — Credit/debit note amount sign & reconciliation · **APPROVED — Option B** · needed to close N8
+
+**Owner decision (2026-08-19):** "the safest practical implementation" —
+evaluated B against C before implementing, per the owner's explicit
+instruction not to combine them or default to A.
+
+**B vs C, evaluated against the actual codebase (not in the abstract):**
+Option C (a separate sign-adjusted `netEffect` column/view) would need a new
+migration, a backfill decision for the credit notes already seeded during
+Phase 3/5 testing, and — critically — every aggregation site would *still*
+have to remember to read the new column instead of the raw one, which is
+the exact same "forgettable branch" risk B carries, just moved to a
+different field name. It buys isolation of the stored representation at the
+cost of a schema change this decision doesn't need. Option A (store
+negative amounts) was ruled out per the owner's explicit instruction unless
+architecturally necessary — it isn't: `createInvoiceSchema` and the W11
+CHECK constraints already require positive line amounts unconditionally,
+and loosening either is a real, separate risk surface this fix doesn't need
+to open.
+
+**Chosen: Option B**, with the shared-helper mitigation the original
+register entry already named as the concrete follow-up. Implemented:
+`lib/zatca/reconciliation.ts` (`netSign`/`netEffect`/`sumNet` — the ONE
+place the sign decision lives) plus the three real call sites that actually
+aggregate across invoices (corrected from this entry's original list, which
+named `lib/services/reconcile-service.ts`; grepped and confirmed that file
+never aggregates `taxableAmount`/`vatAmount` at all — it manages ZATCA
+resubmission retries, not reconciliation totals): `app/api/reports/route.ts`,
+`lib/services/clearance-stats.ts` (`computeClearanceStats`, also used by
+the AI assistant's `getComplianceStats`), and `lib/ai/tools.ts`'s own
+`getReport` handler. No schema or migration change. Tests:
+`lib/zatca/reconciliation.test.ts` (new, pure unit), a new case in
+`lib/services/clearance-stats.test.ts`, and a new end-to-end assertion in
+`lib/services/credit-note.test.ts` proving a real credit note nets a real
+invoice to zero through `GET /api/reports` against `fatoora_audit`.
 
 **QUESTION**
 When a credit or debit note is issued, should its `taxableAmount`/`vatAmount`

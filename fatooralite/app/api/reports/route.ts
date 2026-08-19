@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { num } from "@/lib/db/decimal";
 import { requirePermission } from "@/lib/auth/server";
 import { riyadhToday } from "@/lib/time/riyadh";
+import { sumNet } from "@/lib/zatca/reconciliation";
 
 export const runtime = "nodejs";
 
@@ -74,29 +75,46 @@ export async function GET(req: Request) {
   }
   const format = searchParams.get("format");
 
+  // D1 (docs/audit/decision-register.md): report BOTH figures, clearly
+  // labelled, instead of one number that looks like a VAT return but is
+  // silently "cleared by ZATCA only". "declarable" is every issued invoice
+  // in the period (draft excluded) — the tax point per Saudi VAT time-of-
+  // supply rules, which does not depend on clearance/reporting status.
+  // "cleared" is the original cleared/reported-only figure, unchanged in
+  // meaning, now explicitly labelled instead of implicitly presented as
+  // the whole return. Filtered on issueDate, not createdAt: the VAT period
+  // an invoice belongs to is decided by its issue date — the tax point —
+  // not by when the row happened to be written. An invoice issued on 15
+  // July and entered on 10 August was previously declared in August's
+  // return and vanished from July's entirely, misstating both periods.
   const invoices = await prisma.invoice.findMany({
     where: {
       companyId,
-      status: { in: ["cleared", "reported"] },
-      // Filtered on issueDate, not createdAt. The VAT period an invoice belongs
-      // to is decided by its issue date — the tax point — not by when the row
-      // happened to be written. An invoice issued on 15 July and entered on
-      // 10 August was previously declared in August's return and vanished from
-      // July's entirely, misstating both periods.
+      status: { not: "draft" },
       issueDate: { gte: start, lt: end },
     },
     orderBy: [{ issueDate: "asc" }, { invoiceNumber: "asc" }],
   });
+  const clearedInvoices = invoices.filter((inv) => inv.status === "cleared" || inv.status === "reported");
 
-  const totalTaxable = invoices.reduce((sum, inv) => sum + num(inv.taxableAmount), 0);
-  const totalVat = invoices.reduce((sum, inv) => sum + num(inv.vatAmount), 0);
+  // D9: sign-adjust credit/debit notes so a credit note reduces the total
+  // instead of inflating it (docs/audit/decision-register.md D9, Option B).
+  const toNetInput = (inv: (typeof invoices)[number]) => ({
+    documentType: inv.documentType,
+    taxableAmount: num(inv.taxableAmount),
+    vatAmount: num(inv.vatAmount),
+    grandTotal: num(inv.grandTotal),
+  });
+  const declarable = sumNet(invoices.map(toNetInput));
+  const cleared = sumNet(clearedInvoices.map(toNetInput));
 
   if (format === "csv") {
-    const header = ["Invoice Number", "Issue Date", "Buyer", "Buyer VAT", "Taxable", "VAT", "Grand Total", "Status"];
+    const header = ["Invoice Number", "Issue Date", "Type", "Buyer", "Buyer VAT", "Taxable", "VAT", "Grand Total", "Status"];
     const rows = invoices.map((inv) =>
       [
         inv.invoiceNumber,
         inv.issueDate,
+        inv.documentType,
         inv.buyerName ?? "",
         inv.buyerVat ?? "",
         inv.taxableAmount.toFixed(2),
@@ -105,8 +123,11 @@ export async function GET(req: Request) {
         inv.status,
       ].map(csvCell).join(","),
     );
-    const totals = ["TOTAL", "", "", "", totalTaxable.toFixed(2), totalVat.toFixed(2), (totalTaxable + totalVat).toFixed(2), ""].join(",");
-    const csv = [header.join(","), ...rows, totals].join("\n");
+    // Two labelled totals, not one — see the D1 comment above. Both are
+    // net of credit/debit notes (D9), not a raw sum of the rows above.
+    const declarableTotal = ["TOTAL — declarable (all issued, net of credit/debit notes)", "", "", "", "", declarable.taxableAmount.toFixed(2), declarable.vatAmount.toFixed(2), declarable.grandTotal.toFixed(2), ""].join(",");
+    const clearedTotal = ["TOTAL — cleared by ZATCA only (net of credit/debit notes)", "", "", "", "", cleared.taxableAmount.toFixed(2), cleared.vatAmount.toFixed(2), cleared.grandTotal.toFixed(2), ""].join(",");
+    const csv = [header.join(","), ...rows, declarableTotal, clearedTotal].join("\n");
 
     return new NextResponse(csv, {
       status: 200,
@@ -118,9 +139,14 @@ export async function GET(req: Request) {
   }
 
   return NextResponse.json({
-    totalTaxable,
-    totalVat,
-    totalInvoices: invoices.length,
+    // Legacy top-level fields — unchanged meaning (cleared/reported only,
+    // now also D9-net-adjusted), kept for existing consumers. New code
+    // should read `cleared`/`declarable` below instead of these directly.
+    totalTaxable: cleared.taxableAmount,
+    totalVat: cleared.vatAmount,
+    totalInvoices: clearedInvoices.length,
+    cleared: { totalTaxable: cleared.taxableAmount, totalVat: cleared.vatAmount, totalInvoices: clearedInvoices.length },
+    declarable: { totalTaxable: declarable.taxableAmount, totalVat: declarable.vatAmount, totalInvoices: invoices.length },
     period: label,
   });
 }

@@ -8,6 +8,7 @@ import type { Feature } from "@/lib/billing/entitlements";
 import { issueInvoice } from "@/lib/services/invoice-service";
 import { submitInvoice } from "@/lib/services/clearance-service";
 import { computeClearanceStats } from "@/lib/services/clearance-stats";
+import { sumNet } from "@/lib/zatca/reconciliation";
 import type { InvoiceInput } from "@/lib/zatca/types";
 import { riyadhToday, riyadhTimeOfDay } from "@/lib/time/riyadh";
 
@@ -119,7 +120,7 @@ const TOOLS: Record<string, ToolDef> = {
     async handler(_args, ctx) {
       const invoices = await prisma.invoice.findMany({
         where: { companyId: ctx.companyId },
-        select: { kind: true, status: true, vatAmount: true, issueDate: true, issueTime: true, resultCode: true },
+        select: { kind: true, status: true, vatAmount: true, issueDate: true, issueTime: true, resultCode: true, documentType: true },
       });
       return { content: tenantScoped(computeClearanceStats(invoices.map((i) => ({ ...i, vatAmount: num(i.vatAmount) })))) };
     },
@@ -151,14 +152,23 @@ const TOOLS: Record<string, ToolDef> = {
       const a = args as { rangeDays?: number };
       const days = a.rangeDays ?? 30;
       const start = new Date(Date.now() - days * 86_400_000);
-      const invoices = await prisma.invoice.findMany({
-        where: { companyId: ctx.companyId, status: { in: ["cleared", "reported"] }, createdAt: { gte: start } },
-        select: { taxableAmount: true, vatAmount: true },
+      // D1: report both the declarable figure (every issued invoice, the tax
+      // point per Saudi VAT time-of-supply rules) and the cleared-by-ZATCA
+      // figure side by side — see docs/audit/decision-register.md D1. Both
+      // are D9-net-adjusted so a credit note reduces rather than inflates them.
+      const declarableRows = await prisma.invoice.findMany({
+        where: { companyId: ctx.companyId, status: { not: "draft" }, createdAt: { gte: start } },
+        select: { taxableAmount: true, vatAmount: true, grandTotal: true, documentType: true, status: true },
       });
-      const totalTaxable = invoices.reduce((s, i) => s + num(i.taxableAmount), 0);
-      const totalVat = invoices.reduce((s, i) => s + num(i.vatAmount), 0);
+      const clearedRows = declarableRows.filter((i) => i.status === "cleared" || i.status === "reported");
+      const declarable = sumNet(declarableRows.map((i) => ({ ...i, taxableAmount: num(i.taxableAmount), vatAmount: num(i.vatAmount), grandTotal: num(i.grandTotal) })));
+      const cleared = sumNet(clearedRows.map((i) => ({ ...i, taxableAmount: num(i.taxableAmount), vatAmount: num(i.vatAmount), grandTotal: num(i.grandTotal) })));
       return {
-        content: tenantScoped({ period: `Last ${days} days`, totalInvoices: invoices.length, totalTaxable, totalVat }),
+        content: tenantScoped({
+          period: `Last ${days} days`,
+          declarable: { totalInvoices: declarableRows.length, totalTaxable: declarable.taxableAmount, totalVat: declarable.vatAmount },
+          cleared: { totalInvoices: clearedRows.length, totalTaxable: cleared.taxableAmount, totalVat: cleared.vatAmount },
+        }),
         navigate: `/reports?rangeDays=${days}`,
       };
     },

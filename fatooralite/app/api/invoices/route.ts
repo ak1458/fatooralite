@@ -6,6 +6,7 @@ import { issueInvoice, NoCertificateError, InvoiceValidationError } from "@/lib/
 import { getInvoiceList } from "@/lib/db/queries";
 import { createInvoiceSchema } from "@/lib/validation/schemas";
 import { requirePermission } from "@/lib/auth/server";
+import { isPastReportingPeriod } from "@/lib/time/riyadh";
 import { scheduleCompanyIngest } from "@/lib/ai/tenant-ingest";
 import { checkInvoiceLimit, requireFeature } from "@/lib/billing/plan";
 import { featureLocked, limitReached } from "@/lib/billing/deny";
@@ -83,7 +84,20 @@ export async function POST(req: Request) {
 
     const result = await issueInvoice(companyId, typedInput, prisma, { branchId });
     scheduleCompanyIngest(companyId);
-    return NextResponse.json(result, { status: 201 });
+
+    // D2 (docs/audit/decision-register.md) — soft, non-blocking warning only
+    // (Option B). This never refuses issuance; there is no period lock (that's
+    // Option C, not chosen). A credit/debit note referencing an older invoice
+    // is the correction mechanism for an already-elapsed period, not a reason
+    // to block back-dating outright.
+    const warnings: string[] = [];
+    if (isPastReportingPeriod(typedInput.issueDate)) {
+      warnings.push(
+        `This invoice is dated ${typedInput.issueDate}, in a reporting period that has already ended. If that period was already filed, use a credit or debit note instead of back-dating.`,
+      );
+    }
+
+    return NextResponse.json(warnings.length ? { ...result, warnings } : result, { status: 201 });
   } catch (err) {
     const invalid = zodErrorResponse(err);
     if (invalid) return invalid;

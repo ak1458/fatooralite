@@ -66,3 +66,15 @@ export function parseRiyadhTimestamp(date: string, time: string): Date {
 function offsetSuffix(): string {
   return `+${String(RIYADH_OFFSET_HOURS).padStart(2, "0")}:00`;
 }
+
+/**
+ * D2 (docs/audit/decision-register.md) — Option B, a soft warning only:
+ * whether `issueDate` falls in an already-elapsed Riyadh calendar month
+ * relative to `today`. There is deliberately no `TaxPeriod` "filed" concept
+ * yet (that's D2's Option C, not chosen) — "past period" here means the
+ * simplest thing that doesn't invent one: the invoice's own month has
+ * already ended. The current month is never flagged, even late in it.
+ */
+export function isPastReportingPeriod(issueDate: string, today: string = riyadhToday()): boolean {
+  return issueDate.slice(0, 7) < today.slice(0, 7);
+}
