@@ -80,7 +80,10 @@ async function uploadMedia(
   const form = new FormData();
   form.append("messaging_product", "whatsapp");
   form.append("type", "application/pdf");
-  form.append("file", new Blob([bytes], { type: "application/pdf" }), filename);
+  // Buffer.from copies into a plain ArrayBuffer-backed view — Uint8Array's
+  // own .buffer is typed ArrayBufferLike (which a Blob part rejects) since
+  // it could be a SharedArrayBuffer.
+  form.append("file", new Blob([Buffer.from(bytes)], { type: "application/pdf" }), filename);
 
   const res = await fetchImpl(`${base}/media`, {
     method: "POST",
