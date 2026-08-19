@@ -10,7 +10,8 @@ export default function AcceptableUsePage() {
     <div style={{ maxWidth: 800, margin: "40px auto", padding: "0 24px", color: "var(--tx)", fontFamily: "sans-serif" }}>
       <Link href="/login" style={{ color: "var(--ac)", textDecoration: "none", fontSize: 14 }}>← Back to Application</Link>
       <div style={{ background: "var(--warn)", color: "var(--on-warn)", fontWeight: 700, fontSize: 14, padding: "14px 18px", borderRadius: 12, margin: "20px 0" }}>
-        DRAFT — placeholder text, not reviewed by counsel. Replace before accepting real customers.
+        DRAFT — drafted from the product&apos;s actual security posture, but not reviewed by qualified legal
+        counsel. Do not rely on this to accept real customers until reviewed.
       </div>
       <h1 style={{ fontSize: 28, fontWeight: 700, margin: "20px 0 10px" }}>Acceptable Use Policy</h1>
       <p style={{ color: "var(--t3)", fontSize: 13, marginBottom: 24 }}>Last updated: July 20, 2026</p>
@@ -28,7 +29,7 @@ export default function AcceptableUsePage() {
 
         <section>
           <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>3. Enforcement</h2>
-          <p>[Placeholder: describe consequences of a violation — warning, suspension, termination — and how a decision can be appealed. Requires legal/business sign-off before publication.]</p>
+          <p>A violation of this policy may result in a warning, temporary suspension, or termination of your account, at a severity matched to the violation — an isolated mistake is treated differently from a deliberate attempt to defraud ZATCA or attack another tenant&apos;s data, which may result in immediate suspension pending investigation. Where an account is suspended or terminated, you retain the data-export and data-subject rights described in the Privacy Policy and Data Retention Policy; suspension does not forfeit your own filed compliance records. If you believe an enforcement decision was made in error, contact support to request review. This section&apos;s specific process requires business/legal sign-off before it is treated as a binding commitment.</p>
         </section>
       </div>
     </div>

@@ -123,7 +123,19 @@ customers file.
 
 ---
 
-## D3 — Commercial model / pricing · **OPEN** · Phase 2
+## D3 — Commercial model / pricing · **APPROVED — manual onboarding, checkout stays OFF** · Phase 2
+
+**Owner decision (2026-08-19):** self-serve paid checkout stays OFF; first
+customers are onboarded manually. No final price invented or set.
+
+**Verified, no code change needed:** `PRO_PRICE_HALALAS` in
+`lib/billing/entitlements.ts` is unchanged (still 149 SAR/month, explicitly
+commented as a placeholder) and there is no checkout route anywhere under
+`app/` today (`grep -r MOYASAR|checkout app/` — zero matches) — this
+decision's chosen state was already the actual state, confirmed rather than
+assumed. Still gated on the Phase 7 (product-roadmap numbering — market
+research, `docs/17-market-analysis.md`, not yet written) research this
+register's original entry already named.
 
 **QUESTION** Final Pro price, whether an annual plan exists, and the limit set.
 
@@ -151,7 +163,36 @@ Moyasar product and a period calculation. Small to medium.
 
 ---
 
-## D4 — Legal copy · **OPEN** · Phase 2
+## D4 — Legal copy · **APPROVED — Option A, drafted, still unreviewed** · Phase 2
+
+**Owner decision (2026-08-19):** Option A — draft the legal pages from the
+product's actual functionality/data practices, keep the DRAFT banners
+until qualified legal counsel reviews them. Not represented as legally
+approved anywhere.
+
+**Delivered:** every remaining `[Placeholder: ...]` block across the seven
+legal pages replaced with substantive draft text grounded in this
+codebase's actual data model, security posture, and features (`app/terms`,
+`app/privacy`, `app/refund-policy`, `app/cancellation-policy`,
+`app/data-retention`, `app/acceptable-use` — `app/cookie-policy` already
+had none). Each page's DRAFT banner is kept and reworded to say what's
+actually true now: drafted from real product facts, but **not reviewed by
+counsel**. Two things deliberately still left unset rather than invented,
+each flagged in place: the refund window in `refund-policy` (no payment
+processor is integrated — D3 keeps checkout OFF; publishing a number ahead
+of an approved commercial policy would bind the business to a figure no
+one chose) and the exact Saudi VAT record-retention period in
+`data-retention` (a tax-law fact, same "flag for a qualified adviser" class
+as D1/D9's own sourcing notes, not something to guess at). A privacy
+contact address is likewise left as an explicit operational TODO rather
+than invented.
+
+**Still blocked on the owner:** commissioning actual qualified legal
+review remains the real gate on public launch (unchanged from this
+register's original text) — drafting substantive text is not a substitute
+for that review, and none of these pages should be read as legally
+sufficient. No code logic changed; this is content-only, matching the
+original "ENGINEERING IMPACT: Content only. No code." assessment.
 
 **QUESTION** Who supplies reviewed text for `/terms`, `/privacy`,
 `/refund-policy`, `/cancellation-policy`, `/data-retention`, `/acceptable-use`?
