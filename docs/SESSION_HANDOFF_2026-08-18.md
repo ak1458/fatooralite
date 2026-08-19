@@ -13,7 +13,7 @@ covers through Phase 5, run 2026-08-19.
 | | |
 |---|---|
 | Branch | `audit/production-readiness-2026-08-18` |
-| Latest commit | Phase 5's work is committed on top of `8995a81` (Phase 4) — see §4 for the exact hash, not pushed to `main` |
+| Latest commit | `ce410ca` — Phase 5's work is committed on top of `8995a81` (Phase 4), not pushed to `main` |
 | Phase 2 | **COMPLETE**, committed as `1c93593`. 447 passed / 2 pre-existing failures / 0 skipped at the time. Ledger: 507 GREEN / 1069 |
 | Phase 3 | **COMPLETE and fully verified**, committed as `97135cf`. 73 test files, 497 tests, 0 failed, 0 skipped at the time |
 | Phase 4 | **COMPLETE, with honestly-documented PARTIALs**, committed as `7dec667`+`8995a81`. 76 test files, 519 tests, 0 failed, 0 skipped at the time |
@@ -153,10 +153,10 @@ uncaught error).
 ## 4. Commit status
 
 **Done.** Phase 4's work is committed as `7dec667`+`8995a81`. Phase 5's
-work (this session) is committed as **[FILL: hash]** on top of it — not
-pushed to `main`, working tree clean afterward. No scratch files left
-behind (temporary batch-file-list `.txt` files used to drive the test runs
-were not committed).
+work (this session) is committed as `ce410ca` (43 files changed) on top of
+it — not pushed to `main`, working tree clean afterward. No scratch files
+left behind (temporary batch-file-list `.txt` files used to drive the test
+runs were not committed).
 
 ## 5. Reconstructing the test-run commands (only needed for future re-verification)
 
