@@ -194,6 +194,16 @@ export async function proxy(req: NextRequest) {
     // caller (Vercel Cron, Moyasar's webhook) is an opaque, silent failure.
     pathname.startsWith("/api/cron") ||
     pathname.startsWith("/api/billing/webhook") ||
+    // Same reasoning, same pattern: the operator surfaces (D7/D8,
+    // 2026-08-19) authenticate with an OPERATOR_SECRET bearer token, never
+    // a session cookie — there is deliberately no platform-admin User role.
+    // Without this line every request to them died here with a generic 401
+    // before the route's own bearer check ever ran; found live in
+    // production 2026-08-19; the 639-test suite never caught it because
+    // every route test imports and calls the handler directly, bypassing
+    // this proxy entirely. GET/HEAD-only routes, so no CSRF gate needed
+    // either.
+    pathname.startsWith("/api/operator") ||
     // Static and PWA assets. These were gated, which broke three things
     // silently: the service worker never registered at all (a browser refuses
     // a worker script that arrives via a redirect), the manifest could not be

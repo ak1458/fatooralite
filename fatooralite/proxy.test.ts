@@ -118,3 +118,20 @@ describe("proxy — Origin required on state-changing requests (W21, closes F-12
     expect(res.status).not.toBe(403);
   });
 });
+
+describe("proxy — operator surfaces reach their own bearer-token check (found live 2026-08-19)", () => {
+  it("does not intercept /api/operator/companies with a generic 401 — no session cookie needed", async () => {
+    const req = new NextRequest(new Request("http://localhost/api/operator/companies"));
+    const res = await proxy(req);
+    // "not 401 from the proxy" is the property that matters: the route
+    // itself still 403s with no Authorization header, but that must come
+    // from lib/audit/events.ts's own check, not this gate.
+    expect(res.status).not.toBe(401);
+  });
+
+  it("does not intercept /api/operator/whatsapp-session with a generic 401 — no session cookie needed", async () => {
+    const req = new NextRequest(new Request("http://localhost/api/operator/whatsapp-session"));
+    const res = await proxy(req);
+    expect(res.status).not.toBe(401);
+  });
+});
