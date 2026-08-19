@@ -235,20 +235,34 @@ browser, not by the automated suite. Full detail: `docs/audit/
 remediation-ledger.md`'s Phase 5 table and outcome section, `handoff.md`'s
 Phase 5 entry, `docs/SESSION_HANDOFF_2026-08-18.md`.
 **Phase 6 and Phase 7 were opened 2026-08-19 and immediately scope-checked:
-0 of their combined 81 items (X1–X4's 72 + D1–D9's 9) are implementable by
-an engineering session** — Phase 6 needs owner credentials/access this
-session doesn't hold (Fatoora OTP, Neon console, Moyasar KYC), Phase 7 is
-the decision register and this session was explicitly instructed not to
-resolve D1–D9 unilaterally. Nothing was built or changed; all 5 CI gates
-and the full 575-test regression were re-run clean to confirm the baseline
-held. Full reasoning in `docs/audit/remediation-ledger.md`'s "Phase 6 &
-Phase 7 outcome (2026-08-19)" section. **The next engineering-executable
-work needs an owner action first** — see "Blocked on the owner" below.
+0 of their combined 81 items (X1–X4's 72 + D1–D9's 9) were implementable by
+an engineering session at that point** — Phase 6 needs owner credentials/
+access no session holds (Fatoora OTP, Neon console, Moyasar KYC); Phase 7
+is the decision register and that session was explicitly instructed not to
+resolve D1–D9 unilaterally. Full reasoning in `docs/audit/
+remediation-ledger.md`'s "Phase 6 & Phase 7 outcome (2026-08-19)" section.
+**Later the same day, in a separate follow-up session, the owner reviewed
+a decision-readiness table and explicitly locked all nine D1–D9
+decisions — every one was then implemented, not merely recorded**: D1+D9
+fixed a live VAT-report correctness bug (credit notes were inflating
+totals instead of reducing them); D2 added a non-blocking back-dating
+warning; D3 confirmed checkout stays off with no price invented; D4
+drafted all seven legal pages (still unreviewed by counsel); D5 wrote the
+architecture ADR; D6 delivered Postgres RLS as a tested, opt-in mechanism
+(not yet adopted at any real call site — see the invariant below); D7
+delivered a read-only cross-tenant operator surface (`GET /api/operator/
+companies`) — **not** the full Customer Control Center, which stays
+unauthorized; D8 delivered WhatsApp's core send capability,
+feature-flagged off, with no production send yet verified (Meta
+Business/template approval is owner-only and still pending). Full detail:
+`docs/audit/decision-register.md` (per-decision) and
+`docs/SESSION_HANDOFF_2026-08-18.md` §8 (session-level). Phase 6's X1–X4
+are unaffected by any of this — still BLOCKED ON OWNER. **Verified clean
+afterward: 93 test files, 612 tests, 0 failed, 0 skipped, all 5 CI gates
+green.**
 
-**Three decisions are still open and block work:** D1 (VAT-return scope), D7
-(does the absent Control Center gate launch), D8 (is WhatsApp launch scope).
-All three are analysed with recommendations in
-`docs/audit/decision-register.md`; none has been implemented.
+**All nine decisions (D1–D9) are now APPROVED and implemented** — see
+`docs/audit/decision-register.md` for what each one actually shipped.
 
 Still outstanding from the audit:
 
@@ -278,9 +292,13 @@ Still outstanding from the audit:
    re-index.**~~ **FIXED in Phase 2 (W6).** Global re-index needs
    `OPERATOR_SECRET`; per-call token/latency accounting in `AiUsage`. No
    quota *enforcement* yet — W6 built the accounting substrate, not limits.
-5. **HUMAN DECISION:** `/api/reports` counts only `cleared`/`reported` invoices,
-   so an issued-but-not-yet-cleared invoice is absent from the VAT return. That
-   is a tax-scope call, deliberately left unchanged.
+5. ~~**HUMAN DECISION:** `/api/reports` counts only `cleared`/`reported`
+   invoices, so an issued-but-not-yet-cleared invoice is absent from the
+   VAT return.~~ **RESOLVED 2026-08-19 (D1, Option C).** `/api/reports` now
+   returns both figures — `declarable` (every issued invoice) and `cleared`
+   (the original cleared/reported-only figure) — clearly labelled side by
+   side, net of credit/debit notes (D9). See `docs/audit/
+   decision-register.md` D1.
 
 ### 1. Phase 7 — market research
 
@@ -367,10 +385,16 @@ identifiers deployment depends on.
    matches `parseInvoiceWebhook`.
 3. **Reviewed legal copy** — `/terms`, `/privacy`, `/refund-policy`,
    `/cancellation-policy`, `/data-retention`, `/acceptable-use` all carry DRAFT
-   banners with bracketed placeholders.
+   banners; the placeholder text itself was drafted 2026-08-19 (D4), but none
+   of it has been reviewed by qualified legal counsel.
 4. **Final Pro pricing** (see Phase 7).
 5. **Branch protection on `main`** — confirmed unset.
 6. **`GROQ_API_KEY`** if the Groq demo path is wanted; it ships inert without it.
+7. **Meta Business verification + WhatsApp message-template approval**
+   (D8, 2026-08-19). `lib/whatsapp/send.ts` and `POST /api/invoices/:id/
+   whatsapp` are complete and inert without `WHATSAPP_ACCESS_TOKEN`/
+   `WHATSAPP_PHONE_NUMBER_ID`/`WHATSAPP_INVOICE_TEMPLATE_NAME` — same
+   posture as Moyasar (#2). No production WhatsApp send has been verified.
 
 ---
 
@@ -529,6 +553,32 @@ regression, and the reason is in the code comment beside it.
   `neondb` without explicit owner authorization** — it is still described
   as shared with production. This is not a "fix it while you're in there"
   situation; it needs a deliberate, owner-approved deploy.
+- **`lib/db/rls-client.ts`'s `queryAsTenant()` is not used anywhere in the
+  application yet, on purpose.** D6 (2026-08-19) delivered Postgres RLS as
+  a real, adversarially-tested mechanism on `fatoora_audit` — but wiring it
+  into the app's actual `prisma` client (`lib/db/client.ts`) risks
+  `issueInvoice()`'s chain-critical interactive transaction (nesting a
+  second transaction per operation inside an already-open one is not a
+  supported pattern) and was judged unsafe to retrofit blanket-wide in one
+  session. Do not "finish the job" by splicing it into the shared client
+  without deliberately re-deriving that risk first — adopt it at one
+  specific call site at a time instead. Never apply the RLS migration
+  (`20260819100000_row_level_security`) to `neondb` without the same
+  per-action owner approval every other `neondb` change in this programme
+  has required.
+- **`lib/whatsapp/send.ts` requires all three of `WHATSAPP_ACCESS_TOKEN`,
+  `WHATSAPP_PHONE_NUMBER_ID`, and `WHATSAPP_INVOICE_TEMPLATE_NAME` before
+  it will attempt a real send — partial configuration is treated as fully
+  unconfigured, not a partial attempt.** Same "never crash, log instead"
+  posture as `lib/email/send.ts`'s missing-`RESEND_API_KEY` path. Do not
+  "improve" this by trying to send with only some credentials set.
+- **`lib/zatca/reconciliation.ts`'s `netSign`/`netEffect`/`sumNet` are the
+  ONLY place a credit or debit note's sign is decided for cross-invoice
+  aggregation (D9).** Every call site that sums `taxableAmount`/
+  `vatAmount`/`grandTotal` across more than one invoice must go through
+  this helper — re-implementing the `documentType === "credit"` branch
+  inline at a new call site is exactly how this bug got reintroduced
+  silently before (three separate places had it wrong independently).
 
 ---
 

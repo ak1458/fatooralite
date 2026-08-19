@@ -16,7 +16,7 @@ Status: PLANNED · IN PROGRESS · DONE · BLOCKED · OPEN (decisions).
 
 | | |
 |---|---|
-| Current phase | **Phase 6 & Phase 7 SCOPE-CHECKED, 2026-08-19 — 0 engineering items implementable** (see outcome below) |
+| Current phase | **Phase 7's D1–D9 all APPROVED and implemented, 2026-08-19** (separate follow-up session to the same-day scope-check below). Phase 6's X1–X4 remain BLOCKED ON OWNER, unchanged |
 | Branch | `audit/production-readiness-2026-08-18` |
 | Audit baseline | 461 GREEN / 1069 · 363 tests |
 | After Phase 1 | 481 GREEN / 1069 · 402 tests, 0 skipped |
@@ -95,17 +95,17 @@ complexity, recommended phase) is in `remediation-roadmap.md` §Phase 5.
 
 | ID | Feature | Audit items | Launch required? | Status | Evidence |
 |---|---|---|---|---|---|
-| N1 | Customer Control Center | 23 | **Contested — D7** | **BLOCKED — decision-gated** | Building it resolves D7 by fiat (grants the contested cross-tenant privileged role); not attempted |
-| N2 | Support ticketing + KB | 18 | No | **BLOCKED — depends on N1** | Nothing to build until D7 resolves |
-| N3 | WhatsApp integration | 16 | **Contested — D8** | **BLOCKED — decision-gated** | Not attempted. N7 landing strengthens D8's Option B (email at launch, WhatsApp post-launch) but does not decide it |
+| N1 | Customer Control Center | 23 | **D7 resolved — Option C, not B** | **BLOCKED — the full Control Center specifically was not authorized** | D7 (2026-08-19) approved Option C only — a read-only, no-write operator surface, delivered as `GET /api/operator/companies` (see decision-register.md D7). Option B (this 23-item full Control Center) remains explicitly NOT chosen; building it would exceed what was actually decided |
+| N2 | Support ticketing + KB | 18 | No | **BLOCKED — depends on N1's full build, which stays not authorized** | Unchanged — nothing here is satisfied by D7's Option C, which has no ticketing/write surface |
+| N3 | WhatsApp integration | 16 | **D8 resolved — Option A** | **PARTIAL — core delivery built, full 16-item scope not** | D8 (2026-08-19) approved Option A. Delivered: `lib/whatsapp/send.ts` (Meta Cloud API, media upload + approved-template message) and `POST /api/invoices/:id/whatsapp` (recipient exclusively from `Customer.phone`, same anti-abuse design as N7's email route). **Not delivered, honestly**: per-customer opt-in/consent tracking (M-308), delivery-status webhooks (M-306), Arabic-vs-English template selection (M-303/M-304 — one template only), retry/fallback beyond the single send attempt (M-312). No production send has been verified — Meta Business verification and template approval are owner-only actions, still pending |
 | N4 | Excel/CSV import | 15 | No (strong adoption lever) | **DONE (scoped first cut)** | CSV-only (not xlsx — a parser dependency this repo's audit posture deliberately avoids) synchronous import/export of customers and products, `lib/import/csv.ts` (hand-rolled RFC-4180 parser, no dependency) + `lib/import/import-service.ts` (preview/commit, transactional `createMany`, refuses entirely on any row error). Gated `requirePermission → requireFeature("bulkImport", Pro-only) → csvImport flag (default OFF) → rate limit → size/row caps`. 33 new tests across parser/service/4 routes. **Deliberately excluded, recorded not silently dropped**: invoice import (would fork the ZATCA signing/PIH chain or mass-issue back-dated documents — undecided business rule, same class as D9), xlsx parsing, column-mapping UI, async/large-file import (no job queue exists), "opening data" import (M-286, no spec exists anywhere) |
-| N5 | Support diagnostics report | 17 | No | **BLOCKED — depends on N1** | Nothing to build until D7 resolves |
-| N6 | Feature flags | 9 | No | **DONE (D7-safe design)** | `FeatureFlag` table (migration `20260819090000`), `lib/flags/flags.ts` (env override > per-company row > code default, DB failure → default), `scripts/set-flag.ts` (the only write path — no HTTP write route, deliberately, to stay clear of D7's contested admin-UI territory), `GET /api/flags` (own-company-only read). Not a security boundary by design (A-220) — every gated route still runs its own permission/feature check independently. 11 new tests. **A-218 ("admin can see enabled features per customer") stays PARTIAL — `--list` only, no cross-tenant UI, pending D7** |
-| N7 | Email invoice delivery | 1 | **Recommended for launch if D8 defers N3** | **DONE** | `lib/email/send.ts` extended with attachment support (Resend's base64 `content` field); `POST /api/invoices/:id/send` — recipient comes exclusively from the invoice's linked `Customer.email`, never the request body (eliminates the free-email-relay abuse vector by construction); rate-limited, flag-gated, refuses drafts and customers with no email on file. 13 new tests, including an explicit "attacker-supplied recipient is ignored" case. Not plan-gated (read-path reasoning, same class as PDF download) |
-| N8 | Credit/debit/refund/cancellation flows | 5 | Probably, for real customers | Unchanged — Phase 3 | Not Phase 5 work; see Phase 3's table. Refund/cancellation stay MISSING, D9 stays OPEN |
-| N9 | Operations surfaces | 7 | No | **BLOCKED — depends on N1** | Nothing to build until D7 resolves |
-| N10 | Remaining integrations | 4 | No | **Closed, not built — rollup** | M-676 (Excel/CSV) and M-677 (Email) are substantively satisfied by N4/N7 landing; M-675 (WhatsApp) stays D8-blocked; M-678 ("External APIs") has no concrete requirement anywhere in the audit or roadmap — recorded as underspecified rather than invented |
-| N11 | Admin job visibility | 1 | No | **BLOCKED — depends on N1** | W8 half is done; the N1 half is not |
+| N5 | Support diagnostics report | 17 | No | **BLOCKED — depends on N1** | Unchanged — nothing here is satisfied by D7's Option C |
+| N6 | Feature flags | 9 | No | **DONE (D7-safe design)** | `FeatureFlag` table (migration `20260819090000`), `lib/flags/flags.ts` (env override > per-company row > code default, DB failure → default), `scripts/set-flag.ts` (the only write path — no HTTP write route, deliberately, to stay clear of D7's contested admin-UI territory), `GET /api/flags` (own-company-only read). Not a security boundary by design (A-220) — every gated route still runs its own permission/feature check independently. 11 new tests. **A-218 ("admin can see enabled features per customer") stays PARTIAL — `--list` only, no cross-tenant UI**; D7's Option C (2026-08-19) is a separate cross-tenant view (license/ZATCA/last-seen), not a flags UI, so this stays as-is |
+| N7 | Email invoice delivery | 1 | **Recommended for launch if D8 defers N3** | **DONE** | `lib/email/send.ts` extended with attachment support (Resend's base64 `content` field); `POST /api/invoices/:id/send` — recipient comes exclusively from the invoice's linked `Customer.email`, never the request body (eliminates the free-email-relay abuse vector by construction); rate-limited, flag-gated, refuses drafts and customers with no email on file. 13 new tests, including an explicit "attacker-supplied recipient is ignored" case. Not plan-gated (read-path reasoning, same class as PDF download). D8 (2026-08-19) resolved WhatsApp as launch-required too (Option A, not a defer-to-email option) — see N3; email delivery stands as shipped regardless |
+| N8 | Credit/debit/refund/cancellation flows | 5 | Probably, for real customers | **Totals-correctness gap CLOSED (D9, 2026-08-19); refund/cancellation still MISSING** | The link/XML/PIH-chain work from Phase 3 is unchanged. D9 (docs/audit/decision-register.md, Option B) fixed the real bug Phase 3 filed rather than fixed: `lib/zatca/reconciliation.ts` nets a credit note out of every cross-invoice aggregation (VAT report, clearance stats, AI compliance tool) instead of inflating it — proven end-to-end in `lib/services/credit-note.test.ts`. Refund flow (A-027) and cancellation flow (A-028) remain MISSING — D9 only ever covered the reconciliation sign question, not those two flows, and building either would still be inventing a business rule nobody has approved |
+| N9 | Operations surfaces | 7 | No | **BLOCKED — depends on N1** | Unchanged — nothing here is satisfied by D7's Option C |
+| N10 | Remaining integrations | 4 | No | **Closed, not built — rollup** | M-676 (Excel/CSV) and M-677 (Email) are substantively satisfied by N4/N7 landing; M-675 (WhatsApp) — D8 resolved 2026-08-19, see N3's row, core delivery now exists though the rollup item itself wasn't separately re-touched; M-678 ("External APIs") has no concrete requirement anywhere in the audit or roadmap — recorded as underspecified rather than invented |
+| N11 | Admin job visibility | 1 | No | **BLOCKED — depends on N1** | W8 half is done; the N1 half is not — D7's Option C is a company-level list (license/ZATCA/last-seen), not job visibility |
 
 ## Phase 6 — external verification (owner action)
 
@@ -114,25 +114,51 @@ complexity, recommended phase) is in `remediation-roadmap.md` §Phase 5.
 | X1 | ZATCA OTP → CSID → real round trip | 48 | BLOCKED ON OWNER |
 | X2 | Neon PITR / backup / platform restore | 12 | BLOCKED ON OWNER |
 | X3 | Moyasar merchant + sandbox transaction | 1 | BLOCKED ON OWNER |
-| X4 | Mandatory end-to-end flow | 11 | BLOCKED (needs X1 + D8) |
+| X4 | Mandatory end-to-end flow | 11 | BLOCKED (needs X1 + D8) — D8 resolved 2026-08-19, X1 still owner-blocked, so still BLOCKED overall |
 
-**Re-checked 2026-08-19**: all four tracks confirmed still BLOCKED, none actionable by engineering this session (each needs owner credentials/access this session was never given, or — X4 — depends on X1 and D8 as well). See "Phase 6/7 outcome" below.
+**Re-checked 2026-08-19 (scope-check session)**: all four tracks confirmed still BLOCKED, none actionable by engineering, each needing owner credentials/access. **Re-checked again 2026-08-19 (decision-implementation session, same day, separate session)**: X1/X2/X3 unchanged — still need a Fatoora portal OTP, Neon console access, and Moyasar KYC respectively, none of which an engineering session can provide. X4 specifically needed D8 as well as X1; D8 is now resolved (see Phase 7 below) but X1 is not, so X4 remains BLOCKED — resolving one of its two dependencies doesn't unblock it alone.
 
 ## Phase 7 — decisions
 
 | ID | Decision | Status | Needed by |
 |---|---|---|---|
-| D1 | VAT-return scope | OPEN | Phase 1 |
-| D2 | Tax-period closing/locking | OPEN | Phase 3 |
-| D3 | Commercial model / pricing | OPEN | Phase 2 |
-| D4 | Legal copy | OPEN | Phase 2 |
-| D5 | Architecture evaluation ADR | OPEN | Phase 4 |
-| D6 | Postgres RLS defence in depth | OPEN | Phase 3 |
-| D7 | Control Center launch requirement | OPEN | Phase 1 |
-| D8 | WhatsApp launch scope | OPEN | Phase 1 |
-| D9 | Credit/debit note amount sign & reconciliation | OPEN | needed to close N8 |
+| D1 | VAT-return scope | **APPROVED — Option C** (2026-08-19) | Phase 1 |
+| D2 | Tax-period closing/locking | **APPROVED — Option B** (2026-08-19) | Phase 3 |
+| D3 | Commercial model / pricing | **APPROVED — checkout stays OFF, no price set** (2026-08-19) | Phase 2 |
+| D4 | Legal copy | **APPROVED — Option A, drafted, still unreviewed** (2026-08-19) | Phase 2 |
+| D5 | Architecture evaluation ADR | **APPROVED — Option A** (2026-08-19) | Phase 4 |
+| D6 | Postgres RLS defence in depth | **APPROVED — Option C, mechanism built, not adopted app-wide** (2026-08-19) | Phase 3 |
+| D7 | Control Center launch requirement | **APPROVED — Option C only, not B** (2026-08-19) | Phase 1 |
+| D8 | WhatsApp launch scope | **APPROVED — Option A** (2026-08-19) | Phase 1 |
+| D9 | Credit/debit note amount sign & reconciliation | **APPROVED — Option B** (2026-08-19) | needed to close N8 |
 
-**Re-checked 2026-08-19**: all nine decisions confirmed still OPEN. None was resolved — implementing any option listed in `decision-register.md` for any of D1–D9 would resolve that decision by fiat, which this session was explicitly instructed not to do. See "Phase 6/7 outcome" below.
+**Re-checked 2026-08-19 (scope-check session, earlier the same day)**: all nine
+decisions confirmed still OPEN at that point — none resolved, consistent
+with that session's explicit instruction not to resolve any unilaterally.
+
+**Resolved 2026-08-19 (decision-implementation session, later the same
+day, separate session)**: the owner reviewed the decision-readiness table
+this program produced and explicitly locked all nine decisions. Each
+option was implemented (not merely recorded) except where the decision
+itself required no code change (D3). Full per-decision detail — exact
+files, tests, and honest DONE/PARTIAL scoping — is in
+`decision-register.md`, not duplicated here. Summary of what each
+unlocked: D1+D9 fixed the two live VAT-report correctness bugs together;
+D2 added a non-blocking back-dating warning; D5 closed 16 MISSING ledger
+items (M-601…M-616) with documentation only; D6 delivered RLS as a tested,
+opt-in mechanism on `fatoora_audit` only — not yet adopted at any real
+call site, so still genuinely PARTIAL against the full "defence in depth
+everywhere" goal; D7 delivered the read-only operator surface (not the
+full Control Center — N1/N2/N5/N9/N11 stay BLOCKED, see Phase 5's table);
+D8 delivered WhatsApp's core send capability (N3, now PARTIAL rather than
+BLOCKED — see Phase 5's table for what's still missing) but production
+verification stays owner-blocked on Meta Business/template approval; D4
+drafted all seven legal pages' remaining placeholder text without removing
+any DRAFT banner. All 5 CI gates green afterward: 93 test files, 612
+tests, 0 failed, 0 skipped; lint 0 errors; `npm audit --audit-level=critical`
+7 high / 0 critical (unchanged baseline); `validate-zatca.ts` 7/7; build
+clean. Full write-up: `docs/SESSION_HANDOFF_2026-08-18.md`'s decision-
+implementation section.
 
 ## Phase 8 — final production verification
 

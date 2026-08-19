@@ -361,3 +361,116 @@ or an owner decision recorded in `decision-register.md` for any of D1–D9.
 If neither has happened, re-running "Phase 6 and Phase 7" will reach the
 same conclusion; start from `docs/audit/remediation-ledger.md`'s "Phase 6 &
 Phase 7 outcome" section instead of re-deriving it.
+
+---
+
+## 8. D1–D9 decision implementation (2026-08-19, separate follow-up session)
+
+Later the same day as §7's scope-check, the owner reviewed a
+decision-readiness table and explicitly locked all nine decisions. This
+session read `START-HERE.md`, the roadmap, the ledger, the decision
+register, and this file first, verified `git status` clean, then
+implemented every approved option — **decisions, not invented
+requirements**: every choice below traces to an owner instruction, not an
+engineering judgement call.
+
+**What was built, one paragraph each — full detail (files, tests,
+rationale) lives in `docs/audit/decision-register.md`, not repeated here:**
+
+- **D1 (Option C)** + **D9 (Option B)**, done together since both touch the
+  same aggregation code: `GET /api/reports` now returns both a
+  "declarable" (every issued invoice) and "cleared" (ZATCA-cleared only)
+  VAT figure, and both are net of credit/debit notes via a new shared
+  helper (`lib/zatca/reconciliation.ts`) that replaced three separately-
+  wrong summation sites. This closes a **currently-live** correctness bug
+  — a credit note previously inflated the VAT return instead of reducing
+  it — not a hypothetical one.
+- **D2 (Option B)**: `POST /api/invoices` attaches a non-blocking warning
+  when an invoice is dated into an already-elapsed reporting month. No
+  period lock exists or was authorized.
+- **D3**: verified, not implemented — checkout was already OFF and no
+  price was invented; the owner's chosen state was already the actual
+  state.
+- **D4 (Option A)**: every remaining placeholder across the seven legal
+  pages replaced with real draft text grounded in this codebase's actual
+  data practices. DRAFT banners kept and reworded to say "drafted, not
+  reviewed by counsel" — never represented as legally approved.
+- **D5 (Option A)**: `docs/audit/adr-001-hybrid-architecture.md` — the
+  architecture decision this app already embodies, written up, changing
+  nothing.
+- **D6 (Option C)**: real, adversarially-tested Postgres RLS on
+  Invoice/Customer/Product/Certificate (`prisma/migrations/
+  20260819100000_row_level_security`, `lib/db/rls-client.ts`) — but
+  **deliberately not wired into the app's actual runtime client**. Forcing
+  RLS onto the owner role every existing query already uses would have
+  broken the whole application and this entire test suite the instant it
+  landed, since the safe precondition the original recommendation named
+  (W17 separating prod/dev — still X2/owner-blocked) hasn't happened. What
+  exists is a proven, opt-in primitive (`queryAsTenant()`), not yet adopted
+  anywhere. Applied only to `fatoora_audit`, never `neondb`.
+- **D7 (Option C, not B)**: `GET /api/operator/companies` — read-only,
+  cross-tenant, gated by the same `OPERATOR_SECRET` pattern as W6's global
+  RAG re-index, every read audited. The full Customer Control Center (N1)
+  and everything depending on it (N2/N5/N9/N11) remain BLOCKED — Option C
+  does not unlock them.
+- **D8 (Option A)**: `lib/whatsapp/send.ts` + `POST /api/invoices/:id/
+  whatsapp` — Meta WhatsApp Business Cloud API, document media upload
+  followed by an approved-template message, same anti-abuse recipient
+  design as N7's email route. Feature-flagged OFF by default. **No
+  production send has been verified** — Meta Business verification and
+  template approval are owner-only actions, still pending; only the mock
+  path and deterministic injected-fetch unit tests have run.
+
+**Verification, exact numbers:**
+
+- All 5 CI gates green: `npm run lint` (0 errors), `npm audit
+  --audit-level=critical` (7 high / 0 critical — unchanged baseline),
+  `npx tsx scripts/validate-zatca.ts` (7/7 local checks), `npm run build`
+  (clean), full regression suite.
+- Full regression: **93 test files, 612 tests, 0 failed, 0 skipped** (6
+  new files since §7's 87: `lib/zatca/reconciliation.test.ts`,
+  `app/api/invoices/past-period-warning.test.ts`,
+  `app/api/operator/companies/route.test.ts`, `lib/db/rls.test.ts`,
+  `lib/whatsapp/send.test.ts`, `app/api/invoices/[id]/whatsapp/
+  route.test.ts`). Same two-group convention as every phase since Phase 3:
+  6 schema-pushing files run separately (39/39), the other 87 run together
+  with `--no-file-parallelism` (573/573).
+- **Three genuine timeout failures were found and fixed during this
+  session's own final-regression runs** (not pre-existing, surfaced by
+  running the full 87/93-file batch, which takes 13-14 minutes
+  sequentially — not by running any file in isolation): `app/api/health/
+  deep/route.test.ts` (pre-existing, unrelated to this session's edits —
+  the first real invocation of a route that makes an outbound ZATCA call
+  pays a cold-start cost the next identical call doesn't), `lib/db/
+  rls.test.ts` (2 tests, this session's own new file), and `app/api/
+  invoices/[id]/send/route.test.ts` (pre-existing, unrelated). All three
+  are the same class of measured Neon/network connection-latency variance
+  under sustained sequential load already documented for this programme
+  (Phase 4's `plan.test.ts` case). Fixed with explicit `20_000`ms test
+  timeouts, evidenced by reproduction across multiple full-batch runs — not
+  applied blindly. One of the three also had a real code-level cause
+  worth fixing on its own merits: `lib/db/rls-client.ts`'s `queryAsTenant`
+  used Prisma's default interactive-transaction `maxWait` (2s), which
+  failed outright once under load; raised to 15s/20s, mirroring
+  `issueInvoice()`'s own already-documented override for the identical
+  reason.
+
+**Commits this session** (branch `audit/production-readiness-2026-08-18`,
+on top of §7's `7f8b59c`): `6b6a623` (D1+D2+D9), `bb68080` (D5+D7),
+`917331d` (D6), `8685d92` (D8), `7b00972` (WhatsApp typecheck fix),
+`b90000a` (D3+D4), `a1315f5` (regression timeout fixes). Working tree
+clean afterward. Not pushed to `main`.
+
+**Not done, honestly**: D6 is a tested mechanism, not an app-wide
+protection — adopting `queryAsTenant` at real call sites is the natural
+next increment. D8's WhatsApp path has never sent a real message. D4's
+pages are drafted, not legally reviewed. None of Phase 6's X1–X4 moved
+(still owner-blocked, unaffected by this session). N1 (full Control
+Center) and its dependents (N2/N5/N9/N11) remain BLOCKED — D7 explicitly
+did not authorize building them.
+
+**Next session**: nothing in Phase 6/7 is left to decide or implement.
+Next engineering-executable work is either owner-triggered (any of
+X1–X3, Meta Business verification for D8, legal review for D4) or a new
+increment the owner explicitly requests (e.g., adopting `queryAsTenant` at
+a first real call site). Do not start a new phase without being asked.

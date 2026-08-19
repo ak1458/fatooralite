@@ -1,9 +1,14 @@
 # Decision register — Fatoora Lite Pro remediation
 
 Nine decisions: eight surfaced by the 2026-08-18 production audit, plus D9
-(surfaced during Phase 3/N8 implementation, same day). **None has been
-implemented.** Each carries a recommendation; behaviour changes only on written
-owner approval.
+(surfaced during Phase 3/N8 implementation, same day). Each carries a
+recommendation; behaviour changes only on written owner approval.
+
+**All nine were APPROVED by the owner on 2026-08-19 and implemented the same
+day** (a separate session from an earlier same-day scope-check that found
+them all still OPEN — see `docs/audit/remediation-ledger.md`'s Phase 7
+section for that history). See each decision's own "Owner decision" note
+below for the option chosen and exactly what was built.
 
 Status key: OPEN (awaiting owner) · APPROVED · REJECTED · DEFERRED.
 
