@@ -9,6 +9,10 @@ export const FLAG_DEFAULTS = {
   emailInvoiceDelivery: true,
   /** N4 — CSV import of customers/products. Default OFF: dark launch of the first upload surface. */
   csvImport: false,
+  /** D8/N3 — WhatsApp invoice delivery. Default OFF: needs a Meta Business
+   *  account, phone number, and an approved message template per tenant
+   *  before it can do anything real (docs/audit/decision-register.md D8). */
+  whatsappInvoiceDelivery: false,
 } as const satisfies Record<string, boolean>;
 
 export type FlagName = keyof typeof FLAG_DEFAULTS;

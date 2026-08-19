@@ -48,6 +48,7 @@ export const SECURITY_EVENTS = {
   zatcaSubmissionRetried: "zatca.submission.retried",
   zatcaSubmissionExhausted: "zatca.submission.exhausted",
   invoiceEmailSent: "invoice.email_sent",
+  invoiceWhatsappSent: "invoice.whatsapp_sent",
   featureFlagChanged: "feature_flag.changed",
   operatorCompaniesViewed: "operator.companies.viewed",
   operatorAccessDenied: "operator.access.denied",

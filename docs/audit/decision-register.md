@@ -337,7 +337,46 @@ missing audit trail (W2) cannot record.
 
 ---
 
-## D8 — WhatsApp launch scope · **OPEN** · needed for Phase 1
+## D8 — WhatsApp launch scope · **APPROVED — Option A** · needed for Phase 1
+
+**Owner decision (2026-08-19):** Option A — WhatsApp invoice delivery IS
+required for launch. Not replaced by email (N7) merely because N7 already
+exists.
+
+**Delivered, everything that can be built without owner-only external
+setup:** `lib/whatsapp/send.ts` (WhatsApp Business Cloud API — Meta —
+document media upload followed by an approved-template message referencing
+it, since Meta requires a pre-approved template for any business-initiated
+message outside the 24h customer-service window); `POST /api/invoices/:id/
+whatsapp` (mirrors N7's `/send` exactly on the design decision that
+matters: the recipient comes exclusively from the invoice's linked
+`Customer.phone`, never the request body); a `whatsappInvoiceDelivery`
+feature flag (default OFF — this cannot do anything real until the owner
+action below happens); `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID`/
+`WHATSAPP_INVOICE_TEMPLATE_NAME` env vars (all optional — unset means a
+mock/logged send, same "never crash" posture as `RESEND_API_KEY`). Tests:
+`lib/whatsapp/send.test.ts` (6, injected-fetch, deterministic, never calls
+the real Graph API), `app/api/invoices/[id]/whatsapp/route.test.ts` (9,
+mocked send module, real DB).
+
+**BLOCKED ON OWNER, cannot be simulated further:** a Meta Business account,
+phone-number registration, and — specifically — approval of an actual
+message template naming real invoice-delivery copy. Nothing in this
+session can obtain that; `WHATSAPP_INVOICE_TEMPLATE_NAME` names whatever
+template the owner gets approved, once approved. **No production WhatsApp
+send has been verified** — only the mock path and the injected-fetch unit
+tests. Do not read "9 tests pass" as "WhatsApp delivery works in
+production"; it proves the code path is correct against Meta's documented
+API shape, not that a real message has ever been sent.
+
+**Phase 6 (X4, mandatory E2E) still cannot close even with this decided.**
+X4 depends on X1 (a real ZATCA round trip) *and* D8. This resolves the D8
+half; X1 remains owner-blocked exactly as before (docs/audit/
+remediation-ledger.md's Phase 6 & Phase 7 outcome section, 2026-08-19). The
+Master Audit's mandatory E2E flow already terminates in "Send WhatsApp"
+(M-501) — Option A does not require rewriting that flow's definition (the
+B-flavoured amendment the original recommendation would have needed is now
+moot).
 
 **QUESTION** Is WhatsApp invoice delivery required for launch?
 

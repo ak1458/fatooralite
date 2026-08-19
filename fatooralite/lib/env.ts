@@ -41,6 +41,17 @@ const envSchema = z.object({
   /* ---- optional (no warning — feature is allowed to be unconfigured) ---- */
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
+  /**
+   * D8/N3 — WhatsApp Business Cloud API (Meta). All three unset means the
+   * feature is fully inert, same posture as RESEND_API_KEY for email —
+   * lib/whatsapp/send.ts falls back to a mock/logged send, never a crash.
+   * Owner-blocked externally (Meta Business verification + template
+   * approval, docs/audit/decision-register.md D8) — nothing here can make
+   * that verification happen; these are read once it's done.
+   */
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_INVOICE_TEMPLATE_NAME: z.string().optional(),
 
   /**
    * Canonical deployed URL. lib/appUrl.ts reads these two (pre-existing
