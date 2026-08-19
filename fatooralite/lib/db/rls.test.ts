@@ -65,13 +65,22 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
+// Explicit timeouts throughout this file: this session's own final
+// regression measured queryAsTenant's interactive transaction (real
+// Postgres round trips: SET LOCAL ROLE, set_config, then the query) hitting
+// both vitest's 5s default test timeout and, once, Prisma's own default
+// transaction maxWait, inside a long (14+ minute) full-suite batch — not in
+// isolation. Same class of connection-pressure latency this repo already
+// documents (docs/SESSION_HANDOFF_2026-08-18.md §3.5); rls-client.ts's
+// queryAsTenant itself now also raises Prisma's maxWait/timeout for the
+// same measured reason.
 describe.skipIf(!hasTestDb)("Postgres row-level security (D6)", () => {
   it("an unfiltered findMany — no where clause at all — still only returns the scoped tenant's rows", async () => {
     const rows = await queryAsTenant(companyA, (tx) => tx.customer.findMany());
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((r) => r.companyId === companyA)).toBe(true);
     expect(rows.some((r) => r.companyId === companyB)).toBe(false);
-  });
+  }, 20_000);
 
   it("switching the scoped tenant switches what's visible — not cached, not sticky", async () => {
     const asA = await queryAsTenant(companyA, (tx) => tx.product.findMany());
@@ -79,7 +88,7 @@ describe.skipIf(!hasTestDb)("Postgres row-level security (D6)", () => {
     expect(asA.every((r) => r.companyId === companyA)).toBe(true);
     expect(asB.every((r) => r.companyId === companyB)).toBe(true);
     expect(asA.some((r) => r.companyId === companyB)).toBe(false);
-  });
+  }, 20_000);
 
   it("an insert under the wrong tenant's scope is refused by the policy, not silently mis-attributed", async () => {
     await expect(
@@ -89,10 +98,10 @@ describe.skipIf(!hasTestDb)("Postgres row-level security (D6)", () => {
     ).rejects.toThrow();
     const leaked = await db.customer.findFirst({ where: { companyId: companyB, name: "should be refused" } });
     expect(leaked).toBeNull();
-  });
+  }, 20_000);
 
   it("the main application connection (no SET ROLE) is completely unaffected — sees every tenant, as before", async () => {
     const all = await db.customer.findMany({ where: { companyId: { in: [companyA, companyB] } } });
     expect(all.length).toBeGreaterThanOrEqual(2);
-  });
+  }, 20_000);
 });

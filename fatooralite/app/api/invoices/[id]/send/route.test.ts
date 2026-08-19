@@ -84,6 +84,12 @@ describe.skipIf(!hasTestDb)("POST /api/invoices/:id/send (N7)", () => {
     expect(res.status).toBe(401);
   });
 
+  // Explicit timeout: this session's own final regression measured this
+  // specific test hitting vitest's 5s default inside the full-suite batch
+  // (not in isolation) — real Neon connection-latency variance under a
+  // long sequential run, same class as docs/SESSION_HANDOFF_2026-08-18.md
+  // §3.5's plan.test.ts case and this session's own analogous WhatsApp
+  // route test. Not a defect in this route (unchanged this session).
   it("403s for another company's invoice", async () => {
     const { POST } = await import("./route");
     const invoice = await makeInvoice(companyId);
@@ -92,7 +98,7 @@ describe.skipIf(!hasTestDb)("POST /api/invoices/:id/send (N7)", () => {
       ctx(invoice.id),
     );
     expect(res.status).toBe(403);
-  });
+  }, 20_000);
 
   it("404s for an unknown id", async () => {
     const { POST } = await import("./route");

@@ -39,6 +39,17 @@ describe("GET /api/health/deep", () => {
     expect(res.status).toBe(401);
   });
 
+  // This is the first test in the file to reach the route's real work (the
+  // three above all 401 before it) — outbound ZATCA reachability plus a DB
+  // job-stats query, both paying a one-time connection/TLS cold-start cost
+  // that the next test (reusing warm connections) doesn't. Reproduced
+  // deterministically (2/2, both in isolation and inside the full-suite
+  // batch) as exactly this test timing out at the 5s default while the
+  // next test's identical call succeeds — measured, not assumed, and the
+  // same class of Neon/network cold-start latency already documented for
+  // this programme (docs/SESSION_HANDOFF_2026-08-18.md §3.5's plan.test.ts
+  // case; this session's app/api/invoices/[id]/whatsapp/route.test.ts hit
+  // the identical signature). Not a logic defect in this route.
   it("the response never contains the CRON_SECRET value, even on success", async () => {
     const { GET } = await import("./route");
     const res = await GET(
@@ -46,7 +57,7 @@ describe("GET /api/health/deep", () => {
     );
     const text = await res.text();
     expect(text).not.toContain("deep-health-test-secret");
-  });
+  }, 20_000);
 
   it("reports background-job visibility (W8) alongside dependency health", async () => {
     const { GET } = await import("./route");
@@ -61,5 +72,5 @@ describe("GET /api/health/deep", () => {
       submittedStale: expect.any(Number),
       needsReview: expect.any(Number),
     });
-  });
+  }, 20_000);
 });

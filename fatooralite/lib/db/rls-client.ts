@@ -56,13 +56,23 @@ export async function queryAsTenant<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
   client: PrismaClient = rlsClient,
 ): Promise<T> {
-  return client.$transaction(async (tx) => {
-    // Role names can't be bind parameters in SET ROLE — fatoora_rls_app is
-    // a fixed constant in this file, never attacker-controlled.
-    await tx.$executeRawUnsafe(`SET LOCAL ROLE fatoora_rls_app`);
-    // set_config (unlike SET LOCAL app.company_id = ...) accepts a real bind
-    // parameter, so companyId is never string-interpolated into SQL.
-    await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
-    return fn(tx);
-  });
+  return client.$transaction(
+    async (tx) => {
+      // Role names can't be bind parameters in SET ROLE — fatoora_rls_app is
+      // a fixed constant in this file, never attacker-controlled.
+      await tx.$executeRawUnsafe(`SET LOCAL ROLE fatoora_rls_app`);
+      // set_config (unlike SET LOCAL app.company_id = ...) accepts a real bind
+      // parameter, so companyId is never string-interpolated into SQL.
+      await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
+      return fn(tx);
+    },
+    // Found by this session's own final regression, not assumed: Prisma's
+    // interactive-transaction defaults (maxWait 2s, timeout 5s) are the same
+    // ones issueInvoice() already overrides in lib/services/invoice-service.ts,
+    // and for the same reason — under real connection-pool pressure the
+    // default maxWait can fail to even START the transaction in time
+    // (`Unable to start a transaction in the given time`), which is a
+    // real production risk, not just a test artifact.
+    { maxWait: 15_000, timeout: 20_000 },
+  );
 }
