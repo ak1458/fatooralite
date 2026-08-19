@@ -210,7 +210,47 @@ Do not reopen the architecture.
 
 ---
 
-## D6 — Postgres RLS as defence in depth · **OPEN** · Phase 3
+## D6 — Postgres RLS as defence in depth · **APPROVED — Option C, PARTIAL this session** · Phase 3
+
+**Owner decision (2026-08-19):** Option C — RLS on Invoice/Customer/Product/
+Certificate only, not every table.
+
+**Honest scope: the mechanism is built and adversarially tested; it is not
+yet adopted anywhere in the app's actual runtime.** The original
+recommendation was "after W17 separates production from development" —
+that separation is still X2/owner-blocked, `neondb` is still the shared
+dev/demo database. Applying this in a way that actually protects live
+traffic requires either (a) that separation, or (b) migrating every
+existing query call site onto the RLS-scoped path in one coordinated
+change — both explicitly out of a single session's safe scope. What was
+done instead, staying strictly inside what's safe on shared infrastructure:
+
+- `prisma/migrations/20260819100000_row_level_security` — creates a
+  NOLOGIN Postgres role (`fatoora_rls_app`) and RLS policies on the four
+  tables. Deliberately does **not** set `FORCE ROW LEVEL SECURITY` on the
+  owner role every existing query (and this entire 575-test suite) already
+  connects as — doing so would have made every unmigrated query return
+  zero rows the instant the migration landed, breaking the whole
+  application, not just adding a safety net. RLS applies automatically to
+  the new non-owner role instead; the owner role, and everything using it,
+  is provably unaffected (see `lib/db/rls.test.ts`'s last test).
+- `lib/db/rls-client.ts` — an explicit, opt-in `queryAsTenant(companyId, fn)`
+  helper (not a transparent wrapper around the main `prisma` client — see
+  the file header for why: nesting into `issueInvoice()`'s own chain-
+  critical interactive transaction was judged too risky to attempt this
+  session).
+- `lib/db/rls.test.ts` — adversarial proof: an unfiltered `findMany()` with
+  no `where` clause at all, run through the scoped role, still cannot see
+  another tenant's rows; switching tenants switches visibility; a
+  wrong-tenant insert is refused by the policy, not silently mis-attributed;
+  the main app connection is unaffected. Applied only to `fatoora_audit`,
+  never `neondb`, per this programme's standing rule.
+
+**Not done, and not claimed done:** wiring `queryAsTenant` into any real
+application read/write path. That is the natural next increment — pick one
+low-risk read path first, prove it in production-shaped conditions, then
+expand — deliberately not attempted in the same session that built and
+tested the primitive.
 
 **QUESTION** Add row-level security beneath the application's tenant scoping?
 
