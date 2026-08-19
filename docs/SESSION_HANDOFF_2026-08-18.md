@@ -531,3 +531,123 @@ actionable without an owner action or an explicit new request. If asked to
 continue "launch readiness" again without new owner input, re-deriving
 this same P0/P1 queue will reach the same conclusion; start from this
 section instead.
+
+---
+
+## 10. OpenWA — temporary interim WhatsApp transport (2026-08-19, fourth session this day)
+
+Owner directed a change to D8's *implementation* (not the decision itself,
+which stays "WhatsApp required for launch," unchanged): stop spending time
+on Meta Business verification for now, and use OpenWA
+(https://github.com/rmyndharis/OpenWA), a self-hosted WhatsApp gateway, as
+a temporary transport behind the same interface, kept low-cost. Read
+before writing any code: OpenWA's own `docs/06-api-specification.md`
+(fetched from the repository — endpoints below are quoted from it, not
+guessed), the existing Meta implementation, the email delivery route (N7,
+the pattern this mirrors), the feature-flag system, and the audit-event
+mechanism.
+
+**IMPORTANT, repeated everywhere this touched: OpenWA is not, and must
+never be documented as, the final recommended production/compliance-grade
+WhatsApp integration.** It connects via reverse-engineered WhatsApp
+clients, not Meta's official API; its own docs warn of a real account-ban
+risk and say to treat it as "not approved" for regulated sectors. Meta's
+Cloud API remains the intended production path — see
+`docs/audit/decision-register.md` D8's addendum for the full framing.
+
+**Architecture — reused, not duplicated:**
+
+`lib/whatsapp/send.ts` changed from a Meta-specific sender into a thin
+dispatcher. Two provider modules now sit behind it:
+- `lib/whatsapp/providers/meta.ts` — the prior implementation, moved
+  unchanged (same two-step upload-then-template flow).
+- `lib/whatsapp/providers/openwa.ts` — new. `POST /sessions/:sessionId/
+  messages/send-document` (PDF sent as base64, never a fetchable URL —
+  nothing here should let OpenWA, or anyone who compromises it, pull an
+  invoice PDF on demand) and `GET /sessions/:sessionId` for session
+  status. Chat IDs are OpenWA's documented `<digits>@c.us` shape, no
+  leading `+`, converted from the stored `Customer.phone`.
+
+Selection order in the dispatcher: an explicit `WHATSAPP_PROVIDER`
+override, else Meta if its three env vars are all set (compliance-grade
+always wins automatically the moment it's configured — migrating off
+OpenWA later needs zero code changes), else OpenWA if its three env vars
+are all set, else mock (unchanged "never crash, log instead" posture).
+
+`app/api/invoices/:id/whatsapp/route.ts` needed exactly **one line**
+changed — a new provider-agnostic `isWhatsAppProviderConfigured()` instead
+of a Meta-specific env check. Recipient resolution (`Customer.phone`
+only, never the request body), tenant scoping, authorization, the
+`whatsappInvoiceDelivery` feature flag, rate limiting, and audit logging
+via `recordSecurityEvent` were **not touched** — reused exactly as they
+were, per the explicit instruction not to duplicate any of them.
+
+**New operator surface**: `GET /api/operator/whatsapp-session` — read-only
+provider/session health (configured? available? which provider?), gated
+by the same `OPERATOR_SECRET` bearer pattern as D7's `/api/operator/
+companies` and W6's global re-index. Never returns the API key, the
+paired phone number, or a QR code. Session creation and QR pairing are
+deliberately **not** built into this app — OpenWA ships its own dashboard
+(default `http://localhost:2785`) for that one-time, interactive, human
+task; building UI for it here would have been the "elaborate WhatsApp
+management dashboard" the instructions explicitly said not to build.
+
+**New env vars** (all optional, documented in `.env.example`):
+`OPENWA_API_URL`, `OPENWA_API_KEY`, `OPENWA_SESSION_ID`,
+`WHATSAPP_PROVIDER`. No secret committed — no real OpenWA instance was
+configured or available this session.
+
+**Tests, all against an injected mock `fetch`, none requiring a real
+WhatsApp account or a running OpenWA instance** (per the explicit
+instruction): `lib/whatsapp/providers/openwa.test.ts` (10 — payload shape
+against OpenWA's documented contract, chatId conversion, non-2xx handling,
+"never claims success without a confirmed messageId," API key never
+appears in a logged or thrown value, session-status mapping including
+network-failure and non-`ready` cases), `lib/whatsapp/send.test.ts` (12
+total — 6 pre-existing Meta-path tests, one updated for a legitimate
+interface addition — a `provider` tag on the result — not weakened, plus 6
+new provider-selection-order tests), `app/api/operator/whatsapp-session/
+route.test.ts` (5 — authorization, status reporting, no-secret-leak). One
+pre-existing test file's module mock (`app/api/invoices/[id]/whatsapp/
+route.test.ts`) needed `isWhatsAppProviderConfigured` added to its
+`vi.mock` factory, since the route now imports it too — caught by running
+the tests, not guessed.
+
+**Verification**: lint 0 errors; `npm audit --audit-level=critical` 7
+high/0 critical (unchanged baseline); `validate-zatca.ts` 7/7; build clean
+(new route confirmed present in the route manifest); full regression — 95
+test files (up from 93), 6 schema-pushing run separately (39/39), the
+other 89 together with `--no-file-parallelism`. **639 total tests, 95
+files, 0 failed, 0 skipped.**
+
+One genuine infra blip during the ~13-minute batch run, diagnosed rather
+than papered over: two files' `beforeAll` hit `PrismaClientInitializationError:
+Can't reach database server` (a full connection failure, not a query
+timeout) and one pre-existing, unrelated file (`lib/ai/
+confirmation.test.ts`) hit vitest's 5s default. None of the three touch
+WhatsApp/OpenWA. Checked reachability immediately after: `fatoora_audit`
+answered a trivial `select 1` in ~4.1 seconds — far slower than a warm
+connection, consistent with Neon's free-tier compute having auto-suspended
+after the earlier idle gaps in this session and needing to cold-start on
+the next query. Re-ran the three affected files in isolation once warm:
+14/14 passed immediately, no code touched. **No timeout was changed** —
+this was root-caused as transient infrastructure latency, not a defect,
+per the explicit instruction to distinguish the two before acting.
+
+**Not done, honestly**: no real send verified through either provider —
+Meta stays owner-blocked on Business verification (deferred, not
+attempted); OpenWA had no running instance available to test against in
+this environment, so its correctness is proven against the documented API
+contract via mocks, not a live gateway. If a local OpenWA instance becomes
+available without placing credentials in chat, run the mocked tests first
+(already green) and only then attempt one real send — not done this
+session for that reason.
+
+**Commits**: `aa36b7b` (feat — OpenWA implementation, code + tests), plus
+this documentation commit on top.
+
+**Next session**: if a real OpenWA instance and session become available,
+the natural next step is one real, manually-verified send (not
+automated — per the instructions, this should happen only after the
+mocked tests are green, which they are). Otherwise nothing further is
+actionable without an owner action.

@@ -264,6 +264,17 @@ green.**
 **All nine decisions (D1–D9) are now APPROVED and implemented** — see
 `docs/audit/decision-register.md` for what each one actually shipped.
 
+**D8 addendum, 2026-08-19 (a later session the same day) — OpenWA added as
+a temporary interim WhatsApp transport.** D8 itself was not reopened
+(WhatsApp is still required for launch, unchanged); the owner directed
+using a self-hosted gateway (OpenWA) behind the same `sendWhatsAppInvoice()`
+interface while Meta Business verification stays deferred, explicitly NOT
+as a replacement for Meta — see the invariant below and `docs/audit/
+decision-register.md` D8's addendum for the full detail, including why
+OpenWA must never be documented as the production/compliance-grade choice.
+No real OpenWA send has been verified (no running instance existed this
+session) — only mocked, deterministic tests.
+
 Still outstanding from the audit:
 
 1. ~~**Arabic invoice PDFs fail outright.**~~ **FIXED in Phase 1 (W1).** What
@@ -391,10 +402,22 @@ identifiers deployment depends on.
 5. **Branch protection on `main`** — confirmed unset.
 6. **`GROQ_API_KEY`** if the Groq demo path is wanted; it ships inert without it.
 7. **Meta Business verification + WhatsApp message-template approval**
-   (D8, 2026-08-19). `lib/whatsapp/send.ts` and `POST /api/invoices/:id/
-   whatsapp` are complete and inert without `WHATSAPP_ACCESS_TOKEN`/
-   `WHATSAPP_PHONE_NUMBER_ID`/`WHATSAPP_INVOICE_TEMPLATE_NAME` — same
-   posture as Moyasar (#2). No production WhatsApp send has been verified.
+   (D8, 2026-08-19) — **deferred by explicit owner instruction, not
+   attempted.** `lib/whatsapp/providers/meta.ts` is complete and inert
+   without `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID`/
+   `WHATSAPP_INVOICE_TEMPLATE_NAME` — same posture as Moyasar (#2). Meta
+   remains the intended production/compliance-grade path once a real
+   customer requires WhatsApp as a production commitment.
+8. **OpenWA session pairing** (D8 addendum, 2026-08-19, later the same
+   day) — a **temporary** interim WhatsApp transport (see the invariant
+   below), used *instead of* waiting on #7. `lib/whatsapp/providers/
+   openwa.ts` is complete and inert without `OPENWA_API_URL`/
+   `OPENWA_API_KEY`/`OPENWA_SESSION_ID`. Unlike Meta, OpenWA's session must
+   be paired once by scanning a QR code — done directly against OpenWA's
+   own dashboard (default `http://localhost:2785`), not inside this app
+   (deliberately no QR-pairing UI was built here). No real OpenWA send has
+   been verified — this session had no running OpenWA instance to test
+   against; every OpenWA test uses an injected mock `fetch`.
 
 ---
 
@@ -566,12 +589,27 @@ regression, and the reason is in the code comment beside it.
   (`20260819100000_row_level_security`) to `neondb` without the same
   per-action owner approval every other `neondb` change in this programme
   has required.
-- **`lib/whatsapp/send.ts` requires all three of `WHATSAPP_ACCESS_TOKEN`,
-  `WHATSAPP_PHONE_NUMBER_ID`, and `WHATSAPP_INVOICE_TEMPLATE_NAME` before
-  it will attempt a real send — partial configuration is treated as fully
-  unconfigured, not a partial attempt.** Same "never crash, log instead"
-  posture as `lib/email/send.ts`'s missing-`RESEND_API_KEY` path. Do not
-  "improve" this by trying to send with only some credentials set.
+- **`lib/whatsapp/send.ts` is a provider dispatcher, not a sender.** As of
+  2026-08-19 (D8 addendum) it picks between `lib/whatsapp/providers/
+  meta.ts` and `lib/whatsapp/providers/openwa.ts` — Meta wins automatically
+  the instant its three env vars are all set, regardless of whether OpenWA
+  is also configured, so migrating off OpenWA later needs no code change,
+  only Meta's env vars being set. Each provider requires ALL THREE of its
+  own env vars before attempting a real send — partial configuration is
+  treated as fully unconfigured, not a partial attempt (same "never crash,
+  log instead" posture as `lib/email/send.ts`'s missing-`RESEND_API_KEY`
+  path). Do not "improve" this by trying to send with only some
+  credentials set, and do not add a third provider without re-reading this
+  file's selection-order comment first.
+- **OpenWA (`lib/whatsapp/providers/openwa.ts`) is a TEMPORARY, self-hosted
+  interim WhatsApp transport — never describe it as the production or
+  compliance-grade path in any document.** It exists because Meta Business
+  verification was deferred by explicit owner instruction, to keep
+  WhatsApp delivery available and low-cost in the meantime. OpenWA's own
+  documentation warns of a real account-ban risk and says to treat it as
+  "not approved" for regulated sectors. Migrating to Meta later requires
+  zero code changes to the route or the dispatcher — only setting Meta's
+  three env vars, which then wins automatically (see above).
 - **`lib/zatca/reconciliation.ts`'s `netSign`/`netEffect`/`sumNet` are the
   ONLY place a credit or debit note's sign is decided for cross-invoice
   aggregation (D9).** Every call site that sums `taxableAmount`/

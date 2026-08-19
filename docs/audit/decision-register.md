@@ -424,6 +424,87 @@ Master Audit's mandatory E2E flow already terminates in "Send WhatsApp"
 B-flavoured amendment the original recommendation would have needed is now
 moot).
 
+---
+
+**Addendum, 2026-08-19 (later the same day) — interim transport, D8 itself
+NOT reopened.** D8's decision is unchanged: WhatsApp is required for
+launch. What changed is *how* to get there while Meta Business
+verification stays deferred by owner instruction (not spending time on it
+now). The owner directed use of **OpenWA**
+(https://github.com/rmyndharis/OpenWA), a self-hosted WhatsApp gateway, as
+a **temporary** transport behind the *same* `sendWhatsAppInvoice()`
+interface — kept low-cost and available now, while Meta's Cloud API
+remains the intended production/compliance-grade path once a real
+customer requires WhatsApp as a production commitment.
+
+**IMPORTANT, stated as plainly as the source instruction stated it: OpenWA
+is not, and must never be documented as, the final recommended
+production/compliance-grade WhatsApp integration.** It connects to
+WhatsApp through reverse-engineered clients, not Meta's official API —
+its own documentation warns of a non-zero account/number ban risk and
+explicitly says to "treat OpenWA as not approved" for regulated sectors,
+recommending Meta's official API instead. Every file this session touched
+for OpenWA repeats this warning in its own header — deliberately
+redundant, so no future read of any one file misses it.
+
+**Delivered:**
+- `lib/whatsapp/providers/meta.ts` — the existing Meta implementation,
+  extracted unchanged (same two-step upload-then-template flow, same
+  tests' expectations, only its file location moved).
+- `lib/whatsapp/providers/openwa.ts` — a new provider implementing OpenWA's
+  own documented API (`docs/06-api-specification.md`, fetched from the
+  repository before writing any code, not guessed): `POST /sessions/
+  :sessionId/messages/send-document` with the PDF as base64 (never a
+  fetchable URL — nothing here should give OpenWA, or anyone who
+  compromises it, a way to pull an invoice PDF on demand), and `GET
+  /sessions/:sessionId` for session-readiness status. Chat IDs are
+  digits-only (`<phone>@c.us`), no leading `+`, converted from the
+  E.164-ish stored `Customer.phone`.
+- `lib/whatsapp/send.ts` — now a thin dispatcher, not a Meta-specific
+  sender. Selection order: an explicit `WHATSAPP_PROVIDER` override, else
+  Meta if its three env vars are set (the compliance-grade path always
+  wins automatically the moment it's actually configured — no other
+  change needed anywhere), else OpenWA if its three env vars are set, else
+  mock. `app/api/invoices/:id/whatsapp/route.ts` needed exactly one line
+  changed (a provider-agnostic `isWhatsAppProviderConfigured()` instead of
+  a Meta-specific env check) — recipient resolution, tenant scoping,
+  authorization, the feature flag, rate limiting, and audit logging were
+  not touched, per the explicit instruction not to duplicate any of them.
+- `GET /api/operator/whatsapp-session` — read-only session-health check
+  (configured? available? which provider?), gated by the same
+  `OPERATOR_SECRET` pattern as D7's operator surface and W6's global
+  re-index. Deliberately does not expose the API key, the paired phone
+  number, or a QR code. Session creation and QR pairing are **not** built
+  into this app — OpenWA already ships its own dashboard for that
+  one-time, interactive, human task; building one here would be exactly
+  the "elaborate WhatsApp management dashboard" the implementation
+  instructions said not to build.
+- New env vars, all optional, all documented in `.env.example`:
+  `OPENWA_API_URL`, `OPENWA_API_KEY`, `OPENWA_SESSION_ID`,
+  `WHATSAPP_PROVIDER`. No secret is stored in source; nothing was
+  committed for a real OpenWA instance because none was configured this
+  session.
+- Tests: `lib/whatsapp/providers/openwa.test.ts` (13, injected fetch,
+  deterministic — payload shape, chatId conversion, failure handling,
+  "never claims success without a confirmed messageId", API key never
+  appears in a logged/thrown value), `lib/whatsapp/send.test.ts` (provider
+  selection order, +1 field on the existing Meta result shape),
+  `app/api/operator/whatsapp-session/route.test.ts` (5, authorization +
+  no-secret-leak). None require a real WhatsApp account or a running
+  OpenWA instance — all against an injected mock `fetch`.
+
+**Still true, unchanged by this addendum:** Meta Business verification and
+template approval remain owner-only and deferred by the owner's own
+instruction — not attempted, not simulated. **No real Meta delivery and no
+real OpenWA delivery have been verified** — this session had no running
+OpenWA instance and no credentials for either provider; everything above
+was tested against mocks only, exactly as the instructions required
+("Automated tests must NOT require a real WhatsApp account"). If a local
+OpenWA instance becomes available without placing credentials in chat, the
+mocked-tests-first, real-second order in the original instructions still
+applies — not done this session because no instance was available to test
+against.
+
 **QUESTION** Is WhatsApp invoice delivery required for launch?
 
 **CURRENT BEHAVIOUR** **Zero code in the repository** (M-299…M-313, 16 items).

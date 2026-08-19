@@ -41,7 +41,8 @@ Do these three, in this order:
 | --- | --- | --- | --- |
 | 1 | **Fatoora portal OTP** | Dashboard honestly shows 0% readiness / "Not connected" until a real ZATCA onboarding runs. Also the only independent proof the XAdES signing fix works. This is Phase 6's X1, still open — see `docs/audit/remediation-ledger.md`. | Log in to the ZATCA Fatoora portal → *Onboard new solution* → copy the OTP → run the harness above within the hour. |
 | 2 | **Moyasar merchant account** | Checkout is built and inert (Phase 6's X3). The webhook payload shape was written from published docs, never seen live. | Complete Moyasar KYC + bank details. Then run one sandbox transaction and confirm the payload matches `parseInvoiceWebhook` in `lib/billing/moyasar.ts`. |
-| 3 | **Meta Business verification + WhatsApp template approval** *(new, 2026-08-19 — D8)* | WhatsApp invoice delivery is now built (`lib/whatsapp/send.ts`, `POST /api/invoices/:id/whatsapp`) but completely inert without `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID`/`WHATSAPP_INVOICE_TEMPLATE_NAME`. No production send has been verified. | Complete Meta Business verification, register the sending phone number, and get an invoice-delivery message template approved. Then set the three env vars below. |
+| 3 | **Meta Business verification + WhatsApp template approval** — **deferred by your own instruction, not started** | WhatsApp invoice delivery is built (`POST /api/invoices/:id/whatsapp`) behind a provider dispatcher (`lib/whatsapp/send.ts`) that supports two transports. Meta's Cloud API (`lib/whatsapp/providers/meta.ts`) remains the intended production/compliance-grade path but is completely inert without `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID`/`WHATSAPP_INVOICE_TEMPLATE_NAME`. **In the meantime, OpenWA (a self-hosted gateway) is wired up as a temporary transport** — see the new row below. No production send has been verified through either provider. | When ready: complete Meta Business verification, register the sending phone number, get an invoice-delivery message template approved, then set the three env vars below — Meta takes over from OpenWA automatically the moment all three are set, no other change needed. |
+| 3b | **OpenWA session pairing** *(new, 2026-08-19 — D8 addendum, temporary transport)* | `lib/whatsapp/providers/openwa.ts` is inert without `OPENWA_API_URL`/`OPENWA_API_KEY`/`OPENWA_SESSION_ID`, and even once those are set, the session itself must be paired by scanning a QR code once. **OpenWA is not, and must not be treated as, the production/compliance-grade WhatsApp path** — its own docs warn of a real account-ban risk and say to treat it as "not approved" for regulated sectors. It exists only to keep WhatsApp delivery available and low-cost while blocker #3 stays deferred. | Run an OpenWA instance (self-hosted — see https://github.com/rmyndharis/OpenWA for setup, e.g. its Docker Compose). Create a session and pair it via **OpenWA's own dashboard** (default `http://localhost:2785`) — this app deliberately has no QR-pairing UI. Once paired, set the three env vars below. Check `GET /api/operator/whatsapp-session` (with the `OPERATOR_SECRET` bearer) to confirm it reports `available: true`. |
 | 4 | **Legal copy still needs a lawyer, even though it's now drafted** | `/terms`, `/privacy`, `/refund-policy`, `/cancellation-policy`, `/data-retention`, `/acceptable-use` were rewritten 2026-08-19 (D4) from placeholder brackets into substantive text grounded in what the product actually does — but **none of it has been reviewed by qualified counsel**, and the DRAFT banners say so. Shipping as-is to real customers is still a real liability. | Have a lawyer review the drafted text (it's real prose now, not `[Placeholder: ...]` — review should be faster than starting from scratch) and approve or amend it. |
 | 5 | **Final Pro pricing** | `PRO_PRICE_HALALAS` in `lib/billing/entitlements.ts` is still a **149 SAR placeholder**, deliberately (D3, 2026-08-19: self-serve checkout stays off, no price invented ahead of research). | Decide the price. Market research (launch-plan Phase 7) was intended to inform this and has not been done. |
 | 6 | **Branch protection on `main`** | Confirmed unset. Nothing stops a force-push over history. | GitHub → Settings → Branches → protect `main` (require PR, require CI green). |
@@ -82,7 +83,9 @@ doc, both of those are done; don't re-flag them.
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | Enterprise AI backends | Not used unless `AI_PROVIDER` selects them. |
 | `MOYASAR_SECRET_KEY`, `MOYASAR_WEBHOOK_SECRET` | Paid upgrades | Checkout returns 501 with a friendly message. |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Password-reset emails, invoice email delivery (N7) | Reset links are console-logged, not delivered; invoice emails log a mock send instead of sending. |
-| `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_INVOICE_TEMPLATE_NAME` *(new, 2026-08-19)* | WhatsApp invoice delivery (D8) | All three unset (or even one missing) means every send falls back to a logged mock — see blocker #3 above. The `whatsappInvoiceDelivery` feature flag also defaults OFF per company regardless of these being set. |
+| `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_INVOICE_TEMPLATE_NAME` | WhatsApp invoice delivery via **Meta** (D8) — the production/compliance-grade path | All three unset (or even one missing) means Meta isn't the active provider — see blocker #3. The `whatsappInvoiceDelivery` feature flag also defaults OFF per company regardless. |
+| `OPENWA_API_URL`, `OPENWA_API_KEY`, `OPENWA_SESSION_ID` *(new, 2026-08-19)* | WhatsApp invoice delivery via **OpenWA** — a **temporary** self-hosted transport, see blocker #3b | Used only when the Meta vars above are unset. Never describe this as the production path in any customer-facing material. |
+| `WHATSAPP_PROVIDER` *(new, 2026-08-19)* | Forces `meta` or `openwa` when both happen to be configured at once | Rare — a supervised migration window. Unset means automatic selection (Meta wins if configured). |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Distributed rate limiting | Falls back to in-memory (fine for a single instance, not for serverless scale). |
 | `ZATCA_MODE` | `sandbox` or `production` | Defaults to sandbox. |
 | `OPERATOR_SECRET` | Global AI knowledge re-index (`POST /api/ai/ingest {scope:"global"}`) **and, since 2026-08-19, the read-only cross-tenant support view** (`GET /api/operator/companies` — D7) | Both endpoints return 403 to everyone, including tenant owners, when unset — there is deliberately no platform-admin User role. Re-index the shared corpus at deploy time with `scripts/ingest-global.ts` instead of the HTTP path. Treat this secret as sensitive: whoever holds it can read every tenant's license state, ZATCA certificate status, and last-seen time across the whole platform (read-only, no writes). |
@@ -172,6 +175,7 @@ lint 0 errors; ZATCA 7/7; build clean.
 | Issue one invoice | Signed, QR present, PDF downloads |
 | `GET /api/operator/companies` with no `Authorization` header | `403` |
 | …with `Authorization: Bearer <OPERATOR_SECRET>` | `200`, a list of every company with license/ZATCA/last-seen fields, no write endpoint exists at this path |
+| `GET /api/operator/whatsapp-session` with the correct `OPERATOR_SECRET` bearer | `200`, `{provider, configured, available, ...}` — `available:true` only once a provider is actually configured and (for OpenWA) its session is paired and `status:"ready"` |
 
 ---
 
@@ -239,9 +243,14 @@ Also true and worth not overstating:
 - The signing engine is **not yet certified against a live ZATCA gateway**. The
   fixes are high-confidence and locally verified (7/7 checks), but blocker #1
   is what makes that claim provable.
-- **No WhatsApp message has ever actually been sent** *(2026-08-19)*. The
-  send path is built and unit-tested against Meta's documented API shape,
-  but only in mock mode — see blocker #3.
+- **No WhatsApp message has ever actually been sent, through either
+  provider** *(2026-08-19)*. Both the Meta path and the temporary OpenWA
+  path are built and unit-tested against their documented API shapes, but
+  only against mocks — see blockers #3 and #3b. **Do not describe OpenWA
+  as a production-grade integration** — it's a self-hosted, reverse-
+  engineered gateway used only to keep delivery available while Meta
+  verification is deferred; its own docs recommend against it for
+  regulated sectors.
 - Postgres row-level security exists (D6, 2026-08-19) as a tested,
   adversarially-proven mechanism, but is **not yet used by any real
   request the app serves** — it's a built and verified primitive, not a
