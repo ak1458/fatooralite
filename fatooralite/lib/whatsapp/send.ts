@@ -1,52 +1,59 @@
 /**
- * WhatsApp Business Cloud API (Meta) sender — D8/N3
- * (docs/audit/decision-register.md D8, owner decision: WhatsApp IS required
- * for launch).
+ * WhatsApp invoice delivery — provider dispatcher (D8/N3,
+ * docs/audit/decision-register.md).
  *
- * Same "mock-safe degradation" convention as lib/email/send.ts: missing
- * credentials never crash the app, they fall back to logging instead of
- * sending. Two real steps against Meta's Graph API, unlike email's one —
- * a document must be uploaded to get a media id before a template message
- * can reference it, and outbound business-initiated messages to a customer
- * who hasn't messaged first MUST use a pre-approved template (Meta rejects
- * a free-form message outside the 24h customer-service window) — so
- * WHATSAPP_INVOICE_TEMPLATE_NAME must name a template already approved in
- * the Meta Business Manager for this WABA. Building the template itself,
- * getting it approved, and completing Meta Business verification are all
- * owner-only actions (docs/audit/decision-register.md D8) — nothing here
- * can substitute for that. `fetchImpl` is injectable so this is unit-
- * testable without ever calling the real Graph API.
+ * Two providers exist behind this one interface:
+ *   - lib/whatsapp/providers/meta.ts   — Meta WhatsApp Business Cloud API,
+ *     the intended production/compliance-grade path. Deferred: needs Meta
+ *     Business verification + an approved message template, both owner-only.
+ *   - lib/whatsapp/providers/openwa.ts — a self-hosted gateway used as a
+ *     TEMPORARY interim transport while Meta stays deferred. NOT
+ *     production/compliance-grade — see that file's header.
+ *
+ * Selection order (checked in this order, first configured wins):
+ *   1. `WHATSAPP_PROVIDER` env var, if set, forces "meta" or "openwa".
+ *   2. Meta, if all three of its env vars are set — the compliance-grade
+ *      path always wins automatically once it's actually configured, with
+ *      no other change needed anywhere in this app.
+ *   3. OpenWA, if all three of its env vars are set.
+ *   4. Neither configured -> mock (log, `{sent:false}`), same "never crash"
+ *      posture as lib/email/send.ts's missing-RESEND_API_KEY path.
+ *
+ * app/api/invoices/:id/whatsapp/route.ts — the only caller — is completely
+ * unaware of which provider ran; it only ever sees `SendWhatsAppResult`.
+ * Recipient resolution, tenant scoping, authorization, the feature flag,
+ * rate limiting, and audit logging all live in that route, unchanged and
+ * un-duplicated by this file.
  */
 
 import { log } from "@/lib/log/logger";
+import { isMetaConfigured, sendViaMeta } from "./providers/meta";
+import { isOpenWaConfigured, sendViaOpenWa } from "./providers/openwa";
+import type { SendWhatsAppInvoiceInput, SendWhatsAppResult, WhatsAppProviderName } from "./types";
 
-const GRAPH_API_VERSION = "v21.0";
+export type { SendWhatsAppInvoiceInput, SendWhatsAppResult } from "./types";
 
-export interface SendWhatsAppInvoiceInput {
-  /** E.164 phone number, e.g. "+9665XXXXXXXX". */
-  to: string;
-  invoiceNumber: string;
-  sellerName: string;
-  grandTotal: string;
-  pdfBytes: Uint8Array;
-  filename: string;
+/** Which provider `sendWhatsAppInvoice` would actually use right now, if any. */
+export function activeWhatsAppProvider(): WhatsAppProviderName | null {
+  const forced = process.env.WHATSAPP_PROVIDER;
+  if (forced === "meta" || forced === "openwa") return forced;
+  if (isMetaConfigured()) return "meta";
+  if (isOpenWaConfigured()) return "openwa";
+  return null;
 }
 
-export interface SendWhatsAppResult {
-  sent: boolean;
-  /** Meta's message id, only present on a real successful send. */
-  messageId?: string;
+/** Used by the route to decide whether an unsent result means "not configured" (mock, fine) vs "really failed" (502). */
+export function isWhatsAppProviderConfigured(): boolean {
+  return activeWhatsAppProvider() !== null;
 }
 
 export async function sendWhatsAppInvoice(
   input: SendWhatsAppInvoiceInput,
   fetchImpl: typeof fetch = fetch,
 ): Promise<SendWhatsAppResult> {
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const templateName = process.env.WHATSAPP_INVOICE_TEMPLATE_NAME;
+  const provider = activeWhatsAppProvider();
 
-  if (!accessToken || !phoneNumberId || !templateName) {
+  if (!provider) {
     console.log(
       `\n💬 [mock whatsapp] to=${input.to} invoice=${input.invoiceNumber} ` +
         `total=${input.grandTotal} attachment=${input.filename} (${input.pdfBytes.byteLength}b)\n`,
@@ -54,91 +61,14 @@ export async function sendWhatsAppInvoice(
     return { sent: false };
   }
 
-  const base = `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}`;
-
   try {
-    const mediaId = await uploadMedia(base, accessToken, input.pdfBytes, input.filename, fetchImpl);
-    if (!mediaId) return { sent: false };
-
-    const messageId = await sendTemplateMessage(base, accessToken, templateName, mediaId, input, fetchImpl);
-    if (!messageId) return { sent: false };
-
-    return { sent: true, messageId };
+    if (provider === "meta") return await sendViaMeta(input, fetchImpl);
+    return await sendViaOpenWa(input, fetchImpl);
   } catch (err) {
-    log.error("whatsapp.delivery.error", { error: err instanceof Error ? err.message : String(err) });
+    log.error("whatsapp.delivery.error", {
+      provider,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return { sent: false };
   }
-}
-
-async function uploadMedia(
-  base: string,
-  accessToken: string,
-  bytes: Uint8Array,
-  filename: string,
-  fetchImpl: typeof fetch,
-): Promise<string | null> {
-  const form = new FormData();
-  form.append("messaging_product", "whatsapp");
-  form.append("type", "application/pdf");
-  // Buffer.from copies into a plain ArrayBuffer-backed view — Uint8Array's
-  // own .buffer is typed ArrayBufferLike (which a Blob part rejects) since
-  // it could be a SharedArrayBuffer.
-  form.append("file", new Blob([Buffer.from(bytes)], { type: "application/pdf" }), filename);
-
-  const res = await fetchImpl(`${base}/media`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: form,
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "<unreadable body>");
-    log.error("whatsapp.media_upload.failed", { status: res.status, body: body.slice(0, 300) });
-    return null;
-  }
-  const data = (await res.json()) as { id?: string };
-  return data.id ?? null;
-}
-
-async function sendTemplateMessage(
-  base: string,
-  accessToken: string,
-  templateName: string,
-  mediaId: string,
-  input: SendWhatsAppInvoiceInput,
-  fetchImpl: typeof fetch,
-): Promise<string | null> {
-  const res = await fetchImpl(`${base}/messages`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to: input.to,
-      type: "template",
-      template: {
-        name: templateName,
-        language: { code: "en" },
-        components: [
-          { type: "header", parameters: [{ type: "document", document: { id: mediaId, filename: input.filename } }] },
-          {
-            type: "body",
-            parameters: [
-              { type: "text", text: input.sellerName },
-              { type: "text", text: input.invoiceNumber },
-              { type: "text", text: input.grandTotal },
-            ],
-          },
-        ],
-      },
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "<unreadable body>");
-    log.error("whatsapp.message_send.failed", { status: res.status, body: body.slice(0, 300) });
-    return null;
-  }
-  const data = (await res.json()) as { messages?: { id?: string }[] };
-  return data.messages?.[0]?.id ?? null;
 }

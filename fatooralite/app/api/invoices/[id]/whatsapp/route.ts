@@ -5,7 +5,7 @@ import { generatePdf } from "@/lib/pdf/generate";
 import { loggerFor } from "@/lib/log/logger";
 import { prisma } from "@/lib/db/client";
 import { isRateLimited } from "@/lib/ratelimit/limiter";
-import { sendWhatsAppInvoice } from "@/lib/whatsapp/send";
+import { sendWhatsAppInvoice, isWhatsAppProviderConfigured } from "@/lib/whatsapp/send";
 import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
 import { isFlagEnabled } from "@/lib/flags/flags";
 
@@ -25,6 +25,11 @@ const PHONE_RE = /^\+?\d{7,15}$/;
  * email: there is no address parameter to control, so this cannot be used
  * to relay an arbitrary outbound WhatsApp message to an attacker-chosen
  * number.
+ *
+ * This route is provider-agnostic on purpose — lib/whatsapp/send.ts decides
+ * whether Meta's Cloud API or OpenWA (a temporary self-hosted interim
+ * transport, 2026-08-19) actually sends the message. Nothing here changes
+ * based on which one is configured.
  */
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
   const params = await context.params;
@@ -65,7 +70,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     return NextResponse.json({ error: "Too many WhatsApp sends for this account — try again later" }, { status: 429 });
   }
 
-  const hasProvider = Boolean(process.env.WHATSAPP_ACCESS_TOKEN);
+  const hasProvider = isWhatsAppProviderConfigured();
   if (!hasProvider && process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "WhatsApp delivery is not configured" }, { status: 503 });
   }

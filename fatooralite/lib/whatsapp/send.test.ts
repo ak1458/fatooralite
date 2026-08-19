@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { sendWhatsAppInvoice } from "./send";
+import { sendWhatsAppInvoice, activeWhatsAppProvider, isWhatsAppProviderConfigured } from "./send";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -7,6 +7,12 @@ function setCreds() {
   process.env.WHATSAPP_ACCESS_TOKEN = "test-token";
   process.env.WHATSAPP_PHONE_NUMBER_ID = "1234567890";
   process.env.WHATSAPP_INVOICE_TEMPLATE_NAME = "invoice_delivery";
+}
+
+function setOpenWaCreds() {
+  process.env.OPENWA_API_URL = "http://localhost:2785/api";
+  process.env.OPENWA_API_KEY = "test-openwa-key";
+  process.env.OPENWA_SESSION_ID = "session-abc";
 }
 
 const input = {
@@ -53,7 +59,7 @@ describe("sendWhatsAppInvoice", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ messages: [{ id: "wamid.XYZ" }] }), { status: 200 }));
 
     const result = await sendWhatsAppInvoice(input, fetchImpl as unknown as typeof fetch);
-    expect(result).toEqual({ sent: true, messageId: "wamid.XYZ" });
+    expect(result).toEqual({ sent: true, messageId: "wamid.XYZ", provider: "meta" });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
 
     const [mediaCall, messageCall] = fetchImpl.mock.calls;
@@ -88,5 +94,46 @@ describe("sendWhatsAppInvoice", () => {
     const fetchImpl = vi.fn().mockRejectedValueOnce(new Error("ECONNRESET"));
     const result = await sendWhatsAppInvoice(input, fetchImpl as unknown as typeof fetch);
     expect(result).toEqual({ sent: false });
+  });
+});
+
+describe("provider selection (2026-08-19 — OpenWA added alongside Meta)", () => {
+  it("is null/unconfigured when neither provider's env vars are set", () => {
+    expect(activeWhatsAppProvider()).toBeNull();
+    expect(isWhatsAppProviderConfigured()).toBe(false);
+  });
+
+  it("picks OpenWA when only OpenWA is configured", () => {
+    setOpenWaCreds();
+    expect(activeWhatsAppProvider()).toBe("openwa");
+    expect(isWhatsAppProviderConfigured()).toBe(true);
+  });
+
+  it("picks Meta when only Meta is configured", () => {
+    setCreds();
+    expect(activeWhatsAppProvider()).toBe("meta");
+  });
+
+  it("prefers Meta over OpenWA when both are configured — the compliance-grade path wins automatically", () => {
+    setCreds();
+    setOpenWaCreds();
+    expect(activeWhatsAppProvider()).toBe("meta");
+  });
+
+  it("WHATSAPP_PROVIDER forces the choice even when both are configured", () => {
+    setCreds();
+    setOpenWaCreds();
+    process.env.WHATSAPP_PROVIDER = "openwa";
+    expect(activeWhatsAppProvider()).toBe("openwa");
+  });
+
+  it("actually dispatches to OpenWA's send-document endpoint when OpenWA is the active provider", async () => {
+    setOpenWaCreds();
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ messageId: "true_628@c.us_XYZ", timestamp: 1 }), { status: 201 }),
+    );
+    const result = await sendWhatsAppInvoice(input, fetchImpl as unknown as typeof fetch);
+    expect(result).toEqual({ sent: true, messageId: "true_628@c.us_XYZ", provider: "openwa" });
+    expect(String(fetchImpl.mock.calls[0][0])).toContain("/sessions/session-abc/messages/send-document");
   });
 });

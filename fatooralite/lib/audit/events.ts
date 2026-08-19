@@ -51,6 +51,7 @@ export const SECURITY_EVENTS = {
   invoiceWhatsappSent: "invoice.whatsapp_sent",
   featureFlagChanged: "feature_flag.changed",
   operatorCompaniesViewed: "operator.companies.viewed",
+  operatorWhatsappSessionViewed: "operator.whatsapp_session.viewed",
   operatorAccessDenied: "operator.access.denied",
 } as const;
 

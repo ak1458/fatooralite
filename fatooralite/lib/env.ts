@@ -52,6 +52,19 @@ const envSchema = z.object({
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_INVOICE_TEMPLATE_NAME: z.string().optional(),
+  /**
+   * OpenWA (lib/whatsapp/providers/openwa.ts) — a TEMPORARY, self-hosted
+   * interim WhatsApp transport (2026-08-19), used only until Meta Business
+   * verification above is complete. NOT the production/compliance-grade
+   * path — see that file's header before treating this as a permanent
+   * choice. All three unset means WhatsApp falls fully back to mock mode,
+   * same as the Meta vars above.
+   */
+  OPENWA_API_URL: z.string().optional(),
+  OPENWA_API_KEY: z.string().optional(),
+  OPENWA_SESSION_ID: z.string().optional(),
+  /** Forces provider selection ("meta" | "openwa") when both happen to be configured at once — see lib/whatsapp/send.ts. */
+  WHATSAPP_PROVIDER: z.enum(["meta", "openwa"]).optional(),
 
   /**
    * Canonical deployed URL. lib/appUrl.ts reads these two (pre-existing

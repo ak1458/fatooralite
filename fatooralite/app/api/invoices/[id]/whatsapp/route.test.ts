@@ -15,7 +15,16 @@ import { SECURITY_EVENTS } from "@/lib/audit/events";
  */
 vi.mock("@/lib/pdf/generate", () => ({ generatePdf: vi.fn(async () => new Uint8Array([1, 2, 3])) }));
 const sendWhatsAppMock = vi.fn(async (_input: { to: string }) => ({ sent: false }));
-vi.mock("@/lib/whatsapp/send", () => ({ sendWhatsAppInvoice: (input: { to: string }) => sendWhatsAppMock(input) }));
+// isWhatsAppProviderConfigured must be mocked too now that the route also
+// imports it (provider dispatch, 2026-08-19 OpenWA addition) — this file
+// tests authorization/anti-abuse behaviour, not provider selection (that's
+// lib/whatsapp/send.test.ts and lib/whatsapp/providers/openwa.test.ts), so
+// it's pinned to `false` throughout: no real provider is "configured" from
+// the route's perspective, matching every test's expectation of a mock send.
+vi.mock("@/lib/whatsapp/send", () => ({
+  sendWhatsAppInvoice: (input: { to: string }) => sendWhatsAppMock(input),
+  isWhatsAppProviderConfigured: () => false,
+}));
 
 let db: PrismaClient;
 let companyId: string;
