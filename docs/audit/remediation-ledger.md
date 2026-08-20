@@ -86,7 +86,7 @@ Status: PLANNED · IN PROGRESS · DONE · BLOCKED · OPEN (decisions).
 | W22 | Sequence-gap surfacing + Arabic search/sort validation | 3 | **DONE** | `lib/services/sequence-gaps.ts` (`getSequenceIntegrity`) wired into `GET /api/clearance` + a warning banner on the Compliance Center page; `lib/services/sequence-gaps.test.ts` (4 tests) + `lib/db/arabic-text.test.ts` (5 tests, including an alphabet-order sort assertion against real Postgres collation) |
 | W23 | Incident-response runbook | 15 | **DONE** | `docs/20-incident-response.md` — detection/triage via `SecurityEvent` + `x-request-id`, revocation playbooks for every existing mechanism (session/secret/certificate), incident recording template, customer notification template (legal-obligation question explicitly left to owner/legal review) |
 | W24 | Dependency advisories / transformers decision | 1 | **DONE** | Re-ran `npm audit --json`: same 7 high advisories, still no fix at any version for either chain — confirmed, not assumed. No dependency change; standing recommendation to set a hosted embedding provider in production documented in `docs/19-operations-runbook.md` §6 |
-| W25 | Backup procedures beyond the drill | 10 | **PARTIAL** | `docs/21-backup-restore.md` (logical `pg_dump`/`pg_restore` procedure independent of Neon's own backup features) + `scripts/restore-verify.ts` (migration currency, core-table counts, sequence integrity via W22, PIH chain spot-check) delivered and its refusal path verified. End-to-end drill **not executed** — this machine has no `pg_dump`/`pg_restore` on `PATH` (checked). Neon PITR/backup-encryption/platform-restore stay UNKNOWN, owner-blocked on **X2** |
+| W25 | Backup procedures beyond the drill | 10 | **PARTIAL** | `docs/21-backup-restore.md` (logical `pg_dump`/`pg_restore` procedure independent of Neon's own backup features) + `scripts/restore-verify.ts` (migration currency, core-table counts, sequence integrity via W22, PIH chain spot-check) delivered and its refusal path verified. End-to-end drill **not executed** — this machine has no `pg_dump`/`pg_restore` on `PATH` (checked). Neon PITR/platform-restore since confirmed via `neonctl` (2026-08-20, see X2 below) — backup-**encryption** is the only piece still UNKNOWN |
 
 ## Phase 5 — product / post-launch features
 
@@ -112,7 +112,7 @@ complexity, recommended phase) is in `remediation-roadmap.md` §Phase 5.
 | ID | Track | Audit items | Status |
 |---|---|---|---|
 | X1 | ZATCA OTP → CSID → real round trip | 48 | BLOCKED ON OWNER |
-| X2 | Neon PITR / backup / platform restore | 12 | **PARTIALLY VERIFIED 2026-08-19** — 6 of 12 checks verified read-only from the database itself; 3 remain console-only (plan, self-service restore, encryption-at-rest); 1 owner-reported (retention). See "X2 verification" below |
+| X2 | Neon PITR / backup / platform restore | 12 | **VERIFIED 2026-08-19 (later the same day, via authenticated `neonctl`)** — 11 of 12 checks now directly confirmed; only encryption-at-rest has no API-exposed fact to check. See "X2 verification" below |
 | X3 | Moyasar merchant + sandbox transaction | 1 | BLOCKED ON OWNER |
 | X4 | Mandatory end-to-end flow | 11 | BLOCKED (needs X1 + D8) — D8 resolved 2026-08-19, X1 still owner-blocked, so still BLOCKED overall |
 
@@ -138,12 +138,53 @@ database created or deleted, no migration applied.
 | 11 | Neon settings altered? | **NO** | None touched |
 | 12 | Branches/databases deleted? | **NO** | None |
 
+### X2 update (2026-08-20, later session — owner granted CLI access)
+
+The owner authenticated `gh`, `vercel`, and `neonctl` on this machine
+(device-flow login, each confirmed via a `whoami`-equivalent check before
+anything else ran). `neonctl` answered the three items the read-only pass
+above could only mark "owner action required":
+
+| # | Check | Result |
+|---|---|---|
+| 3 | Neon plan | **VERIFIED — Free** (`neonctl orgs list`: `"plan": "free"`) |
+| 4 | Backup/PITR retention | **VERIFIED — 21600 seconds = exactly 6h** (`neonctl projects get`: `history_retention_seconds: 21600`), confirming the owner's earlier report precisely rather than just trusting it |
+| 5 | PITR restore self-service | **VERIFIED — real command exists**: `neonctl branches restore <target> <source>@<timestamp|lsn>`, callable directly, no support ticket. Not executed (nothing needed restoring) — existence and shape confirmed via `--help`, not guessed |
+
+Also confirmed: project `fatooralite` (`lingering-pine-81021509`), branch
+`main` (`br-damp-leaf-ajeiikbz`, state `ready`) is genuinely the one
+backing `DATABASE_URL`/`DIRECT_URL` — item #1 above is no longer partial.
+A second branch, `test` (`br-dawn-term-ajqa4kzd`), exists but is
+**archived** — inactive, costs nothing, not the source of the prod/test
+*database*-level sharing already documented in item #2 (that sharing is
+`neondb`/`fatoora_audit`/`fatoora_restore` coexisting on the `main`
+branch's single compute, unrelated to this archived branch).
+
+**Item 10 changed from "deliberately not applied" to applied.** With the
+owner's explicit go-ahead to work live, `prisma migrate deploy` was run
+against `neondb`: `20260819100000_row_level_security` applied cleanly,
+19/19 migrations now current. Verified immediately after, not assumed:
+`pg_class.relrowsecurity = true` on all four tables (Invoice/Customer/
+Product/Certificate), `relforcerowsecurity = false` (exactly as designed —
+never forced onto the owner role), the app's own connection still reads
+`Invoice` normally (count unchanged at 2), and `GET /api/health` stayed
+200 through the change. No regression.
+
+**Only remaining X2 gap: encryption-at-rest (#6).** Neither the Neon API
+nor `neonctl` exposes a queryable field for it — this genuinely has no
+programmatic answer available, only Neon's own platform documentation
+(which states storage is encrypted by default) or a direct question to
+Neon support. Not verified here; not asserted as verified either.
+
 **Net X2 position:** the engineering-verifiable half is now done and green
-(identity, migration integrity, data intact). What remains is genuinely
-console-only — plan, self-service-restore availability, and
-encryption-at-rest — plus independent confirmation of the 6-hour retention
-figure. The prod/dev separation gap (W17) is no longer "suspected"; it is
-**confirmed**, with the specific mechanism recorded above.
+(identity, migration integrity, data intact). Following the 2026-08-20
+update above, plan, retention, and self-service restore are also
+independently confirmed via `neonctl`. **Only encryption-at-rest has no
+API answer** — genuinely console/vendor-documentation-only, not something
+either read-only SQL or the authenticated CLI can expose. The prod/dev
+separation gap (W17) is confirmed, not suspected, with the specific
+mechanism recorded above — this remains true regardless of the CLI access
+gained since; nothing about the sharing itself changed.
 
 **Re-checked 2026-08-19 (scope-check session)**: all four tracks confirmed still BLOCKED, none actionable by engineering, each needing owner credentials/access. **Re-checked again 2026-08-19 (decision-implementation session, same day, separate session)**: X1/X2/X3 unchanged — still need a Fatoora portal OTP, Neon console access, and Moyasar KYC respectively, none of which an engineering session can provide. X4 specifically needed D8 as well as X1; D8 is now resolved (see Phase 7 below) but X1 is not, so X4 remains BLOCKED — resolving one of its two dependencies doesn't unblock it alone.
 

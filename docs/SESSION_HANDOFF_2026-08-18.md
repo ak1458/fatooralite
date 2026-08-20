@@ -704,3 +704,99 @@ is 44 chars (over the 32 minimum), `AUTH_ENFORCE` is literal `true`,
 **Tests/gates:** none re-run, deliberately. No application code changed,
 so per this pass's own instruction the 639-test suite was not re-executed;
 the last full green run (§10) stands unchanged.
+
+---
+
+## 12. CLI access granted, production actually deployed (2026-08-20)
+
+The owner authenticated `gh`, `vercel`, and `neonctl` on this machine
+(each via its own device-flow/browser login, done by the owner — this
+session cannot complete OAuth itself) and explicitly authorized working
+live. What follows actually happened, in order.
+
+**X2 fully resolved except one item.** `neonctl` answered what §11's
+read-only pass could only mark "owner action required": plan is **Free**,
+retention is **21600s = 6h exactly** (matches the owner's earlier report,
+now independently confirmed rather than trusted), self-service PITR
+restore is real (`neonctl branches restore <target> <source>@<ts|lsn>`,
+confirmed via `--help`, not executed since nothing needed restoring).
+Project/branch identity confirmed: `fatooralite`
+(`lingering-pine-81021509`), branch `main` (`br-damp-leaf-ajeiikbz`,
+`ready`); a `test` branch exists but is `archived`. Only
+**encryption-at-rest** has no API answer anywhere — genuinely
+console/vendor-doc-only. Full detail in `docs/audit/remediation-ledger.md`'s
+X2 section.
+
+**The pending D6 migration was applied to `neondb`.** 19/19 now current.
+Verified immediately after: `relrowsecurity=true`/`relforcerowsecurity=false`
+on all four tables (exactly as designed), the app's own connection still
+reads `Invoice` normally, `/api/health` stayed 200 throughout. No
+regression.
+
+**Production was actually deployed** (`vercel --prod`, aliased to
+`fatooralite.vercel.app`) — twice. The first deploy surfaced a real bug,
+found only by testing the live site, not by any of the 639 tests:
+
+**`proxy.ts` was silently blocking both operator routes in production.**
+It gates every `/api/*` path behind a session cookie unless explicitly
+exempted (the same file already exempts `/api/cron` and
+`/api/billing/webhook` for the identical reason — they authenticate via
+their own bearer/shared-secret check, not a cookie). `/api/operator/*`
+was never added to that exemption, so `GET /api/operator/companies` and
+`GET /api/operator/whatsapp-session` died at the proxy with a generic 401
+before their own `OPERATOR_SECRET` check ever ran — for every caller,
+correctly-credentialed or not. Every existing test imports and calls the
+route handler directly (`import("./route")`), which bypasses `proxy.ts`
+entirely, so nothing in the suite could have caught this; it only showed
+up testing the real HTTP path. Fixed the same way the file's own
+`/api/cron` precedent is written: added `/api/operator` to the exemption
+list, with a comment explaining why. Two new regression tests in
+`proxy.test.ts` prove the proxy no longer intercepts these paths with its
+own 401; all 16 pre-existing proxy tests and both operator-route test
+files re-run unchanged and green (28 tests total). Lint and build clean.
+Commit `605f029`.
+
+**Also found and fixed along the way:** the `OPERATOR_SECRET` value set in
+§11 turned out impossible to verify by the method used
+(`vercel env pull`) — Vercel deliberately redacts Sensitive-typed values
+in a pulled `.env` file with a placeholder, confirmed by checking a
+long-standing, definitely-correct pre-existing secret (`CRON_SECRET`) the
+same way and seeing the identical redacted shape. Not a real bug in what
+was stored; a bug in how it was being checked. Re-verified properly this
+time — generate, confirm length locally (44 chars), set via `vercel env
+add --value` (not stdin, which truncated unpredictably under this
+shell — a real, reproducible quirk worth remembering, not explained
+further), redeploy, then test the live endpoint directly with the value
+still in shell scope, never round-tripped through `pull`. Both operator
+routes now return real 200s with a correct credential and their own
+403 with a wrong/missing one, confirmed live.
+
+**`GET /api/operator/whatsapp-session` in production correctly reports
+OpenWA as unavailable** (`{"provider":"openwa","configured":true,
+"available":false,"error":"fetch failed"}`) — expected, not a bug.
+`OPENWA_API_URL` points at `127.0.0.1:2785`, this machine's own OpenWA
+instance, which Vercel's serverless functions cannot reach. This was
+predicted before any of this session's live work and is now confirmed
+rather than assumed. WhatsApp delivery in production is Meta-or-nothing
+until OpenWA is hosted somewhere Vercel can reach — a decision not made
+this session.
+
+**Not done: the branch has still not been pushed to GitHub.** `git push`
+itself is no longer blocked by Claude Code's sandbox classifier (it
+wasn't this session), but `gh`'s OAuth token lacked the `workflow` scope,
+which GitHub requires to push any change touching
+`.github/workflows/ci.yml` (one of this branch's 29 commits does). A
+`gh auth refresh -h github.com -s workflow` was started and needs one more
+owner click to approve — pending as this section is written. Once
+approved, the push is expected to succeed immediately (everything else
+about the push path is already confirmed working: credentials wired via
+`gh auth setup-git`, `GIT_TERMINAL_PROMPT=0` set so nothing hangs waiting
+for input again).
+
+**Commits this session:** `605f029` (proxy fix) on top of `ac4229e`. Not
+yet pushed — see above.
+
+**Next session, if the push still hasn't happened:** finish `gh auth
+refresh`, then `git push -u origin audit/production-readiness-2026-08-18`.
+Everything else — X2, the migration, the live proxy fix, `OPERATOR_SECRET`
+— is done and verified; don't re-derive any of it from scratch.
