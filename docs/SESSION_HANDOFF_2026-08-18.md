@@ -800,3 +800,61 @@ yet pushed — see above.
 refresh`, then `git push -u origin audit/production-readiness-2026-08-18`.
 Everything else — X2, the migration, the live proxy fix, `OPERATOR_SECRET`
 — is done and verified; don't re-derive any of it from scratch.
+
+---
+
+## 13. Push completed, CI fixed, PR opened, main protected (2026-08-20)
+
+The `workflow`-scope refresh from §12 timed out once (device code expired
+before approval — my wait window was too short, not a real failure) and
+succeeded on retry. Push landed: 31 commits, branch matches `origin`
+exactly (`0794dcf` at that point).
+
+**GitHub's own repo page then showed `main`'s latest check failing.**
+Investigated rather than assumed: the failure was on `main`'s actual HEAD
+commit (`95ac6fa`, 2026-08-06) — **`main` has not been updated since**;
+none of this entire remediation programme has ever been merged. Root
+cause: the `Unit tests` CI step had no `AUTH_SECRET`/`DATABASE_URL`
+placeholders, so `lib/env.ts`'s `validateEnv()` (pulled in transitively by
+most service files) threw at module-import time before any test could
+run. Fixed in `.github/workflows/ci.yml` (commit `7240cf9`) — turned out
+partially redundant: `vitest.config.ts` already carries the identical
+fallback, added 2026-08-18 (`1c93593`), which simply never made it to
+`main` either. Left the `ci.yml` fix in anyway as harmless belt-and-braces
+matching the `Build` step's existing pattern, but recorded honestly here
+rather than overclaiming it as the whole fix.
+
+**Opened PR #16** specifically to trigger CI via `pull_request` (the
+workflow only listens to `push:main` and `pull_request`, never a plain
+branch push) and verify locally-unverifiable changes for real. First run
+surfaced a second, genuine, different bug: `app/api/health/deep/
+route.test.ts` had two tests that call the real route handler
+end-to-end — unlike every other DB-touching test in this codebase, they
+were never gated behind `hasTestDb`, so they only ever passed locally
+because a real `DATABASE_URL` was always configured. CI's is an
+intentional non-connecting placeholder. Fixed (commit `c953798`): split
+into two `describe` blocks — the three auth-gate tests (no DB touched)
+stay unconditional; the two success-path tests moved under
+`describe.skipIf(!hasTestDb)`, the codebase's own established convention.
+Verified both modes locally before pushing (with and without
+`TEST_DATABASE_URL`).
+
+**Second PR run: fully green** — lint, audit, unit tests, ZATCA
+validation, build all passed (`32327003639`, 2m3s).
+
+**`main` branch protection enabled**, per the owner's direct request and
+matching `docs/18-production-checklist.md`'s own long-standing
+recommendation: PR required before merge (0 reviewers — solo repo, so this
+forces the workflow without demanding a second person), `lint · test ·
+build` required and must be current with `main` (`strict: true`), force-push
+and branch deletion blocked. `enforce_admins: false` — the owner can still
+bypass in a genuine emergency; this isn't a lockout.
+
+**Not done, deliberately: PR #16 was not merged.** Every prompt this whole
+session said not to touch `main`; opening/fixing/protecting are all
+reversible and don't touch `main`'s content, merging does. That decision
+was left for the owner explicitly.
+
+**Commits this session, in order:** `605f029`, `0794dcf`, `7240cf9`,
+`c953798` — all on `audit/production-readiness-2026-08-18`, all pushed,
+all included in PR #16.
