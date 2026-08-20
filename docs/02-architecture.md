@@ -215,7 +215,70 @@ graph LR
 
 ---
 
-## 6. Verification & Architectural Benchmarks
+## 6. Background Work
+
+There is no job-queue library or generic job table. The pattern, built in
+Phase 2 (W3) for ZATCA submission and formalized in Phase 3 (W8):
+
+**Persistent state lives on the owning row**, not a separate queue entity.
+`Invoice` carries `status`, `submitAttempts`, `lastSubmitAt`, `nextSubmitAt`,
+`needsReview`, `reportingState`, `reportingDeadline` — a small state machine
+per invoice, not a job record pointing at an invoice.
+
+**Claiming is an atomic compare-and-swap**, never a row lock held across an
+external call: `db.invoice.updateMany({ where: { status: {in:[...]} }, data: {...} })`.
+Two callers racing on the same row — a retried request, an overlapping cron
+tick — can both attempt the claim; Postgres serializes the two `UPDATE`s, so
+at most one succeeds. The loser refuses rather than duplicating work. This is
+what "duplicate job prevention" and "safe concurrency" mean here — there is
+no distributed lock, because none is needed once the claim itself is atomic.
+
+**Retry is a backoff ladder with a hard ceiling**, not unbounded retrying:
+`RETRY_BACKOFF_MS` (5m/15m/1h/4h) and `MAX_SUBMIT_ATTEMPTS` (5) in
+`lib/services/clearance-service.ts`. Past the ceiling, `needsReview` flips
+true and automatic retries stop — permanently, by design. This **is** the
+dead-letter mechanism (closes A-064): a flagged row is never picked up again
+by the claim query (`needsReview: false` is always in its `WHERE`), and
+resolving it is a deliberate human action, not an automatic one, because
+ZATCA has no status-lookup endpoint and the system must never guess a
+verdict it was never given.
+
+**Two Vercel crons drain the two things that need draining**:
+`/api/cron/zatca-reporting` (B2C invoices due within 24h) and
+`/api/cron/zatca-reconcile` (any invoice stranded in `submitted` past the
+staleness window, from a crash or timeout) — both `CRON_SECRET`-gated,
+both idempotent re-entrant sweeps, not stateful workers.
+
+**Recovery after restart is free**: state is rows, not in-memory queue
+contents, so a killed process loses nothing — the next cron tick or manual
+retry re-reads the same state and continues.
+
+**Tenant isolation** is `companyId` on the row, same as every other query in
+the app — no separate mechanism.
+
+**Visibility** (`lib/services/job-stats.ts`, surfaced at the operator-only
+`GET /api/health/deep`) reports counts of pending/overdue/failed reporting
+rows and stale-submitted/needs-review rows — cross-tenant by design, since
+it backs an operator dashboard, not a tenant API.
+
+**Best-effort work stays best-effort, deliberately**: `scheduleCompanyIngest`
+(`lib/ai/tenant-ingest.ts`) debounces and retries an in-process RAG re-index
+after invoice clearance, swallowing its own failure — a stale search index
+degrades gracefully; failing the request that triggered it would not. The
+global ZATCA knowledge corpus is rebuilt at deploy time
+(`scripts/ingest-global.ts`), not on a request path.
+
+**Why not a generic job table:** the only real background work today is the
+two crons above; a generic `BackgroundJob` table would be a second source of
+truth for submission fate — exactly the duplication W3 eliminated — and
+would change failure modes for no current consumer. If a future feature
+needs genuine background processing (queued WhatsApp/email delivery, bulk
+import), it should either follow this same pattern on its own owning entity,
+or that's the point to revisit this decision — not before.
+
+---
+
+## 7. Verification & Architectural Benchmarks
 
 The entire system is continuously validated using automated test suites and compliance harnesses:
 

@@ -5,6 +5,8 @@ import { inviteUser, UserError } from "@/lib/services/user-service";
 import { requirePermission } from "@/lib/auth/server";
 import { checkSeatLimit } from "@/lib/billing/plan";
 import { limitReached } from "@/lib/billing/deny";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -55,13 +57,25 @@ export async function POST(req: Request) {
 
   try {
     const user = await inviteUser({ companyId, ...parsed.data });
+    const { user: actor } = await requirePermission(req, "users:manage", companyId);
+    await recordSecurityEvent({
+      action: SECURITY_EVENTS.userCreated,
+      outcome: "success",
+      companyId,
+      actorId: actor?.userId,
+      actorEmail: actor?.email,
+      targetType: "user",
+      targetId: user.id,
+      request: req,
+      metadata: { email: user.email, role: user.role },
+    });
     return NextResponse.json(
       { user: { id: user.id, name: user.name, email: user.email, role: user.role, title: user.title, status: user.status } },
       { status: 201 },
     );
   } catch (err) {
     if (err instanceof UserError) return NextResponse.json({ error: err.message }, { status: 409 });
-    console.error("Invite user error:", err);
+    loggerFor(req).error("user.invite.failed", { error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Could not create user" }, { status: 500 });
   }
 }

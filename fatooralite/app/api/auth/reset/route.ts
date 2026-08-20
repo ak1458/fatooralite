@@ -3,6 +3,8 @@ import { jwtVerify } from "jose";
 import { prisma } from "@/lib/db/client";
 import { hashPassword } from "@/lib/auth/password";
 import { authSecretKey } from "@/lib/auth/session";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -55,9 +57,19 @@ export async function POST(req: Request) {
       },
     });
 
+    await recordSecurityEvent({
+      action: SECURITY_EVENTS.passwordResetCompleted,
+      outcome: "success",
+      actorId: user.id,
+      targetType: "user",
+      targetId: user.id,
+      request: req,
+      metadata: { sessionsInvalidated: true },
+    });
+
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Reset password error:", err);
+    loggerFor(req).error("auth.reset.failed", { error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "An unexpected error occurred." }, { status: 500 });
   }
 }

@@ -34,7 +34,61 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
 
 ---
 
-## Current state (2026-08-06)
+## Current state (2026-08-18)
+
+- **A full production audit was run on 2026-08-18** against both audit
+  specifications (1069 items). Report and ledger in `docs/audit/`. Verdict:
+  **NOT READY**. One of its two blockers is now fixed (Arabic invoice PDFs);
+  the other — no ZATCA round trip has ever been performed — is owner-blocked
+  on a Fatoora portal OTP.
+- **Remediation Phase 1 is complete** (W1 Arabic PDF, W2 security audit trail).
+  **Remediation Phase 2 is complete** (W3 idempotency/reconciliation, W4
+  observability, W5 AI confirmation tokens, W6 RAG restriction/AI usage
+  accounting, W7 deployment config, W26 remaining risks).
+  **Remediation Phase 3 is complete, with honestly-documented PARTIALs**
+  (W8–W18, N8; F-A/F-B/F-C investigated and closed).
+  **Remediation Phase 4 is complete, with honestly-documented PARTIALs**
+  (W19, W21–W24 DONE outright; W20, W25 PARTIAL — W20 is a bounded doc
+  reconciliation, not exhaustive; W25's drill wasn't run end-to-end, no
+  postgres client tools on this machine, checked not assumed).
+  **Remediation Phase 5 is complete, as a deliberately scoped subset**
+  (N4 CSV import/export, N6 feature flags, N7 email invoice delivery
+  DONE; N1/N2/N3/N5/N9/N11 BLOCKED on OPEN decisions D7/D8, not attempted;
+  N10 closed as a rollup). Programme state lives in
+  `docs/audit/remediation-ledger.md`; read that before starting anything.
+  Phase 6 has NOT been started. Full regression (87 test files, 575 tests)
+  confirmed 0 failed / 0 skipped. **A real, pre-existing gap was found this
+  phase — `neondb` was missing 7 migrations dating back to Phase 1 — and
+  is now RESOLVED (2026-08-19, same day, with explicit owner approval):
+  `prisma migrate deploy` ran clean, verified, `GET /api/invoices` returns
+  200. See `docs/SESSION_HANDOFF_2026-08-18.md` §3.7 for the full
+  investigation-then-resolution record.** **If you're picking this up
+  fresh, read `docs/SESSION_HANDOFF_2026-08-18.md` first** for the exact
+  current state and what to do if this work isn't committed yet.
+- **Thirteen defects were found and fixed in the original audit**, four
+  financial or compliance-affecting. Full detail in
+  `docs/audit/2026-08-18-findings.md`.
+- **The test suite now runs its database-gated half.** It was 285 passed /
+  43 skipped; after the audit it was 363 passed / 0 skipped, after
+  remediation Phase 1 it was 402 passed / 0 skipped, after remediation
+  Phase 2 it was 447 passed / 2 pre-existing failed / 0 skipped, after
+  remediation Phase 3 it was 497 passed / 0 failed / 0 skipped (73 files),
+  after remediation Phase 4 it was 519 passed / 0 failed / 0 skipped (76
+  files), and after remediation Phase 5 it is **575 passed / 0 failed / 0
+  skipped** (87 test files — 11 added this phase — run against
+  `fatoora_audit` via `TEST_DATABASE_URL`). Run convention unchanged from
+  Phase 3: 6 files that call `pushTestSchema()` must run in separate
+  `vitest run` invocations, one at a time (running two together races); the
+  other 81 must run together in one invocation with `--no-file-parallelism`
+  (true parallel execution against the same database caused real connection
+  contention, not a code bug). See `handoff.md`'s Phase 3–5 entries for the
+  full mechanics.
+- Security core verified adversarially: 25 cross-tenant attacks refused,
+  privilege escalation refused, invoice totals recomputed server-side, the
+  ZATCA chain did not fork under concurrency, RAG leaked nothing under prompt
+  injection. Evidence in the audit report, not inferred from reading code.
+
+## Previous state (2026-08-06)
 
 - **Shipped.** `main` is pushed to GitHub and deployed to production. Tagged
   `v0.4.0`; tags `v0.1.0`–`v0.4.0` are all on the remote.
@@ -58,7 +112,7 @@ All five CI gates pass, in the order CI runs them:
 cd fatooralite
 npm run lint                       # 0 errors — was failing for a long time; keep it green
 npm audit --audit-level=critical
-npx vitest run                     # 285 passed / 43 skipped (DB-gated)
+npx vitest run                     # 447 passed / 2 pre-existing unrelated failures / 0 skipped with TEST_DATABASE_URL set
 npx tsx scripts/validate-zatca.ts  # 7/7 local checks
 npm run build
 ```
@@ -115,7 +169,149 @@ clearing an `any` cast. Prefer both over another reading pass.
 
 ## What is left
 
-### 1. Phase 7 — market research *(do this next)*
+**Note on numbering:** section 0 below uses the remediation programme's own
+phase numbers (1–8, defined in `docs/audit/remediation-roadmap.md`). Sections
+1–6 further down use an older, unrelated numbering from the pre-audit product
+roadmap (`docs/12-master-roadmap.md`/`docs/16-launch-plan.md`) — e.g. "Phase
+7 — market research" there is *not* the remediation programme's Phase 7
+(decisions D1–D9). The two schemes collided before this note was added;
+check which document a "Phase N" reference belongs to before acting on it.
+
+### 0. Remediation programme *(see `docs/audit/remediation-ledger.md` — start there)*
+
+**Phase 1 is done.** Arabic invoice PDFs now render (embedded Amiri + fontkit
+shaping + a bidi pass), and a real security/actor audit trail exists with a
+query API. Suite: 402 passed, 0 skipped. Ledger: 481 GREEN / 1069.
+
+**Phase 2 is done.** W3 idempotency + ZATCA submission reconciliation + retry
+policy (atomic CAS claim, backoff ladder, `/api/cron/zatca-reconcile`), W4
+observability (`lib/log/logger.ts`, `x-request-id` correlation, `/api/health/
+deep`), W5 server-minted AI confirmation tokens (`AiConfirmation`), W6 global
+RAG re-index restricted to `OPERATOR_SECRET` + AI usage accounting
+(`AiUsage`), W7 deployment config correctness (`APP_URL` boot check,
+`appUrl()` reset links), W26 closed the remaining RISK findings (F-16
+reconfirmed as no-longer-reproducing; F-12 confirmed accepted-with-basis at
+the time — **since fixed outright in Phase 4/W21, see below**).
+Suite: 447 passed / 2 pre-existing unrelated failures / 0 skipped. Ledger:
+507 GREEN / 1069. Full write-up in `handoff.md`'s 2026-08-18 Phase 2 entry.
+
+**Phase 3 is done, with honestly-documented PARTIALs.** W8 background job
+substrate, W9 Asia/Riyadh timezone policy, W10 branchId scoping, W11 DB CHECK
+constraints, W13 migration safety drills, W18 assistant scope claims are
+DONE outright. W12 (ZATCA XSD/Schematron validation), W14 (performance
+testing), W15 (test coverage), W17 (DevOps staging/patch process), and N8
+(credit/debit notes, promoted from Phase 5) are PARTIAL — each gap is either
+owner-blocked (X1, X2) or a deliberately undecided business rule (D9), never
+silently substituted. W16 (failure-injection harness) is DONE for the
+harness itself. F-A/F-B/F-C (carried over from Phase 2's own report) are
+closed. Full detail: `docs/audit/remediation-ledger.md`'s Phase 3 table and
+outcome section, `handoff.md`'s Phase 3 entry.
+
+**Phase 4 is done, with honestly-documented PARTIALs.** W19 (session
+refresh/rotation), W21 (Origin required on state-changing requests, closes
+F-12), W22 (sequence-gap surfacing + Arabic search/sort validation), W23
+(incident-response runbook), W24 (dependency advisories re-checked, no fix
+exists, no change made) are DONE outright. W20 (documentation
+reconciliation) and W25 (backup procedures beyond the drill) are PARTIAL —
+W20 was a bounded pass against 21 named items, not exhaustive; W25
+delivered a working backup/restore procedure and verification script but
+the actual drill wasn't run end to end (no postgres client tools on this
+machine) and Neon's own PITR/backup capability stays owner-blocked (X2).
+Full detail: `docs/audit/remediation-ledger.md`'s Phase 4 table and outcome
+section, `handoff.md`'s Phase 4 entry.
+
+**Phase 5 is done, as a deliberately scoped subset of the roadmap's 11
+candidate items.** N4 (CSV import/export of customers/products, scoped down
+to exclude xlsx/invoice-import/async — see the ledger for exact reasons),
+N6 (feature flags, designed with no HTTP write path to stay clear of D7),
+and N7 (email invoice delivery) are DONE. N1/N2/N3/N5/N9/N11 are BLOCKED —
+N1 and N3 are gated on OPEN decisions D7/D8 and building either would
+resolve the decision by fiat; N2/N5/N9/N11 depend on N1. N8 was already
+Phase 3's. N10 is closed as a rollup, not built (see the ledger). **A real
+gap was found this phase and is not fixed**: `neondb` is missing 7
+migrations dating back to Phase 1 (see the invariant below and
+`docs/SESSION_HANDOFF_2026-08-18.md` §3.7) — found by live-testing in a
+browser, not by the automated suite. Full detail: `docs/audit/
+remediation-ledger.md`'s Phase 5 table and outcome section, `handoff.md`'s
+Phase 5 entry, `docs/SESSION_HANDOFF_2026-08-18.md`.
+**Phase 6 and Phase 7 were opened 2026-08-19 and immediately scope-checked:
+0 of their combined 81 items (X1–X4's 72 + D1–D9's 9) were implementable by
+an engineering session at that point** — Phase 6 needs owner credentials/
+access no session holds (Fatoora OTP, Neon console, Moyasar KYC); Phase 7
+is the decision register and that session was explicitly instructed not to
+resolve D1–D9 unilaterally. Full reasoning in `docs/audit/
+remediation-ledger.md`'s "Phase 6 & Phase 7 outcome (2026-08-19)" section.
+**Later the same day, in a separate follow-up session, the owner reviewed
+a decision-readiness table and explicitly locked all nine D1–D9
+decisions — every one was then implemented, not merely recorded**: D1+D9
+fixed a live VAT-report correctness bug (credit notes were inflating
+totals instead of reducing them); D2 added a non-blocking back-dating
+warning; D3 confirmed checkout stays off with no price invented; D4
+drafted all seven legal pages (still unreviewed by counsel); D5 wrote the
+architecture ADR; D6 delivered Postgres RLS as a tested, opt-in mechanism
+(not yet adopted at any real call site — see the invariant below); D7
+delivered a read-only cross-tenant operator surface (`GET /api/operator/
+companies`) — **not** the full Customer Control Center, which stays
+unauthorized; D8 delivered WhatsApp's core send capability,
+feature-flagged off, with no production send yet verified (Meta
+Business/template approval is owner-only and still pending). Full detail:
+`docs/audit/decision-register.md` (per-decision) and
+`docs/SESSION_HANDOFF_2026-08-18.md` §8 (session-level). Phase 6's X1–X4
+are unaffected by any of this — still BLOCKED ON OWNER. **Verified clean
+afterward: 93 test files, 612 tests, 0 failed, 0 skipped, all 5 CI gates
+green.**
+
+**All nine decisions (D1–D9) are now APPROVED and implemented** — see
+`docs/audit/decision-register.md` for what each one actually shipped.
+
+**D8 addendum, 2026-08-19 (a later session the same day) — OpenWA added as
+a temporary interim WhatsApp transport.** D8 itself was not reopened
+(WhatsApp is still required for launch, unchanged); the owner directed
+using a self-hosted gateway (OpenWA) behind the same `sendWhatsAppInvoice()`
+interface while Meta Business verification stays deferred, explicitly NOT
+as a replacement for Meta — see the invariant below and `docs/audit/
+decision-register.md` D8's addendum for the full detail, including why
+OpenWA must never be documented as the production/compliance-grade choice.
+No real OpenWA send has been verified (no running instance existed this
+session) — only mocked, deterministic tests.
+
+Still outstanding from the audit:
+
+1. ~~**Arabic invoice PDFs fail outright.**~~ **FIXED in Phase 1 (W1).** What
+   remains is a *mirrored* RTL page layout (A-189/A-190/A-191) — Arabic text
+   renders correctly, but the invoice page is still laid out left-to-right.
+   That is a design change, not a rendering fix.
+
+<details><summary>Original Phase 1 blocker text (for history)</summary>
+
+1. **Arabic invoice PDFs fail outright.** `WinAnsi cannot encode "ش" (0x0634)`.
+   English invoices render; any Arabic or mixed-script buyer name returns 500.
+   The invoice is already signed and numbered by then, so the tenant holds a
+   filed document they cannot print or send. Needs an embedded Unicode font
+   *and* a shaping engine — pdf-lib does no Arabic shaping — realistically an
+   HTML→PDF pipeline. Do not "fix" it by substituting placeholder characters;
+   silently altering a name on a tax document is worse than failing.
+2. ~~**No security audit trail.**~~ **FIXED in Phase 1 (W2)** — see
+   `docs/audit/security-event-log.md`.
+
+</details>
+3. ~~**No observability.**~~ **FIXED in Phase 2 (W4).** Structured logging,
+   request correlation IDs, `/api/health/deep`. No external error-tracking
+   SaaS (Sentry/log-drain) or metrics dashboard — those are owner decisions,
+   documented in `docs/18-production-checklist.md`, not engineering defaults.
+4. ~~**No AI usage accounting, any tenant owner can trigger a global RAG
+   re-index.**~~ **FIXED in Phase 2 (W6).** Global re-index needs
+   `OPERATOR_SECRET`; per-call token/latency accounting in `AiUsage`. No
+   quota *enforcement* yet — W6 built the accounting substrate, not limits.
+5. ~~**HUMAN DECISION:** `/api/reports` counts only `cleared`/`reported`
+   invoices, so an issued-but-not-yet-cleared invoice is absent from the
+   VAT return.~~ **RESOLVED 2026-08-19 (D1, Option C).** `/api/reports` now
+   returns both figures — `declarable` (every issued invoice) and `cleared`
+   (the original cleared/reported-only figure) — clearly labelled side by
+   side, net of credit/debit notes (D9). See `docs/audit/
+   decision-register.md` D1.
+
+### 1. Phase 7 — market research
 
 Deliverable `docs/17-market-analysis.md`. ZATCA-adjacent vendors (Wafeq,
 Qoyod, Zoho Books KSA, Odoo partners, Mudad, ClearTax KSA, Sada), their
@@ -180,9 +376,10 @@ identifiers deployment depends on.
 
 ### Smaller, not phase-sized
 
-- Four entitlement flags — `bulkImport`, `apiKeys`, `customBranding`,
-  `advancedReports` — are declared and enforced with **nothing behind them**.
-  Honest placeholders; do not put them in marketing copy.
+- `bulkImport` now has something behind it (Phase 5 / N4 — CSV import of
+  customers/products). Three entitlement flags remain honest placeholders —
+  `apiKeys`, `customBranding`, `advancedReports` — declared and enforced with
+  **nothing behind them**. Do not put them in marketing copy.
 - No e2e test proves a trial tenant is refused the 26th invoice through the
   real UI, or that an expired tenant can still export.
 - Bundle size per route was never reviewed.
@@ -199,10 +396,28 @@ identifiers deployment depends on.
    matches `parseInvoiceWebhook`.
 3. **Reviewed legal copy** — `/terms`, `/privacy`, `/refund-policy`,
    `/cancellation-policy`, `/data-retention`, `/acceptable-use` all carry DRAFT
-   banners with bracketed placeholders.
+   banners; the placeholder text itself was drafted 2026-08-19 (D4), but none
+   of it has been reviewed by qualified legal counsel.
 4. **Final Pro pricing** (see Phase 7).
 5. **Branch protection on `main`** — confirmed unset.
 6. **`GROQ_API_KEY`** if the Groq demo path is wanted; it ships inert without it.
+7. **Meta Business verification + WhatsApp message-template approval**
+   (D8, 2026-08-19) — **deferred by explicit owner instruction, not
+   attempted.** `lib/whatsapp/providers/meta.ts` is complete and inert
+   without `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID`/
+   `WHATSAPP_INVOICE_TEMPLATE_NAME` — same posture as Moyasar (#2). Meta
+   remains the intended production/compliance-grade path once a real
+   customer requires WhatsApp as a production commitment.
+8. **OpenWA session pairing** (D8 addendum, 2026-08-19, later the same
+   day) — a **temporary** interim WhatsApp transport (see the invariant
+   below), used *instead of* waiting on #7. `lib/whatsapp/providers/
+   openwa.ts` is complete and inert without `OPENWA_API_URL`/
+   `OPENWA_API_KEY`/`OPENWA_SESSION_ID`. Unlike Meta, OpenWA's session must
+   be paired once by scanning a QR code — done directly against OpenWA's
+   own dashboard (default `http://localhost:2785`), not inside this app
+   (deliberately no QR-pairing UI was built here). No real OpenWA send has
+   been verified — this session had no running OpenWA instance to test
+   against; every OpenWA test uses an injected mock `fetch`.
 
 ---
 
@@ -234,6 +449,174 @@ regression, and the reason is in the code comment beside it.
 - **No AI attribution anywhere in the repo** — no `Co-Authored-By`, no
   "Generated with", no robot sign-offs. Enforced by `.githooks/commit-msg`;
   enable with `git config core.hooksPath .githooks`.
+- **Invoice PDFs draw text run by run, not in one `drawText` call.** fontkit
+  applies a single direction to whatever string it is given, so a mixed
+  "Acme شركة" leaves the Arabic in logical order and "شركة Acme" reverses the
+  Latin. `lib/pdf/bidi.ts` splits the string into single-direction runs and
+  `generate.ts` places them; collapsing that back into one call silently
+  corrupts every mixed-script invoice. Latin keeps Helvetica and Arabic uses the
+  embedded Amiri, so English output is unchanged.
+- **`assets/fonts/*.ttf` must stay in `outputFileTracingIncludes`.** The font is
+  read at runtime via `process.cwd()`, which Next's tracer cannot see. Drop the
+  entry in `next.config.ts` and Arabic PDFs work locally and fail in production.
+- **`SecurityEvent` has no foreign keys, deliberately.** An audit record must
+  outlive what it describes — the record of a user being deleted cannot be
+  cascaded away by that deletion. Nothing purges it either; retention is an open
+  decision (`docs/audit/decision-register.md`), and it is safer to keep too much
+  than to delete early.
+- **Recording a security event must never break the request it describes.**
+  `recordSecurityEvent` swallows its own failures on purpose, and `redact()`
+  drops sensitive-looking keys rather than trusting call sites. Do not "improve"
+  either by letting errors propagate.
+- **Logging out signs the user out on every device.** `POST /api/auth/logout`
+  increments `User.sessionVersion`. The JWT carries no per-session id, so
+  per-device logout is not possible without a schema change; for software
+  holding a business's tax records, "signed out means signed out everywhere" is
+  the safer default. Clearing the cookie alone was not a logout at all — the
+  token stayed valid for its full 7 days.
+- **`/api/reports` filters on `issueDate`, not `createdAt`.** The VAT period is
+  decided by the tax point, not by when the row was written, and `issueDate` is
+  a `YYYY-MM-DD` string so the comparison is timezone-free. Using `createdAt`
+  with `new Date(y, m, 1)` boundaries put invoices in the wrong month and made
+  the answer depend on the server's timezone.
+- **The rate limiter reads `X-Forwarded-For` from the RIGHT.** The caller writes
+  that header, so the leftmost entry is attacker-chosen; only entries appended
+  by our own edge can be trusted. `TRUSTED_PROXY_HOPS` (default 1) is correct on
+  Vercel. Reading it left-to-right, or using the whole header as the key, means
+  a fresh value per request is a fresh bucket per request.
+- **`Certificate.secret` is encrypted at rest, and legacy clear-text rows are
+  returned unchanged.** `decryptSecret` distinguishes them by shape, so no
+  migration was needed. Do not "simplify" that passthrough away.
+- **`submitInvoice` writes status `submitted` before calling ZATCA.** That state
+  existed in the schema and was read by the UI but never written, so a crash
+  after ZATCA accepted looked identical to never having sent. An invoice in
+  `submitted` means "fate unknown, needs reconciling" — it is not a bug. Since
+  Phase 2 (W3) that write is an atomic compare-and-swap
+  (`updateMany({ where: { status: { in: ["signed","rejected"] } } } })`), not
+  a plain update — this is what makes concurrent/retried submissions safe.
+  Do not revert it to a read-then-write.
+- **`Invoice.needsReview = true` with `status` still `submitted` is a
+  deliberate terminal state, never auto-resolved.** It means the retry
+  ceiling (`MAX_SUBMIT_ATTEMPTS`, `lib/services/clearance-service.ts`) was
+  hit without ever receiving a gateway response. ZATCA has no status-lookup
+  endpoint, so the system cannot know whether that document was actually
+  accepted — only a human decision (resend manually, or mark abandoned) may
+  change it. Do not build a job that clears this flag automatically.
+- **A `rejected` invoice can still be resubmitted; only `cleared`/`reported`
+  are terminal.** The CAS claim's `WHERE status IN ('signed','rejected')` is
+  intentional — a gateway rejection can be transient or credential-related,
+  and refusing resubmission there would leave no correction path.
+- **AI confirmation tokens are consumed atomically, and the executed
+  tool/arguments come from the stored `AiConfirmation` row, never from the
+  client's copy — even when they'd match.** (`lib/ai/confirmation.ts`,
+  Phase 2 / W5.) The whole point is that nothing the client sends can
+  determine what a confirmed action executes. Do not "simplify" the
+  confirm route back to trusting `{name, arguments}` from the request body.
+- **`OPERATOR_SECRET` unset means global AI re-index is fully disabled over
+  HTTP** (`POST /api/ai/ingest {scope:"global"}` → 403), by design — not a
+  misconfiguration to work around by defaulting it open. There is
+  deliberately no platform-admin role in this app. Rebuild the shared corpus
+  at deploy time with `scripts/ingest-global.ts` instead.
+- **`x-request-id` is minted server-side in `proxy.ts`
+  (`crypto.randomUUID()`) and never read from an inbound header.** A client
+  that sends its own `x-request-id` is ignored — trusting a client-supplied
+  correlation id would let a caller plant an arbitrary value into every log
+  line describing its own request.
+- **Schema operations (`prisma db push`, `migrate dev`, `migrate deploy`)
+  must use the DIRECT (non-pooled) Neon connection URL, never the pooled
+  (pgbouncer) one.** Pgbouncer's transaction-pooling mode doesn't reliably
+  support the session-level features (advisory locks, prepared statements)
+  schema DDL depends on — using the pooled URL produces intermittent
+  advisory-lock-timeout and "table does not exist" failures that look
+  unrelated to the real cause. The app's own runtime queries are fine
+  against the pooled URL; this only applies to schema-mutating commands.
+  Phase 3 / W13 (`docs/19-operations-runbook.md` §3).
+- **`prisma db push --force-reset` (what every DB-gated test file's
+  `pushTestSchema()` calls) refuses to run when Prisma detects it's being
+  invoked by an AI agent, without `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`
+  set to a human's own verbatim consent text.** This is a real Prisma CLI
+  safety feature, not a bug to route around — and Claude Code's own
+  permission classifier separately blocks an agent from setting that env var
+  itself, or from editing its own `settings.json` to self-grant a bypass.
+  Only 6 test files call `pushTestSchema()`
+  (`lib/ai/vector-store.test.ts`, `lib/auth/server.test.ts`,
+  `lib/billing/plan.test.ts`, `lib/db/repo.test.ts`,
+  `lib/services/clearance-service.test.ts`,
+  `lib/services/invoice-service.test.ts`); each needs its own separate
+  `vitest run` invocation (two together race). See `handoff.md`'s Phase 3
+  entry for what actually worked.
+- **The Origin/Referer requirement in `proxy.ts` (W21) only fires when the
+  session cookie is present on the request.** A cookie-less state-changing
+  request (cron's bearer secret, Moyasar's webhook token, a bare API client
+  that 401s downstream anyway) is deliberately exempt — the point is to
+  refuse a *cookie-authed* request with no Origin/Referer (the F-12 shape),
+  not to demand Origin on every non-GET request regardless of auth. Do not
+  "harden" this to apply unconditionally; that would break every
+  cookie-less machine caller this app already relies on.
+- **`GET /api/auth/me`'s session refresh (W19) only runs after
+  `hasCurrentSessionVersion` passes, never before or in parallel.**
+  Revocation must always dominate refresh — a token whose `sessionVersion`
+  is stale gets no refresh at all, only rejection. Do not reorder these two
+  checks or make the refresh "best-effort in parallel" with the revocation
+  check; that would let a revoked session extend itself.
+- **`FeatureFlag` rows have no HTTP write path — `scripts/set-flag.ts` is
+  the only way to change one.** This is deliberate, not an oversight: a
+  flag-management UI would need a way to see/set another tenant's flags,
+  which is exactly the cross-tenant privileged surface D7 hasn't authorized
+  building. Do not add a `POST`/`PATCH /api/flags` route "for convenience" —
+  that would resolve D7 by the back door. `GET /api/flags` stays read-only
+  and own-company-only.
+- **`neondb` is missing 7 migrations, dating back to Phase 1's
+  `20260818120000_security_event_log`** (confirmed via `prisma migrate
+  status`, Phase 5, 2026-08-19 — see `docs/SESSION_HANDOFF_2026-08-18.md`
+  §3.7). Every remediation phase verified exclusively against
+  `fatoora_audit`; `neondb` — the shared dev/demo database — was never
+  actually migrated forward. `GET /api/invoices` currently 500s against it
+  as a direct, visible result. **Do not run `prisma migrate deploy` against
+  `neondb` without explicit owner authorization** — it is still described
+  as shared with production. This is not a "fix it while you're in there"
+  situation; it needs a deliberate, owner-approved deploy.
+- **`lib/db/rls-client.ts`'s `queryAsTenant()` is not used anywhere in the
+  application yet, on purpose.** D6 (2026-08-19) delivered Postgres RLS as
+  a real, adversarially-tested mechanism on `fatoora_audit` — but wiring it
+  into the app's actual `prisma` client (`lib/db/client.ts`) risks
+  `issueInvoice()`'s chain-critical interactive transaction (nesting a
+  second transaction per operation inside an already-open one is not a
+  supported pattern) and was judged unsafe to retrofit blanket-wide in one
+  session. Do not "finish the job" by splicing it into the shared client
+  without deliberately re-deriving that risk first — adopt it at one
+  specific call site at a time instead. Never apply the RLS migration
+  (`20260819100000_row_level_security`) to `neondb` without the same
+  per-action owner approval every other `neondb` change in this programme
+  has required.
+- **`lib/whatsapp/send.ts` is a provider dispatcher, not a sender.** As of
+  2026-08-19 (D8 addendum) it picks between `lib/whatsapp/providers/
+  meta.ts` and `lib/whatsapp/providers/openwa.ts` — Meta wins automatically
+  the instant its three env vars are all set, regardless of whether OpenWA
+  is also configured, so migrating off OpenWA later needs no code change,
+  only Meta's env vars being set. Each provider requires ALL THREE of its
+  own env vars before attempting a real send — partial configuration is
+  treated as fully unconfigured, not a partial attempt (same "never crash,
+  log instead" posture as `lib/email/send.ts`'s missing-`RESEND_API_KEY`
+  path). Do not "improve" this by trying to send with only some
+  credentials set, and do not add a third provider without re-reading this
+  file's selection-order comment first.
+- **OpenWA (`lib/whatsapp/providers/openwa.ts`) is a TEMPORARY, self-hosted
+  interim WhatsApp transport — never describe it as the production or
+  compliance-grade path in any document.** It exists because Meta Business
+  verification was deferred by explicit owner instruction, to keep
+  WhatsApp delivery available and low-cost in the meantime. OpenWA's own
+  documentation warns of a real account-ban risk and says to treat it as
+  "not approved" for regulated sectors. Migrating to Meta later requires
+  zero code changes to the route or the dispatcher — only setting Meta's
+  three env vars, which then wins automatically (see above).
+- **`lib/zatca/reconciliation.ts`'s `netSign`/`netEffect`/`sumNet` are the
+  ONLY place a credit or debit note's sign is decided for cross-invoice
+  aggregation (D9).** Every call site that sums `taxableAmount`/
+  `vatAmount`/`grandTotal` across more than one invoice must go through
+  this helper — re-implementing the `documentType === "credit"` branch
+  inline at a new call site is exactly how this bug got reintroduced
+  silently before (three separate places had it wrong independently).
 
 ---
 

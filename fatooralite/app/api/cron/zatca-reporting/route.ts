@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
-import { submitInvoice, AlreadySubmittedError } from "@/lib/services/clearance-service";
+import { submitInvoice, AlreadySubmittedError, SubmissionInFlightError } from "@/lib/services/clearance-service";
 
 export const runtime = "nodejs";
 // Vercel execution ceiling (Hobby 10s / Pro 60s / Enterprise ≤300s). The loop
@@ -37,11 +37,17 @@ export async function GET(req: Request) {
   let failed = 0;
   let processed = 0;
 
+  const now = new Date();
   const due = await prisma.invoice.findMany({
     where: {
       kind: "simplified", // B2C
       reportingState: "pending",
       signedXml: { not: null },
+      // W3: honor the retry ceiling and backoff schedule — a row that has
+      // exhausted its attempts (needsReview) or is still cooling down
+      // (nextSubmitAt in the future) must not be retried every tick.
+      needsReview: false,
+      OR: [{ nextSubmitAt: null }, { nextSubmitAt: { lte: now } }],
     },
     orderBy: { reportingDeadline: "asc" }, // closest to breaching 24h first
     take: BATCH_SIZE,
@@ -73,6 +79,11 @@ export async function GET(req: Request) {
           // forever (submitInvoice's guard would throw this every tick).
           await prisma.invoice.update({ where: { id: inv.id }, data: { reportingState: "reported" } });
           reported++;
+        } else if (err instanceof SubmissionInFlightError) {
+          // Another claim (a concurrent tick, or the reconcile cron) already
+          // owns this invoice's retry — not a failure, just not ours to
+          // resolve on this tick. Leave PENDING; the reconciler's own backoff
+          // governs when it's touched again.
         } else {
           // Transient error (gateway/network): leave PENDING so the next tick retries.
           failed++;

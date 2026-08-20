@@ -41,6 +41,47 @@ const envSchema = z.object({
   /* ---- optional (no warning — feature is allowed to be unconfigured) ---- */
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
+  /**
+   * D8/N3 — WhatsApp Business Cloud API (Meta). All three unset means the
+   * feature is fully inert, same posture as RESEND_API_KEY for email —
+   * lib/whatsapp/send.ts falls back to a mock/logged send, never a crash.
+   * Owner-blocked externally (Meta Business verification + template
+   * approval, docs/audit/decision-register.md D8) — nothing here can make
+   * that verification happen; these are read once it's done.
+   */
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_INVOICE_TEMPLATE_NAME: z.string().optional(),
+  /**
+   * OpenWA (lib/whatsapp/providers/openwa.ts) — a TEMPORARY, self-hosted
+   * interim WhatsApp transport (2026-08-19), used only until Meta Business
+   * verification above is complete. NOT the production/compliance-grade
+   * path — see that file's header before treating this as a permanent
+   * choice. All three unset means WhatsApp falls fully back to mock mode,
+   * same as the Meta vars above.
+   */
+  OPENWA_API_URL: z.string().optional(),
+  OPENWA_API_KEY: z.string().optional(),
+  OPENWA_SESSION_ID: z.string().optional(),
+  /** Forces provider selection ("meta" | "openwa") when both happen to be configured at once — see lib/whatsapp/send.ts. */
+  WHATSAPP_PROVIDER: z.enum(["meta", "openwa"]).optional(),
+
+  /**
+   * Canonical deployed URL. lib/appUrl.ts reads these two (pre-existing
+   * naming split — see its own comment) with a localhost fallback that is
+   * only correct for `next build` without a runtime environment; production
+   * must not silently fall back to it (F-14/F-15).
+   */
+  APP_URL: z.string().url().optional(),
+  NEXT_PUBLIC_APP_URL: z.string().url().optional(),
+
+  /**
+   * Bearer secret gating POST /api/ai/ingest {scope:"global"} — there is
+   * deliberately no platform-admin role, so this is the only credential that
+   * can trigger a global RAG re-index over HTTP. Optional: the feature is
+   * allowed to stay operator-console-only (scripts/ingest-global.ts).
+   */
+  OPERATOR_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -108,6 +149,13 @@ export function validateEnv(): Env {
         "    Generate with: openssl rand -base64 32, then set in Vercel dashboard and vercel.json.",
       );
     }
+    if (!result.data.APP_URL && !result.data.NEXT_PUBLIC_APP_URL) {
+      throw new Error(
+        "⛔  APP_URL (or NEXT_PUBLIC_APP_URL) is required in production.\n" +
+        "    Without it: checkout returns 500, password-reset links and sitemap/robots\n" +
+        "    fall back to http://localhost:3000. Set both to the same deployed URL.",
+      );
+    }
     // The dev placeholder is published in .env.example and in this repo, so a
     // deployment carrying it can have its session cookies forged by anyone.
     // lib/auth/session.ts refuses to sign with it — but that throws on the
@@ -119,6 +167,12 @@ export function validateEnv(): Env {
         "⛔  AUTH_SECRET is still the development placeholder from .env.example.\n" +
         "    Session cookies signed with it are forgeable by anyone who has read this repo.\n" +
         "    Generate with: openssl rand -base64 32 | tr -d '\\r\\n'",
+      );
+    }
+    if (!result.data.RESEND_API_KEY) {
+      console.warn(
+        "⚠️  RESEND_API_KEY not set — password-reset emails will only be console-logged; " +
+        "no self-service recovery path exists for customers.",
       );
     }
   }

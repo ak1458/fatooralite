@@ -15,7 +15,10 @@ test("register -> session -> me returns owner", async ({ page }) => {
 
 test("login round-trip with registered credentials", async ({ page }) => {
   const account = await registerAndSignIn(page);
-  await page.request.post("/api/auth/logout");
+  // W21 requires Origin on a cookie-authed state-changing request; Playwright's
+  // request context shares the page's cookies but doesn't send Origin itself —
+  // this makes the call match what a real browser sends, not a test weakening.
+  await page.request.post("/api/auth/logout", { headers: { origin: "http://localhost:3000" } });
 
   await page.goto("/login");
   await page.getByLabel(/Email|البريد/).fill(account.email);
@@ -26,7 +29,7 @@ test("login round-trip with registered credentials", async ({ page }) => {
 
 test("wrong password is rejected", async ({ page }) => {
   const account = await registerAndSignIn(page);
-  await page.request.post("/api/auth/logout");
+  await page.request.post("/api/auth/logout", { headers: { origin: "http://localhost:3000" } });
 
   await page.goto("/login");
   await page.getByLabel(/Email|البريد/).fill(account.email);

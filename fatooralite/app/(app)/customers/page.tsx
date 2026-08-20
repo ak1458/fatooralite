@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useCompany } from "@/lib/useCompany";
+import { useCompany, usePlan } from "@/lib/useCompany";
 import { useAsyncData } from "@/lib/async/useAsyncData";
 import { AsyncBoundary } from "@/components/common/AsyncBoundary";
 import { NoCompanyState } from "@/components/common/NoCompanyState";
@@ -8,12 +8,19 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { Modal, modalInput, modalLabel, modalPrimary } from "@/components/common/Modal";
 import { Icon } from "@/components/ui/Icon";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import { useFlags } from "@/lib/flags/useFlags";
+import { CsvImportDialog } from "@/components/import-export/CsvImportDialog";
 
 import type { Customer } from "@prisma/client";
 
+const CUSTOMER_TEMPLATE_HEADERS = ["name", "nameAr", "vatNumber", "crNumber", "address", "city", "phone", "email"];
+
 export default function CustomersPage() {
   const { company, isLoading: companyLoading } = useCompany();
+  const { isPro } = usePlan();
+  const { flags } = useFlags();
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const mobile = useMediaQuery(639);
   const { state, retry } = useAsyncData<Customer[]>(
     async (signal) => {
@@ -30,27 +37,44 @@ export default function CustomersPage() {
     <div style={{ maxWidth: 1480, margin: "0 auto" }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Customers</h1>
-        <button
-          onClick={() => setOpen(true)}
-          disabled={!company?.id}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "10px 16px",
-            borderRadius: 11,
-            border: "none",
-            background: "linear-gradient(150deg,var(--acb),var(--ac))",
-            color: "var(--on-ac)",
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: "pointer",
-            boxShadow: "0 8px 22px -10px var(--ac)",
-          }}
-        >
-          <Icon name="plus" size={15} sw={2.4} />
-          New Customer
-        </button>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {company?.id && (
+            <a href={`/api/export/customers?companyId=${company.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 15px", borderRadius: 10, border: "1px solid var(--bd)", background: "var(--s2)", color: "var(--t2)", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>
+              Export CSV
+            </a>
+          )}
+          {flags.csvImport && (
+            <button
+              onClick={() => setImportOpen(true)}
+              disabled={!company?.id || !isPro}
+              title={!isPro ? "Import is a Pro feature — upgrade to unlock it" : undefined}
+              style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 15px", borderRadius: 10, border: "1px solid var(--bd)", background: "var(--s2)", color: "var(--t2)", fontSize: 12.5, fontWeight: 600, cursor: !isPro ? "not-allowed" : "pointer", opacity: !isPro ? 0.5 : 1 }}
+            >
+              Import CSV
+            </button>
+          )}
+          <button
+            onClick={() => setOpen(true)}
+            disabled={!company?.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "10px 16px",
+              borderRadius: 11,
+              border: "none",
+              background: "linear-gradient(150deg,var(--acb),var(--ac))",
+              color: "var(--on-ac)",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 8px 22px -10px var(--ac)",
+            }}
+          >
+            <Icon name="plus" size={15} sw={2.4} />
+            New Customer
+          </button>
+        </div>
       </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title="New customer">
@@ -59,6 +83,18 @@ export default function CustomersPage() {
           onCreated={() => { setOpen(false); retry(); }}
         />
       </Modal>
+
+      {company?.id && (
+        <CsvImportDialog
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          title="Import customers"
+          endpoint="/api/import/customers"
+          companyId={company.id}
+          templateHeaders={CUSTOMER_TEMPLATE_HEADERS}
+          onImported={retry}
+        />
+      )}
 
       {!company?.id && !companyLoading ? (
         <NoCompanyState />

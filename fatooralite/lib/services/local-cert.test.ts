@@ -7,7 +7,9 @@ import { getActiveCertificate } from "@/lib/db/repo";
 import type { InvoiceInput } from "@/lib/zatca/types";
 
 let db: PrismaClient;
-const VAT = "300000000000045";
+// ZATCA VAT format: /^3\d{13}3$/ — must both start AND end with 3. W12 moved
+// BR-KSA-39 (seller VAT format) to issue time, which this fixture predates.
+const VAT = "300000000000043";
 
 async function clean(c: PrismaClient) {
   const co = await c.company.findUnique({ where: { vatNumber: VAT } });

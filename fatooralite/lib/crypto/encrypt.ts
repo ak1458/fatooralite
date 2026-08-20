@@ -85,6 +85,42 @@ export function encryptPrivateKey(pem: string): string {
 }
 
 /**
+ * ZATCA CSID credentials (`Certificate.token` + `Certificate.secret`) are the
+ * HTTP Basic credentials this app presents to the Fatoora gateway. Holding them
+ * is enough to submit documents to the tax authority as that taxpayer, so the
+ * secret is wrapped at rest exactly like the signing key beside it — it was
+ * stored in clear text while the private key in the adjacent column was not.
+ *
+ * Encryption is skipped for an empty value so a row without a secret stays
+ * empty rather than gaining a ciphertext blob that decrypts to "".
+ */
+export function encryptSecret(secret: string): string {
+  if (!secret) return secret;
+  return encryptPrivateKey(secret);
+}
+
+/**
+ * Reads a value written by `encryptSecret`. Rows written before that existed
+ * hold clear text and are returned unchanged — `iv:tag:ciphertext` is three
+ * base64 segments, which a legacy value is not, so the two are distinguishable
+ * without a schema flag. Re-saving a certificate encrypts it.
+ */
+export function decryptSecret(stored: string | null): string | null {
+  if (!stored) return stored;
+  const parts = stored.split(":");
+  const looksEncrypted =
+    parts.length === 3 && parts.every((p) => p.length > 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(p));
+  if (!looksEncrypted) return stored;
+  try {
+    return decryptString({ iv: parts[0], tag: parts[1], ciphertext: parts[2] });
+  } catch {
+    // A value that merely looks like the format but is not ours (a legacy
+    // secret that happens to contain two colons) must not take the caller down.
+    return stored;
+  }
+}
+
+/**
  * Helper to decrypt a private key stored in the format:
  * `iv:tag:ciphertext`
  */

@@ -60,46 +60,90 @@ main input[type=checkbox]{accent-color:var(--ac)}
 <nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
 <div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html">Start Here</a><a href="00-tldr.html" class="active">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html">Deployment Guide</a><a href="10-ai-architecture.html">AI Architecture</a></nav>
 <main>
-<h1>Fatoora Lite Pro — TL;DR</h1>
-<h2>What it is</h2>
-<p>A SaaS web app that lets a Saudi business issue <strong>ZATCA-compliant e-invoices</strong> (Phase 2
-&quot;Fatoora&quot;) without buying expensive ERP integrations. A business signs up, onboards its
-ZATCA credentials, and from then on every invoice it creates is cryptographically signed,
-QR-stamped, and either <strong>cleared</strong> (B2B) or <strong>reported</strong> (B2C) to the government gateway —
-automatically.</p>
-<h2>The problem</h2>
-<p>Since 2023, ZATCA requires all VAT-registered businesses in Saudi Arabia to integrate
-their billing systems with the Fatoora platform. Standard (B2B) invoices must be
-<strong>cleared by ZATCA before</strong> they&#39;re given to the buyer; simplified (B2C) invoices must be
-<strong>reported within 24 hours</strong>. Every invoice needs an XML in a specific UBL format, an
-ECDSA cryptographic stamp, a chained hash (PIH), and a TLV QR code. Getting this wrong
-means rejected invoices, fines, and blocked sales. Most SMEs have no in-house way to do it.</p>
-<h2>Who it&#39;s for</h2>
+<h1>FatooraLite Pro — Executive Summary &amp; Product Architecture Guide</h1>
+<blockquote>
+<p>[!NOTE]<br><strong>Document Purpose</strong>: This executive summary outlines the business model, regulatory compliance framework, core technological differentiators, and target customer personas for <strong>FatooraLite Pro</strong> — a next-generation SaaS platform engineered for Saudi Arabia&#39;s <strong>ZATCA Phase-2 E-Invoicing (Integration Phase)</strong> mandate.</p>
+</blockquote>
+<hr>
+<h2>1. Product Vision &amp; Value Proposition</h2>
+<p>In the Kingdom of Saudi Arabia (KSA), the <strong>Zakat, Tax and Customs Authority (ZATCA)</strong> mandates that all VAT-registered commercial entities integrate their billing systems with the government&#39;s central <strong>Fatoora Portal</strong>.</p>
+<p><strong>FatooraLite Pro</strong> eliminates the high technical and financial barrier of custom ERP integration by delivering an all-in-one, multi-tenant SaaS platform. Small-to-Medium Enterprises (SMEs) and mid-market organizations can onboard their business within 5 minutes, generate cryptographically signed UBL 2.1 XML invoices, and automatically clear or report invoices to ZATCA in real time.</p>
+<pre><code class="language-mermaid">graph LR
+    SME[&quot;Saudi SME / Enterprise&quot;] --&gt;|1. Simple Web / PWA Interface| App[&quot;FatooraLite Pro Engine&quot;]
+    App --&gt;|2. ECDSA secp256k1 &amp; XAdES-BES| XML[&quot;Signed UBL 2.1 XML&quot;]
+    XML --&gt;|3. Real-Time Clearance API| ZATCA[&quot;ZATCA Fatoora Platform&quot;]
+    ZATCA --&gt;|4. Approved Clearance Stamp| Client[&quot;End Customer (Cleared XML + PDF A/3)&quot;]
+</code></pre>
+<hr>
+<h2>2. Regulatory Problem &amp; Market Opportunity</h2>
+<p>Since Phase 2 enforcement began, standard paper and basic PDF invoices are non-compliant and subject to heavy regulatory penalties:</p>
 <ul>
-<li><strong>Business owner</strong> — wants to be compliant and get paid, not learn cryptography.</li>
-<li><strong>Accountant</strong> — issues invoices and credit/debit notes daily, files VAT returns.</li>
-<li><strong>Auditor</strong> — needs a tamper-evident record of every document sent to ZATCA.</li>
-<li><strong>Admin</strong> — manages users, roles, branches, and the ZATCA connection.</li>
+<li><strong>B2B Clearance Mandate</strong>: Standard Tax Invoices must be transmitted to ZATCA&#39;s API and <strong>cleared in real-time</strong> <em>before</em> they can be lawfully issued to a business buyer.</li>
+<li><strong>B2C Reporting Mandate</strong>: Simplified Tax Invoices must be cryptographically signed, stamped with a 9-tag TLV QR code, and <strong>reported within 24 hours</strong>.</li>
+<li><strong>Cryptographic Complexity</strong>: Invoices require <strong>ECDSA secp256k1</strong> keypairs, <strong>XAdES-BES</strong> digital signatures, <strong>xml-exc-c14n11</strong> canonicalization, <strong>SHA-256 Previous Invoice Hash (PIH)</strong> chaining, and strict <strong>BR-CO-17 tax rounding</strong> standards.</li>
 </ul>
-<h2>How it works (happy path)</h2>
+<p><strong>The Opportunity</strong>: Building in-house ZATCA integration costs organizations upwards of 50,000–150,000 SAR in development and ongoing compliance maintenance. FatooraLite Pro turns this complex compliance burden into a seamless, automated SaaS subscription.</p>
+<hr>
+<h2>3. Targeted User Personas &amp; Workflows</h2>
+<p>FatooraLite Pro features a tailored experience optimized for four primary enterprise roles:</p>
+<pre><code>User Workflows by Persona
+├── 1. Business Owner (Overall Revenue, Tax Health, Subscription &amp; Multi-Branch Management)
+├── 2. Accountant / Finance Manager (Daily Invoicing, B2B Clearance, Credit/Debit Notes, Tax Returns)
+├── 3. Sales Representative (Quick POS / B2C Simplified Invoicing, Customer Directory)
+└── 4. Auditor / Compliance Officer (Immutable Audit Trail, Hash Chain Verification, ZATCA XML Downloads)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th align="left">Persona</th>
+<th align="left">Primary Needs &amp; Actions</th>
+<th align="left">FatooraLite Pro Capabilities</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>Business Owner</strong></td>
+<td align="left">Regulatory compliance, tax liability tracking, branch management.</td>
+<td align="left">High-level dashboard, multi-branch switching, role assignment, subscription management.</td>
+</tr>
+<tr>
+<td align="left"><strong>Accountant</strong></td>
+<td align="left">Fast invoice creation, clearance monitoring, credit/debit notes.</td>
+<td align="left">Single-click clearance, automated 15% VAT calculation, UBL 2.1 XML and PDF A/3 downloads.</td>
+</tr>
+<tr>
+<td align="left"><strong>Sales Rep</strong></td>
+<td align="left">Rapid customer checkout, POS invoicing, inventory selection.</td>
+<td align="left">Instant B2C invoice generation, mobile-optimized TLV QR code printing.</td>
+</tr>
+<tr>
+<td align="left"><strong>Auditor</strong></td>
+<td align="left">Proof of ZATCA filing, tamper-evident hash verification.</td>
+<td align="left">Read-only compliance portal, raw XML payload inspection, PIH hash chain audit.</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>4. Key Differentiators &amp; Technical Excellence</h2>
 <ol>
-<li><strong>Sign up</strong> → create your company (no pre-made companies).</li>
-<li><strong>Onboard</strong> → enter company + VAT details, connect to ZATCA (CSID issuance), add branches/locations.</li>
-<li><strong>Operate</strong> → create invoices, customers, products; the app signs + submits to ZATCA.</li>
-<li><strong>Monitor</strong> → Compliance Center shows what cleared, what&#39;s pending, what&#39;s near its 24h deadline.</li>
-<li><strong>Ask AI</strong> → an embedded assistant answers ZATCA questions using real regulation retrieval (RAG) and can perform real actions (&quot;create a 7-day report&quot;).</li>
+<li><strong>Native <code>pgvector</code> RAG Assistant</strong>:
+An embedded AI assistant grounded on curated ZATCA tax codes (<code>global</code> context) and tenant business records (<code>company</code> context). Users can query regulatory rules or issue natural-language operational commands (&quot;Draft invoice for Acme Corp&quot;).</li>
+<li><strong>Built-in Cryptographic Engine</strong>:
+Pure Node.js/TypeScript cryptographic suite (<code>lib/zatca/</code>) implementing ECDSA secp256k1, X.509 CSR generation, XAdES-BES signing, C14N-11 canonicalization, and TLV QR encoding without heavy external binary dependencies.</li>
+<li><strong>Enterprise Security &amp; Multi-Tenancy</strong>:
+Strict database-level <code>companyId</code> tenant isolation, JWT <code>sessionVersion</code> instant revocation, AES-256 encrypted keys at rest, and Zod schema input validation across all endpoints.</li>
+<li><strong>Resilient Architecture</strong>:
+Next.js 16 App Router with Turbopack, Neon serverless Postgres, and automated test harnesses enforcing 100% pass rates across Vitest unit tests and ZATCA compliance checks.</li>
 </ol>
-<h2>Why it can be a business</h2>
-<p>Recurring SaaS subscription per company, tiered by invoice volume / branches / users.
-Compliance is mandatory and ongoing, so churn is low. Add-ons: extra branches, API access,
-premium support, archival retention.</p>
-<h2>What makes it credible (not a mock)</h2>
-<p>The cryptographic core is real today: key generation, CSR, ECDSA-SHA256 signing, XAdES,
-C14N, PIH chaining, TLV QR — all implemented in <code>lib/zatca/*</code>. The gap this project closes
-is turning the <strong>surface UI</strong> into a <strong>fully functional product</strong>: real auth + onboarding,
-real data everywhere, real RBAC, a real AI stack, and production polish.</p>
+<hr>
+<h2>5. Master Documentation Directory</h2>
+<p>For detailed operational specifications, explore the complete documentation suite:</p>
+<ul>
+<li><strong>Business &amp; Operations Manual</strong>: <a href="file:///d:/gravity/FatooraLite%28ZATCA%29/docs/14-easy-business-setup-guide.md">docs/14-easy-business-setup-guide.md</a></li>
+<li><strong>System Architecture Reference</strong>: <a href="file:///d:/gravity/FatooraLite%28ZATCA%29/docs/02-architecture.md">docs/02-architecture.md</a></li>
+<li><strong>ZATCA Integration Specification</strong>: <a href="file:///d:/gravity/FatooraLite%28ZATCA%29/docs/15-zatca-e-invoicing-integration-guide.md">docs/15-zatca-e-invoicing-integration-guide.md</a></li>
+<li><strong>Production Readiness Report</strong>: <a href="file:///d:/gravity/FatooraLite%28ZATCA%29/docs/13-production-readiness-report.md">docs/13-production-readiness-report.md</a></li>
+</ul>
 
-<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/00-tldr.md</div>
+<div class="footer">Fatoora Lite Pro documentation · built 2026-08-18 · source: docs/00-tldr.md</div>
 </main>
 </div>
 </body>

@@ -2,9 +2,41 @@ import { z } from "zod";
 import { BUSINESS_CATEGORY_CODES } from "@/lib/constants/business-categories";
 
 // --- Auth ---
+
+/**
+ * Email addresses are stored and compared in lower case.
+ *
+ * They were not, and the three places that touch an address disagreed about it:
+ * registration and login compared the raw string, while /api/auth/forgot looked
+ * up `email.toLowerCase()`. Someone who signed up as "Owner@example.com" could
+ * sign in, but password recovery would never find their account — a permanent
+ * lockout with no error message, because that route deliberately returns a
+ * generic success to prevent account enumeration. The same mismatch let
+ * "a@x.com" and "A@x.com" register as two separate accounts, since the unique
+ * constraint on User.email is case-sensitive too.
+ *
+ * Normalising before validation also absorbs a leading/trailing space, which
+ * would otherwise fail the email check outright.
+ */
+export const emailField = z
+  .string()
+  .max(200)
+  .transform((v) => v.trim().toLowerCase())
+  .pipe(z.string().email("Enter a valid email"));
+
+/**
+ * Login input. `password` is only checked for presence — the minimum length is
+ * a registration rule, and enforcing it here would answer "is this even a
+ * possible password on this system?" for anyone probing the endpoint.
+ */
+export const loginSchema = z.object({
+  email: emailField,
+  password: z.string().min(1).max(200),
+});
+
 export const registerSchema = z.object({
   name: z.string().min(1, "Your name is required").max(100),
-  email: z.string().email("Enter a valid email").max(200),
+  email: emailField,
   password: z.string().min(8, "Password must be at least 8 characters").max(200),
   companyName: z.string().min(1, "Company name is required").max(100),
   vatNumber: z
@@ -18,7 +50,7 @@ export const registerSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 export const inviteUserSchema = z.object({
-  email: z.string().email("Enter a valid email").max(200),
+  email: emailField,
   name: z.string().min(1, "Name is required").max(100),
   role: z.string().min(1),
   title: z.string().max(100).optional().nullable(),

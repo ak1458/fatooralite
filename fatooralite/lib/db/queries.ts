@@ -212,8 +212,8 @@ export async function getDashboardIntegration(companyId: string, db: PrismaClien
  * List invoices formatted for the UI table.
  */
 export async function getInvoiceList(
-  companyId: string, 
-  filter?: { status?: string },
+  companyId: string,
+  filter?: { status?: string; branchId?: string },
   db: PrismaClient = defaultDb
 ): Promise<{ invoices: Invoice[], tabs: { id: string, count: string }[] }> {
   // Aggregate counts for tabs (grouped in one query; statuses match the
@@ -236,6 +236,10 @@ export async function getInvoiceList(
         ...(filter?.status && filter.status !== "all"
           ? { status: { in: statusSets[filter.status] ?? [filter.status] } }
           : {}),
+        // Location filter only — tab counts above stay company-wide. Branches
+        // are locations of one VAT-registered entity, not a security
+        // boundary (Phase 3 / W10); this narrows a list view, nothing more.
+        ...(filter?.branchId ? { branchId: filter.branchId } : {}),
       },
       orderBy: { createdAt: "desc" },
       take: 50, // limit for UI

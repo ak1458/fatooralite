@@ -10,8 +10,8 @@ export default function CancellationPolicyPage() {
     <div style={{ maxWidth: 800, margin: "40px auto", padding: "0 24px", color: "var(--tx)", fontFamily: "sans-serif" }}>
       <Link href="/login" style={{ color: "var(--ac)", textDecoration: "none", fontSize: 14 }}>← Back to Application</Link>
       <div style={{ background: "var(--warn)", color: "var(--on-warn)", fontWeight: 700, fontSize: 14, padding: "14px 18px", borderRadius: 12, margin: "20px 0" }}>
-        DRAFT — no paid plan exists yet (no payment processor is integrated as
-        of this writing). Placeholder text, not reviewed by counsel.
+        DRAFT — not reviewed by counsel. Self-serve paid checkout is intentionally OFF (D3,
+        docs/audit/decision-register.md); §2 below describes the mechanics ahead of that going live.
       </div>
       <h1 style={{ fontSize: 28, fontWeight: 700, margin: "20px 0 10px" }}>Cancellation Policy</h1>
       <p style={{ color: "var(--t3)", fontSize: 13, marginBottom: 24 }}>Last updated: July 20, 2026</p>
@@ -24,7 +24,7 @@ export default function CancellationPolicyPage() {
 
         <section>
           <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 8px" }}>2. Paid plans</h2>
-          <p>[Placeholder: once a payment processor is chosen, describe exactly how a customer cancels a paid plan — self-serve in Settings, or by contacting support — and what happens to invoice data, ZATCA certificates, and access at the end of the billing period. See also the Refund Policy.]</p>
+          <p>Once self-serve paid checkout is enabled, you will be able to cancel a Pro subscription from Settings; access stays at Pro level through the end of the billing period already paid for, then the account reverts to the free/expired state described in the Terms of Service. Cancellation never deletes your invoice data, customer/product records, or ZATCA certificates — those remain exactly as described in the Data Retention Policy, and an expired account keeps read/export access to its own records (it is not locked out of its own filed documents). See also the Refund Policy for refund eligibility, which is separate from cancellation.</p>
         </section>
       </div>
     </div>

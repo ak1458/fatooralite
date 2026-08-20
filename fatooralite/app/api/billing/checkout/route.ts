@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth/server";
 import { prisma } from "@/lib/db/client";
 import { isMoyasarConfigured, createCheckoutInvoice } from "@/lib/billing/moyasar";
 import { PRO_PRICE_HALALAS, PRO_PERIOD_DAYS } from "@/lib/billing/plan";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url: invoice.url });
   } catch (e) {
-    console.error("Moyasar checkout creation failed:", e);
+    loggerFor(req).error("billing.checkout.failed", { error: e instanceof Error ? e.message : String(e) });
     return NextResponse.json({ error: "Could not start checkout. Try again shortly." }, { status: 502 });
   }
 }

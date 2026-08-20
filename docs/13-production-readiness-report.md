@@ -1,5 +1,11 @@
 # Fatoora Lite Pro — Production Readiness Report
 
+> **Superseded as the current authority.** This report predates the
+> 2026-08-18 production audit and the remediation programme it opened
+> (`docs/audit/`, `START-HERE.md`). It is kept for its historical
+> bug-fix record, not as the current readiness verdict — for that, read
+> `docs/audit/2026-08-18-production-audit.md` and `START-HERE.md`.
+
 **Date:** 2026-07-21. **Scope:** the owner's original 18-category enterprise
 readiness ask (functional, OWASP security, dependencies, performance, DB,
 API, auth, payment, file storage, logging, devops, compliance, legal pages,

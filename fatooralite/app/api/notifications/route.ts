@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { requirePermission } from "@/lib/auth/server";
 import { generateNotifications } from "@/lib/notifications/generate";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,7 @@ export async function POST(req: Request) {
     const { created } = await generateNotifications(companyId);
     return NextResponse.json({ created });
   } catch (error) {
-    console.error("Notification generation error:", error);
+    loggerFor(req).error("notifications.generate.failed", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Failed to generate notifications" }, { status: 500 });
   }
 }

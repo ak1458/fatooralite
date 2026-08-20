@@ -4,6 +4,7 @@ import { useAsyncData } from "@/lib/async/useAsyncData";
 import { AsyncBoundary } from "@/components/common/AsyncBoundary";
 import { NoCompanyState } from "@/components/common/NoCompanyState";
 import type { ClearanceStats } from "@/lib/services/clearance-stats";
+import type { SequenceIntegrity } from "@/lib/services/sequence-gaps";
 
 interface FeedRow {
   invoiceNumber: string;
@@ -18,6 +19,7 @@ interface ClearanceData {
   stats: ClearanceStats;
   feed: FeedRow[];
   isLocal: boolean;
+  sequence: SequenceIntegrity;
 }
 
 const STATUS_TONE: Record<string, { fg: string; bg: string }> = {
@@ -50,8 +52,27 @@ export default function ClearancePage() {
       </p>
 
       <AsyncBoundary state={state} onRetry={retry}>
-        {({ stats, feed, isLocal }) => (
+        {({ stats, feed, isLocal, sequence }) => (
           <>
+            {!sequence.intact && (
+              <div
+                style={{
+                  display: "flex", gap: 10, alignItems: "center", padding: "12px 16px", borderRadius: 12,
+                  background: "var(--dangs)",
+                  border: "1px solid var(--dang)",
+                  marginBottom: 18, fontSize: 13.5,
+                }}
+              >
+                <span style={{ fontWeight: 700, color: "var(--dang)" }}>Sequence gap detected</span>
+                <span style={{ color: "var(--t2)" }}>
+                  {sequence.missing > 0 &&
+                    `${sequence.missing} invoice record(s) missing against the issuance counter — investigate before filing. `}
+                  {sequence.extra > 0 &&
+                    `${sequence.extra} invoice row(s) present beyond what the counter accounts for.`}
+                </span>
+              </div>
+            )}
+
             {isLocal && (
               <div
                 style={{

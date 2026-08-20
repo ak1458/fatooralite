@@ -29,6 +29,11 @@ interface CompletionChoice {
   message?: { content?: string | null; tool_calls?: ToolCall[] };
 }
 
+interface CompletionUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+}
+
 export class OpenAICompatProvider implements ChatProvider {
   readonly name: string;
 
@@ -83,7 +88,7 @@ export class OpenAICompatProvider implements ChatProvider {
     let body = this.body(messages, false, opts, tools);
 
     // Free/shared models are intermittently rate-limited upstream; retry once.
-    let data: { choices?: CompletionChoice[]; error?: { code?: number } } | null = null;
+    let data: { choices?: CompletionChoice[]; error?: { code?: number }; usage?: CompletionUsage } | null = null;
     let relaxedToolChoice = false;
     for (let attempt = 0; attempt < 3; attempt++) {
       const res = await fetch(`${this.cfg.baseUrl}/chat/completions`, {
@@ -123,7 +128,11 @@ export class OpenAICompatProvider implements ChatProvider {
     }
 
     const m = data?.choices?.[0]?.message ?? {};
-    return { role: "assistant", content: m.content ?? null, tool_calls: m.tool_calls };
+    const usage =
+      typeof data?.usage?.prompt_tokens === "number" && typeof data?.usage?.completion_tokens === "number"
+        ? { promptTokens: data.usage.prompt_tokens, completionTokens: data.usage.completion_tokens }
+        : undefined;
+    return { role: "assistant", content: m.content ?? null, tool_calls: m.tool_calls, usage };
   }
 
   async chatText(messages: ChatMessage[], opts?: ChatOptions): Promise<string> {

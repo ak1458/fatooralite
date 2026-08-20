@@ -1,4 +1,9 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is the app directory for **Fatoora Lite Pro** (ZATCA Phase-2
+e-invoicing SaaS) — see `../START-HERE.md` for current state, what's left,
+and what must not be "fixed." This file only documents the Next.js
+scaffolding underneath it; it was originally bootstrapped with
+[`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app)
+and that part is still accurate.
 
 ## Getting Started
 

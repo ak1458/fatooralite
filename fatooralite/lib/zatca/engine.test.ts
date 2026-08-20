@@ -112,6 +112,75 @@ describe("money", () => {
     expect(t.taxableAmount).toBe(80);
     expect(t.vatAmount).toBe(12); // 15% of 80
   });
+
+  // A document-level allowance used to reduce the taxable total while VAT was
+  // still computed from the unreduced base: 1000 - 100 discount produced
+  // taxable 900 but VAT 150, so the buyer was charged VAT on 100 SAR they were
+  // never billed, and the TaxSubtotal rows still said 1000 while the document
+  // said 900 (EN16931 BR-CO-13/BR-CO-17 require them to agree).
+  describe("document-level allowances and charges", () => {
+    const oneThousand = [{ description: "Item", quantity: 1, unitPrice: 1000 }];
+
+    it("reduces VAT in step with a document-level allowance", () => {
+      const t = invoiceTotals(oneThousand, [{ isCharge: false, amount: 100, reason: "Discount" }]);
+      expect(t.taxableAmount).toBe(900);
+      expect(t.vatAmount).toBe(135);
+      expect(t.grandTotal).toBe(1035);
+      expect(t.allowanceTotalAmount).toBe(100);
+    });
+
+    it("raises VAT in step with a document-level charge", () => {
+      const t = invoiceTotals(oneThousand, [{ isCharge: true, amount: 100, reason: "Freight" }]);
+      expect(t.taxableAmount).toBe(1100);
+      expect(t.vatAmount).toBe(165);
+      expect(t.grandTotal).toBe(1265);
+      expect(t.chargeTotalAmount).toBe(100);
+    });
+
+    it("keeps the breakdown rows equal to the document totals", () => {
+      const t = invoiceTotals(oneThousand, [{ isCharge: false, amount: 250 }]);
+      const taxableSum = t.taxSubtotals.reduce((s, x) => s + x.taxableAmount, 0);
+      const taxSum = t.taxSubtotals.reduce((s, x) => s + x.taxAmount, 0);
+      expect(taxableSum).toBe(t.taxableAmount);
+      expect(taxSum).toBe(t.vatAmount);
+    });
+
+    it("applies the allowance to its own category, leaving others untouched", () => {
+      const mixed = [
+        { description: "Standard", quantity: 1, unitPrice: 1000, taxCategory: "S" as const },
+        { description: "Zero-rated", quantity: 1, unitPrice: 500, taxCategory: "Z" as const },
+      ];
+      const t = invoiceTotals(mixed, [{ isCharge: false, amount: 150, taxCategory: "Z" as const }]);
+      const s = t.taxSubtotals.find((x) => x.taxCategory === "S")!;
+      const z = t.taxSubtotals.find((x) => x.taxCategory === "Z")!;
+      expect(s.taxableAmount).toBe(1000);
+      expect(s.taxAmount).toBe(150);
+      expect(z.taxableAmount).toBe(350);
+      expect(z.taxAmount).toBe(0);
+      expect(t.vatAmount).toBe(150);
+      expect(t.grandTotal).toBe(1500);
+    });
+
+    it("defaults an allowance with no category to standard-rated", () => {
+      const t = invoiceTotals(oneThousand, [{ isCharge: false, amount: 100 }]);
+      expect(t.taxSubtotals).toHaveLength(1);
+      expect(t.taxSubtotals[0].taxCategory).toBe("S");
+      expect(t.taxSubtotals[0].taxableAmount).toBe(900);
+    });
+
+    it("still adds a breakdown row for a category with no lines", () => {
+      const t = invoiceTotals(oneThousand, [{ isCharge: true, amount: 40, taxCategory: "Z" as const }]);
+      const z = t.taxSubtotals.find((x) => x.taxCategory === "Z")!;
+      expect(z.taxableAmount).toBe(40);
+      expect(z.taxAmount).toBe(0);
+      expect(t.taxableAmount).toBe(1040);
+      expect(t.vatAmount).toBe(150);
+    });
+
+    it("leaves totals identical when there are no document-level entries", () => {
+      expect(invoiceTotals(oneThousand, [])).toEqual(invoiceTotals(oneThousand));
+    });
+  });
 });
 
 describe("canonicalize", () => {

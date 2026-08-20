@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePlan } from "@/lib/useCompany";
+import { riyadhToday } from "@/lib/time/riyadh";
 
 const DISMISS_KEY = "fl.trialBanner.dismissedOn";
 
-/** Local date key, so a dismissal lasts for the day rather than forever. */
+/** Business-day key (Asia/Riyadh, Phase 3 / W9), so a dismissal lasts for the day rather than forever. */
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return riyadhToday();
 }
 
 /**

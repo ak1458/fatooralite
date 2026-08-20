@@ -2,27 +2,29 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { zodErrorResponse } from "@/lib/validation/http";
 import { Prisma } from "@prisma/client";
-import { issueInvoice, NoCertificateError } from "@/lib/services/invoice-service";
+import { issueInvoice, NoCertificateError, InvoiceValidationError } from "@/lib/services/invoice-service";
 import { getInvoiceList } from "@/lib/db/queries";
 import { createInvoiceSchema } from "@/lib/validation/schemas";
 import { requirePermission } from "@/lib/auth/server";
+import { isPastReportingPeriod } from "@/lib/time/riyadh";
 import { scheduleCompanyIngest } from "@/lib/ai/tenant-ingest";
 import { checkInvoiceLimit, requireFeature } from "@/lib/billing/plan";
 import { featureLocked, limitReached } from "@/lib/billing/deny";
 import type { InvoiceInput } from "@/lib/zatca/types";
+import { loggerFor } from "@/lib/log/logger";
 
 export const runtime = "nodejs";
 
 /** POST /api/invoices — issue (create + sign) a new invoice. */
 export async function POST(req: Request) {
-  let body: { companyId?: string; input?: InvoiceInput };
+  let body: { companyId?: string; input?: InvoiceInput; branchId?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { companyId, input } = body;
+  const { companyId, input, branchId } = body;
   if (!companyId || !input) {
     return NextResponse.json(
       { error: "companyId and input are required" },
@@ -32,6 +34,15 @@ export async function POST(req: Request) {
 
   const { deny } = await requirePermission(req, "invoice:create", companyId);
   if (deny) return deny;
+
+  // branchId is route-level, not a UBL/InvoiceInput concept — a location
+  // label on the row, not a security boundary. Still verify it belongs to
+  // the caller's own tenant: trusting an unverified branchId across
+  // companies would attribute one tenant's invoice to another's location.
+  if (branchId) {
+    const branch = await prisma.branch.findFirst({ where: { id: branchId, companyId } });
+    if (!branch) return NextResponse.json({ error: "Branch not found for this company" }, { status: 400 });
+  }
 
   // Two separate gates: the entitlement (an expired trial cannot issue at all)
   // and the volume cap (a live trial can, up to its monthly allowance).
@@ -71,12 +82,28 @@ export async function POST(req: Request) {
       }))
     } as InvoiceInput;
 
-    const result = await issueInvoice(companyId, typedInput);
+    const result = await issueInvoice(companyId, typedInput, prisma, { branchId });
     scheduleCompanyIngest(companyId);
-    return NextResponse.json(result, { status: 201 });
+
+    // D2 (docs/audit/decision-register.md) — soft, non-blocking warning only
+    // (Option B). This never refuses issuance; there is no period lock (that's
+    // Option C, not chosen). A credit/debit note referencing an older invoice
+    // is the correction mechanism for an already-elapsed period, not a reason
+    // to block back-dating outright.
+    const warnings: string[] = [];
+    if (isPastReportingPeriod(typedInput.issueDate)) {
+      warnings.push(
+        `This invoice is dated ${typedInput.issueDate}, in a reporting period that has already ended. If that period was already filed, use a credit or debit note instead of back-dating.`,
+      );
+    }
+
+    return NextResponse.json(warnings.length ? { ...result, warnings } : result, { status: 201 });
   } catch (err) {
     const invalid = zodErrorResponse(err);
     if (invalid) return invalid;
+    if (err instanceof InvoiceValidationError) {
+      return NextResponse.json({ error: err.message, issues: err.issues }, { status: 400 });
+    }
     if (err instanceof NoCertificateError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }
@@ -88,23 +115,51 @@ export async function POST(req: Request) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return NextResponse.json({ error: "An invoice with this number already exists for this company." }, { status: 409 });
     }
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Issuing holds an exclusive lock on the company's invoice-counter row for
+    // the whole read → sign → write section, so simultaneous issuers on the
+    // same tenant queue behind each other. Past a certain depth the queued
+    // transaction hits its own timeout (Prisma P2028) and fails. Nothing is
+    // half-written — the transaction rolls back and the chain stays intact,
+    // verified under concurrency in the audit — so this is a "try again", not
+    // a server fault, and it must say so.
+    //
+    // It previously fell through to the branch below and returned
+    // `err.message` verbatim, which put "Invalid `prisma.$queryRaw()`
+    // invocation … Transaction API error" and the internal timeout into the
+    // response body of a customer-facing endpoint.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2028") {
+      return NextResponse.json(
+        { error: "The system is issuing another invoice for your business right now. Please try again in a moment.", retryable: true },
+        { status: 503, headers: { "Retry-After": "2" } },
+      );
+    }
+    // Never return a raw error message: it is written by whichever library
+    // failed and routinely names tables, columns and query internals.
+    loggerFor(req).error("invoice.create.failed", { error: err instanceof Error ? err.message : String(err) });
+    return NextResponse.json({ error: "Could not issue the invoice. Please try again." }, { status: 500 });
   }
 }
 
-/** GET /api/invoices?companyId=...&status=... — list invoices. */
+/** GET /api/invoices?companyId=...&status=...&branchId=... — list invoices. */
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const companyId = url.searchParams.get("companyId");
   const status = url.searchParams.get("status") ?? undefined;
+  const branchId = url.searchParams.get("branchId") ?? undefined;
   if (!companyId) {
     return NextResponse.json({ error: "companyId is required" }, { status: 400 });
   }
-  
+
   const { deny } = await requirePermission(req, "audit:view", companyId);
   if (deny) return deny;
 
-  const data = await getInvoiceList(companyId, status ? { status } : undefined);
+  // Same tenant-ownership check as POST — a branchId from another company
+  // must not silently return an empty (or worse, cross-tenant) result.
+  if (branchId) {
+    const branch = await prisma.branch.findFirst({ where: { id: branchId, companyId } });
+    if (!branch) return NextResponse.json({ error: "Branch not found for this company" }, { status: 400 });
+  }
+
+  const data = await getInvoiceList(companyId, { status, branchId });
   return NextResponse.json(data);
 }

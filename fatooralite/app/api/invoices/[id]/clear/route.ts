@@ -6,6 +6,7 @@ import {
   NoCredentialsError,
   LocalCertificateSubmitError,
   AlreadySubmittedError,
+  SubmissionInFlightError,
 } from "@/lib/services/clearance-service";
 import { requirePermission, getUserFromRequest } from "@/lib/auth/server";
 import { prisma } from "@/lib/db/client";
@@ -51,7 +52,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       err instanceof InvoiceNotSignedError ||
       err instanceof NoCredentialsError ||
       err instanceof LocalCertificateSubmitError ||
-      err instanceof AlreadySubmittedError
+      err instanceof AlreadySubmittedError ||
+      err instanceof SubmissionInFlightError
     ) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }

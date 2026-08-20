@@ -3,11 +3,15 @@ import { prisma } from "@/lib/db/client";
 import { updateUserSchema } from "@/lib/validation/schemas";
 import { updateUser, removeUser, UserError } from "@/lib/services/user-service";
 import { requirePermission, getUserFromRequest } from "@/lib/auth/server";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
 
 export const runtime = "nodejs";
 
 async function authorizeForUser(req: Request, id: string) {
-  const target = await prisma.user.findUnique({ where: { id }, select: { companyId: true } });
+  const target = await prisma.user.findUnique({
+    where: { id },
+    select: { companyId: true, email: true, role: true },
+  });
   if (!target) return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
   const { deny } = await requirePermission(req, "users:manage", target.companyId ?? undefined);
   if (deny) return { error: deny };
@@ -31,6 +35,24 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
   try {
     const user = await updateUser(id, parsed.data);
+    const actor = await getUserFromRequest(req);
+    // A role change is recorded as its own event, with both the old and the new
+    // role — "user.updated" alone would not tell an investigator that someone
+    // was granted owner.
+    const roleChanged = parsed.data.role !== undefined && parsed.data.role !== auth.target!.role;
+    await recordSecurityEvent({
+      action: roleChanged ? SECURITY_EVENTS.userRoleChanged : SECURITY_EVENTS.userUpdated,
+      outcome: "success",
+      companyId: auth.target!.companyId,
+      actorId: actor?.userId,
+      actorEmail: actor?.email,
+      targetType: "user",
+      targetId: id,
+      request: req,
+      metadata: roleChanged
+        ? { targetEmail: auth.target!.email, from: auth.target!.role, to: user.role }
+        : { targetEmail: auth.target!.email, status: user.status, title: user.title },
+    });
     return NextResponse.json({ user: { id: user.id, role: user.role, title: user.title, status: user.status } });
   } catch (err) {
     if (err instanceof UserError) return NextResponse.json({ error: err.message }, { status: 400 });
@@ -48,5 +70,16 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
   if (me?.userId === id) return NextResponse.json({ error: "You cannot remove your own account." }, { status: 400 });
 
   await removeUser(id);
+  await recordSecurityEvent({
+    action: SECURITY_EVENTS.userDeleted,
+    outcome: "success",
+    companyId: auth.target!.companyId,
+    actorId: me?.userId,
+    actorEmail: me?.email,
+    targetType: "user",
+    targetId: id,
+    request: req,
+    metadata: { targetEmail: auth.target!.email, role: auth.target!.role },
+  });
   return NextResponse.json({ ok: true });
 }

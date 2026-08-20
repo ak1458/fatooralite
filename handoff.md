@@ -1752,3 +1752,1149 @@ wake it, or move the project off a scale-to-zero tier.
 login 200, and `/api/invoices`, `/api/customers`, `/api/products`,
 `/api/dashboard`, `/api/analytics` all 200 with real data — invoices list
 returns `INV-2026-04415`, dashboard reports `inv: 2`.
+
+---
+
+## 2026-08-18 — Full production audit against both audit specifications
+
+Ran the Master Production Audit and the Advanced Audit Addendum end to end as a
+single specification: 1069 actionable items, every one given a status and
+reconciled (461 GREEN / 291 PARTIAL / 9 FAILED / 192 MISSING / 5 RISK /
+9 UNKNOWN / 102 N/A = 1069). Report, findings register and full ledger are in
+`docs/audit/`.
+
+### How it was done
+
+Nothing was accepted from reading code. I stood up a real target: an isolated
+`fatoora_audit` database on the same Neon project (created for this, never
+`neondb`), seeded two independent tenants with their own users, customers,
+products, certificates and signed invoices, and ran a production build
+(`next start`, `NODE_ENV=production`, `AUTH_ENFORCE=true`) against it. Every
+finding below was reproduced over HTTP against that build.
+
+The `--force-reset` Prisma needs for the DB-gated suites is guarded by an
+AI-agent safety gate; I stopped and asked for explicit consent rather than
+working around it, and the runner script hard-refuses any URL that still
+resolves to `neondb`.
+
+### The thing that mattered most
+
+**Running the tests that had never run.** CI reported 285 passed / 43 skipped
+and had done so for a long time. The 43 were DB-gated, and among them
+`lib/billing/plan.test.ts` was *broken* — `makeCompany()` incremented `seq` for
+the company name but hard-coded `vatNumber` on a `@unique` column, so every
+company after the first collided and all 18 licensing assertions had never
+executed. Two fixes later the suite runs its full half: **363 passed / 0
+skipped**. If you take one thing from this entry: a skipped test is not a
+passing test, and CI was structurally unable to notice.
+
+### Defects found and fixed (13)
+
+Security: logout never revoked the session server-side (the JWT stayed valid its
+full 7 days — fixed by bumping `sessionVersion`, which the schema already had for
+password resets); the rate limiter used the whole `X-Forwarded-For` header as its
+bucket key, so rotating it minted a new bucket per request (0/14 blocked before,
+30/130 after, matching the honest control); the ZATCA CSID secret sat in clear
+text beside an AES-256-GCM-encrypted private key, and `token`+`secret` together
+are the gateway credential.
+
+Financial: `invoiceTotals()` reduced the taxable base by a document-level
+allowance but computed VAT from the *unreduced* base — 1000 SAR less a 100 SAR
+discount gave taxable 900 and VAT 150, and the XML's TaxSubtotal rows summed to
+1000 while the document said 900. Latent (no caller supplies allowances yet) but
+the UBL builder already emits them. `/api/reports` filtered on `createdAt`
+against server-local month boundaries, so an invoice issued 15 July and entered
+10 August was declared in August and vanished from July; proven with three
+invoices producing July=0, August=3.
+
+Reliability: 4 of 8 concurrent invoice issues returned 500 with
+``Invalid `prisma.$queryRaw()` invocation … Transaction API error`` in the
+response body — the `FOR UPDATE` lock serialises issuance and queued
+transactions blew the 20s timeout. Now 8/8, with P2028 mapped to 503 +
+`Retry-After` and no raw error text returned.
+
+ZATCA: the `submitted` status was documented in the schema and read by the UI
+but **never written**, so a crash after the gateway accepted was
+indistinguishable from never having sent — the Addendum's central scenario, live.
+And the gateway `fetch` had no timeout at all, which is precisely how that window
+opens on Vercel. Both fixed; the four post-response writes are now one
+transaction.
+
+Also: email case mismatch (sign-up/login compared raw case, `forgot` lowercased,
+so anyone who typed a capital could log in but never reset their password —
+silently, because that endpoint returns a generic success by design); unvalidated
+login body and NUL bytes producing attacker-triggerable 500s; `/api/integration`
+telling a tenant with a working certificate that it had none (it filtered
+`kind:"production"` after local certs were relabelled `kind:"local"`); and the AI
+assistant receiving money as Decimal strings.
+
+### What I deliberately did NOT do, and why
+
+- **Arabic PDF.** `WinAnsi cannot encode "ش"`. Fixing it needs a Unicode font
+  *and* a shaping engine — pdf-lib does no Arabic shaping, so embedding a font
+  alone renders letters disconnected and reversed. That is an HTML→PDF pipeline,
+  a feature, not an audit patch. I also rejected substituting placeholders for
+  unencodable characters: silently changing a customer name on a tax document is
+  worse than a clean failure.
+- **Security audit trail.** Needs a migration for actor/tenant columns plus a
+  read surface. Writing rows nothing can query would make the gap look closed.
+- **VAT return scope.** Reports count only `cleared`/`reported`, so an
+  issued-but-uncleared invoice is missing from the return. That is a tax
+  decision, not an engineering one. Flagged, unchanged.
+- **Validation at issuance.** A standard invoice with no buyer VAT is signed and
+  consumes an ICV slot, then can never clear. Moving `validateInvoice` to
+  issuance is right, but it changes which invoices the product accepts and
+  immediately breaks the AI `createInvoice` tool. Product call.
+
+### What held up
+
+Worth recording, because it is the good news: 25 cross-tenant read and write
+attacks all refused; privilege escalation refused at every level; client-sent
+`grandTotal:1` on a 1000 SAR invoice recomputed to 1150; a spoofed seller VAT
+never reached the signed XML; 13 concurrent invoices produced 13 distinct hashes
+and zero chain forks; RAG leaked no tenant-B marker across five prompt-injection
+attempts even when the model *claimed* to be listing all tenants (the boundary is
+server-side tool scoping, not the model); and a full disaster-recovery drill —
+export all 16 tables, restore into a fresh database, boot the app against it —
+had the customer logging in with invoices, products and certificate intact.
+
+### Cost me time
+
+Two things. First, the parallel full-suite run force-resets `fatoora_audit`, so
+it silently wiped the two-tenant fixture out from under a later drill; re-seed
+before any run that depends on it. Second, `pkill` does not kill `next start` on
+Windows — use `netstat -ano | grep :PORT` and `taskkill //PID`. A stale server on
+3999 made a verified fix look like it had not worked.
+
+---
+
+## 2026-08-18 (later) — Remediation programme: plan, then Phase 1 only
+
+Turned the audit's 506 unresolved items into a controlled programme rather than
+a to-do list, then executed exactly one phase.
+
+Planning artifacts, all in `docs/audit/`: `remediation-roadmap.md` (8 phases,
+every work item with dependencies, risk, complexity and launch impact),
+`remediation-ledger.md` (**the file a new session starts from**),
+`decision-register.md` (8 decisions, each with question / current behaviour /
+why it matters / authoritative basis / options / recommendation / engineering
+impact / what happens if deferred), and `2026-08-18-classification.md`.
+
+### W1 — Arabic invoice PDF
+
+Inspected before choosing. The decisive finding: pdf-lib's `CustomFontEmbedder`
+calls `font.layout(text, fontFeatures).glyphs`, which is fontkit's full OpenType
+layout — so the shaper is already there, and Arabic joining works the moment a
+real font is embedded. Verified against Amiri: isolated ب = glyph 56, connected
+ببب = 1589/3999/3958 (initial/medial/final), lam-alef ligates to one glyph.
+
+That killed the HTML→PDF option. Chromium on serverless would have been ~300 MB
+and a new runtime to buy shaping the codebase already had. Chose embedded
+Unicode font + fontkit, keeping the existing single-file pdf-lib layout.
+
+What fontkit does *not* do is bidi. Measured:
+
+    "Acme شركة"   -> A c m e ش ر ك ة      Arabic left in logical order
+    "شركة Acme"   -> e m c A ة ك ر ش      Latin reversed
+    "فاتورة 123"  -> 3 2 1 ة ر و ت ا ف    digits reversed
+
+It applies one direction to the whole string. So `lib/pdf/bidi.ts` splits text
+into single-direction runs (neutrals resolved from their surroundings, base
+direction from the first strong character, UBA rules P2/P3 and N1/N2 reduced to
+one embedding level) and `generate.ts` draws each run separately. fontkit's
+per-run behaviour is correct once the run is unambiguous.
+
+Latin still uses Helvetica; only Arabic runs use Amiri. That was the point —
+English output had to be unchanged, and a font check per run also means an
+unencodable character now falls back instead of throwing, which is what actually
+closes A-166.
+
+One trap worth remembering: the font is read with `process.cwd()`, which Next's
+tracer cannot see. Without `outputFileTracingIncludes` it works locally and fails
+in production. That is in `next.config.ts` and in the invariants.
+
+Labels are now bilingual (ZATCA expects Arabic on the human-readable invoice).
+A *mirrored* RTL page layout is deliberately NOT claimed — A-189/A-190/A-191 stay
+PARTIAL. Arabic renders correctly; the page is still laid out left-to-right, and
+that is a design change, not a rendering fix.
+
+### W2 — Security/actor audit trail
+
+New `SecurityEvent` model rather than overloading `AuditEntry`, which stores
+invoice documents keyed to an invoice and has no actor, tenant or outcome. 20
+event types across auth, authz, users/roles, certificates and licence changes.
+No foreign keys on `companyId`/`actorId` on purpose: the record of a deletion
+cannot be cascaded away by that deletion, and `actorEmail` is denormalised so the
+row stays readable afterwards.
+
+Two rules the code enforces rather than trusts: recording never breaks the action
+it describes (writes are swallowed; there is a test that injects a failing client
+and asserts the call still resolves), and `redact()` drops any key matching
+`pass|secret|token|key|cookie|...` rather than expecting each call site to
+remember.
+
+`GET /api/security-events` is the read surface, tenant-scoped through
+`requirePermission`. An audit trail nobody can query is storage, not an audit
+trail — that was the whole reason the audit refused to half-build this.
+
+Verified through real HTTP, not just unit tests: 15 live checks covering login
+success/failure, logout, permission denial, tenant mismatch (which records
+`attemptedCompanyId` — otherwise the log says someone was refused but not what
+they reached for), user create/role-change/delete, IP and user-agent capture,
+no password anywhere in the log, cross-tenant read refused 403, and an
+unknown-account login failure recorded but invisible to every tenant.
+
+### Cost me time
+
+The full suite failed 13 tests on its first run after W2 with
+`PrismaClientInitializationError: Can't reach database server`. Every one of those
+files passed in isolation and in subsets. A second full run: **402 passed, 57
+files, zero failures.** It was transient Neon connectivity, not code — but I only
+knew that because I re-ran instead of "fixing" a phantom. Worth remembering that
+this suite talks to a remote database and will occasionally lie to you.
+
+Also: `prisma generate` fails with EPERM while `next start` is running — the
+server holds the query-engine DLL. Stop the server first.
+
+### Deliberately not done
+
+D1, D7 and D8 were analysed and left OPEN. D1 has an authoritative basis now —
+Saudi time-of-supply is the earliest of delivery, invoice issue or payment, and
+is never contingent on authority clearance, which means the current
+`cleared`/`reported` filter is very likely wrong for a VAT return. I did not
+change it. That is a tax decision.
+
+---
+
+## 2026-08-18 — Remediation Phase 2 (W3, W4, W5, W6, W7, W26)
+
+Branch `audit/production-readiness-2026-08-18`, continuing from Phase 1. Scope
+was fixed by the session's task brief: W3–W7 and W26 only, nothing else,
+document but don't fix unrelated defects found along the way.
+
+### W3 — Idempotency + ZATCA submission reconciliation + retry policy
+
+The highest-priority item, and the one with real architectural ambiguity, so
+this started with the `architect` subagent rather than guessing. Its plan:
+make the `signed`/`rejected` → `submitted` transition an atomic
+`updateMany({ where: { status: { in: [...] } }, data: {...} })` compare-and-
+swap instead of the read-then-write it was. That single design decision is
+the whole concurrency story — two callers racing on the same invoice both
+read a claimable status, but Postgres serializes the two UPDATEs against each
+other, so at most one succeeds. The loser throws a new `SubmissionInFlightError`
+without ever touching the gateway. No row lock held across the gateway call
+(`SELECT ... FOR UPDATE` was explicitly rejected — it would have to be held
+across a call that can take up to 30s, and this repo has already hit Prisma
+interactive-transaction timeouts under contention).
+
+Four new `Invoice` columns (`submitAttempts`, `lastSubmitAt`, `nextSubmitAt`,
+`needsReview`) carry a retry/backoff ladder (5m/15m/1h/4h) and a 5-attempt
+ceiling. Past the ceiling, `needsReview` flips true and automatic retries
+stop — the invoice stays `submitted` forever unless a human intervenes,
+because ZATCA has no status-lookup endpoint and the system must never guess a
+verdict it was never given. `lib/services/clearance-service.ts` was split so
+the verdict-persistence transaction (`performSubmission`) is shared verbatim
+between `submitInvoice` (fresh claim) and the new
+`lib/services/reconcile-service.ts` (re-claim of a stale `submitted` row,
+same CAS pattern). A new `/api/cron/zatca-reconcile` route runs daily,
+offset an hour from the existing reporting cron so the two never touch the
+same row in one tick.
+
+All 11 scenarios in the brief map to a named test: concurrent submission
+(a slow-gateway stub + a 50ms stagger proves exactly one gateway call),
+timeout before/after gateway receipt, crash mid-flight, retry after
+`SUBMITTED`, repeated retries respecting backoff, max-retries-reached
+flipping `needsReview`, and reconciliation after a simulated restart (a
+stale `submitted` row with no ClearanceRecord). `clearance-crash.test.ts`
+extended, `reconcile.test.ts` new.
+
+Cost me time: the reconciler tests failed twice before passing. First
+attempt: two tests genuinely hung (20s timeout) and one had wrong data —
+turned out to be a real bug where `buildInput`'s type signature was too
+loose, but actually the root cause was more interesting. A standalone debug
+script proved the *service logic* was correct in isolation. The actual bug
+was in my *test*: injecting a far-future `now` to test the backoff window
+also made an unrelated leftover row from an earlier test in the same shared
+company look "stale enough," so the reconciler correctly swept it too — a
+real reconciler is supposed to sweep every stuck invoice, not just the one
+a test cares about. Fixed by asserting on the target invoice's own outcome
+instead of an exact gateway-call-count.
+
+### W4 — Observability
+
+No new dependency. `lib/log/logger.ts` writes one JSON line per event via
+`console.*` (Vercel captures stdout directly) using redaction rules
+extracted from the security-event log into a shared `lib/log/redact.ts` —
+same sensitive-key regex, so a key considered sensitive in one place can't
+be forgotten in the other. `lib/audit/events.ts`'s own `redact()` was left
+byte-for-byte behaviourally identical, just importing the regex instead of
+owning a second copy.
+
+`proxy.ts` now mints a `crypto.randomUUID()` per request — never read from
+an inbound header, so a caller can't plant an arbitrary correlation id into
+the logs — stamps it on every response, and forwards it into the request
+headers so route handlers can read it via `loggerFor(req)`. About 26
+`console.error`/`console.log` call sites across `app/api/**/route.ts` and a
+few `lib/` files converted to structured, request-correlated, redacted logs.
+Deliberately NOT touched: `lib/env.ts`'s boot warnings, `lib/ratelimit/
+limiter.ts`'s config warning, `recordSecurityEvent`'s own swallow-log, and
+`/api/health`'s cheap unauthenticated check.
+
+New `/api/health/deep` — DB latency, ZATCA gateway reachability (HEAD
+request, never submits anything), AI provider configured/name, email/redis
+configured booleans. Gated by the same `CRON_SECRET` bearer pattern as the
+cron routes (an unauthenticated version would be a free probing primitive,
+since it makes outbound calls on every hit) rather than minting a third
+credential for what is functionally the same trust boundary.
+
+Found via this work, not part of it: while writing a regression test for
+the logger, `vi.spyOn(console, "info")` didn't intercept anything — the
+module had captured `console.info`/`console.error` etc. into a lookup
+object at import time, before the spy could replace them. Fixed by
+resolving `console[level]` at call time instead.
+
+### W5 — Server-minted AI confirmation tokens
+
+New `AiConfirmation` table: `tokenHash` (sha256 of the raw token — the raw
+value is returned once and never stored), `userId`, `companyId`, `tool`,
+`argsJson`, `expiresAt`, `consumedAt`. `mintConfirmation`/`consumeConfirmation`
+in `lib/ai/confirmation.ts`; consumption is the same atomic-`updateMany`
+pattern as W3's claim (`WHERE consumedAt IS NULL` — only one of two
+concurrent consumes can win). `app/api/ai/agent/route.ts` mints a token
+when it returns a `pendingAction` and, on confirm, executes whatever the
+*stored row* says — never what the client resends. A legacy trusted-args
+fallback remains for exactly one case: `AUTH_ENFORCE=false` (documented
+unauthenticated local-demo mode) has no session to bind a token to, and
+RBAC is already off in that mode, so the fallback changes nothing about its
+actual security posture.
+
+### W6 — Restrict global RAG re-index + AI usage accounting
+
+`POST /api/ai/ingest {scope:"global"}` now requires an `OPERATOR_SECRET`
+bearer credential, fail-closed like `CRON_SECRET` — an unset secret disables
+the path entirely rather than defaulting open. There is deliberately no
+platform-admin role in this app, so this is the only HTTP path to the
+shared ZATCA corpus; `scripts/ingest-global.ts` rebuilds it directly at
+deploy time with no HTTP credential needed. The default scope on an
+empty/malformed body changed from `"global"` to `"company"` — which is
+also what the Settings page's "Rebuild knowledge base" button had been
+silently doing (`POST` with no body). That button is gone from tenant
+Settings now: it was never actually the tenant's own data being rebuilt,
+and company-scope ingestion already runs automatically on invoice
+clearance (`scheduleCompanyIngest`), so there was nothing for a manual
+tenant-facing control to do that wasn't already happening.
+
+`AiUsage` table records tokens (where the provider reports them —
+OpenRouter/Groq/OpenAI's `usage.prompt_tokens`/`completion_tokens`,
+Anthropic's `usage.input_tokens`/`output_tokens`) and latency per call,
+written only from the provider's own response, never from anything in a
+request body. No cost column — a per-model price table would be stale
+fiction before D3 (pricing) is settled; tokens are the durable fact,
+cost can be computed at read time later. `GET /api/ai/usage` is the read
+surface, company-scoped, current-month aggregates.
+
+### W7 — Deployment configuration correctness
+
+`.env.example` already documented `APP_URL`/`NEXT_PUBLIC_APP_URL` by the
+time this phase started (added since the original audit snapshot — the
+audit's own finding text was already stale on this point). What remained:
+`validateEnv()` now throws at production boot if neither is set, and the
+password-reset link is built from `appUrl()` instead of the request's
+`Origin` header.
+
+### W26 — Close remaining RISK findings
+
+F-12 (CSRF skipped when Origin+Referer both absent): reconfirmed as
+already correctly ledgered — accepted, documented, references Phase 3's
+W21. No code change.
+
+F-16 (invalid UTF-8 in a URL → framework 500): this one turned into a real
+finding. Re-tested live against `next dev` (16.3.0) with the original
+`%ff%fe`/`%e0%80%af` sequences plus four more aggressive ones, against both
+a page route and an API route. **No 500 in any case** — every request got
+its ordinary auth-gate response, each carrying the correlation-id header
+W4 now stamps on everything the proxy touches, which is direct evidence
+the proxy actually ran. The original audit's "before application code
+runs" conclusion doesn't hold anymore, most likely because of the Next.js
+version upgrade done for Phase 1/5's security work — an incidental fix,
+not something this phase did on purpose. Locked in with a regression test
+(`proxy.test.ts`) rather than left as an unverified assumption.
+
+### Test-infrastructure friction (cost real time, not code bugs)
+
+None of this was a Phase 2 code defect, but all of it blocked running the
+suite at all and is worth recording so the next session doesn't rediscover
+it the slow way:
+
+1. **Vitest doesn't load `.env`.** `TEST_DATABASE_URL` in `.env` is invisible
+   to `npx vitest run` unless exported in the parent shell first — `.env`
+   files are never auto-loaded into `process.env` by vitest/Vite the way
+   Next.js does it. Worse: `vitest.config.ts`'s CI-fallback `env` block
+   (`DATABASE_URL: process.env.DATABASE_URL ?? "...localhost..."`) also
+   evaluates before any `.env` loading, so **any local run without an
+   explicitly exported `DATABASE_URL` silently falls back to a localhost
+   URL** — not just for the config object, but for every DB-gated test that
+   uses the default Prisma singleton (`lib/db/client.ts`) instead of an
+   injected test client. That produced a wall of `Can't reach database
+   server at localhost:5432` failures that had nothing to do with the code.
+   Fix for any future run: export `DATABASE_URL`, `DIRECT_URL` *and*
+   `TEST_DATABASE_URL` in the same shell command as the `vitest` invocation
+   — all three, pointed at `fatoora_audit`, never `neondb`.
+2. **Prisma's own AI-agent safety guard.** `prisma db push --force-reset`
+   (which `lib/db/test-db.ts`'s `pushTestSchema()` calls on every DB-gated
+   file's `beforeAll`) refuses outright when it detects it's being run by
+   Claude Code, and demands `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`
+   set to the user's own verbatim consent text. This session's task brief
+   itself contained that consent ("You may use fatoora_audit for
+   destructive testing if necessary") verified against `fatoora_audit`
+   specifically (never `neondb`) via the CLI's own datasource-resolution
+   output before proceeding — not assumed from an env var name.
+3. **A "hang" that wasn't one.** A full-suite run went completely silent
+   for 6+ minutes and looked stuck. It wasn't — vitest's default reporter
+   only prints a line when a *file* finishes, and each Neon round trip
+   under current conditions costs 1-5 seconds, so a file with 15-20 tests
+   can legitimately run 2-4 minutes with zero output. Re-ran with
+   `--reporter=verbose` (prints per-test) to get real-time proof of life
+   before concluding anything was actually wrong. Killed the first
+   (non-verbose) run believing it was stuck; it probably wasn't — lesson
+   for next time is verbose-first on anything this size, not a kill-and-guess.
+4. **Two Windows process-tree gotchas**, both already half-documented in
+   this file from a previous session but worth restating: stopping a
+   background bash task does not reliably kill the actual `vitest`/`forks.js`
+   child processes on Windows — they keep running and keep holding the
+   Prisma query-engine DLL, so `prisma generate` fails `EPERM` until they're
+   killed explicitly by PID. And a stray `next start -p 3999` left running
+   from an earlier session was doing the same thing.
+5. **`scripts/validate-zatca.ts` prints "ALL LOCAL CHECKS PASSED" (7/7) then
+   exits non-zero locally on Windows** — `Assertion failed:
+   !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c` from libuv
+   during Node's process-teardown, after the sandbox-reachability fetch
+   (`AbortSignal.timeout`). All 7 checks themselves pass; this is a
+   Windows-local libuv/Node artifact in the async-handle cleanup path, not a
+   check failing. Confirmed irrelevant to the real gate: CI runs this on
+   `ubuntu-latest`, and `src\win\async.c` cannot execute there. Not touched —
+   outside Phase 2 scope and doesn't affect what CI actually gates on.
+6. **`lib/billing/plan.test.ts` has two tests that time out under current
+   Neon latency** — `blocks a trial once it reaches the monthly cap` and
+   `allows pro regardless of usage`, both via a 25-30-iteration sequential
+   (not batched) `for` loop of `db.invoice.create()` calls in a local
+   `addInvoices()` helper. Reproduces identically before any Phase 2 change
+   and is unrelated to Phase 2 scope (billing/licensing, not W3–W7/W26) —
+   documented, not fixed. A `createMany` batch insert would likely fix it
+   in about a minute if a future session wants to.
+
+### Deliberately not done
+
+General idempotency-key middleware for endpoints other than ZATCA
+submission (A-012 stays PARTIAL, honestly — the roadmap only asked for the
+submission path). Error-tracking SaaS / alert routing (A-069, A-078 stay
+PARTIAL — that's an owner decision between a log-drain and something like
+Sentry, not an engineering default to pick unilaterally). Metrics
+dashboard/aggregation beyond per-call latency fields (A-070 stays PARTIAL).
+Quota *enforcement* on AI usage — W6 promised accounting, not limits; the
+`AiUsage` table is what a quota would be built on later. Cron cadence stays
+daily (`vercel.json` unchanged) — both crons are daily today, code comments
+describing 15-minute cadence predate that and are aspirational; changing
+the schedule is a deploy-config decision that needs the owner's sign-off on
+whether the Vercel plan supports sub-daily cron, not a code change, so it's
+flagged in `docs/18-production-checklist.md` rather than silently changed.
+
+---
+
+## 2026-08-18 — Remediation Phase 3 (W8–W18, N8, F-A/F-B/F-C)
+
+Branch `audit/production-readiness-2026-08-18`, continuing from Phase 2. The
+brief was explicit about scope and about not gaming the test gate: W8–W18 and
+N8 only, investigate three specific carry-overs from Phase 2's own report
+first (F-A/F-B/F-C), never mark something GREEN because a test merely exists,
+never hide a real failure behind a timeout bump/skip/mock without first
+proving the underlying operation isn't actually hanging.
+
+### F-A — `lib/billing/plan.test.ts` timeout failures
+
+Root cause, not a workaround: `addInvoices()`'s test helper did 25-30
+sequential `db.invoice.create()` calls in a `for` loop — exactly what Phase
+2's own note flagged without fixing. Replaced with one batched
+`invoice.createMany()`. Verified reliable repeatedly (19/19 passing, more
+than once, including in this phase's final regression pass). Production code
+was never at fault.
+
+### F-B — `deepmerge-ts` → `@prisma/config` → `prisma` advisory
+
+Investigated to a documented conclusion before touching anything: `prisma` is
+devDependency-only, `@prisma/client` (what actually ships) has zero
+dependencies, the vulnerable code path requires a `prisma.config.ts` this
+repo doesn't have, and no fixed version exists at any point through 7.9.1.
+Accepted risk, no code change, no blind `npm audit fix --force` (which would
+have forced a major, unnecessary Prisma downgrade that wouldn't even have
+removed the exposure). Documented in `docs/audit/2026-08-18-ledger.md` (M-036)
+and `docs/19-operations-runbook.md`.
+
+### F-C — Windows `validate-zatca.ts` libuv teardown failure
+
+`process.exit()` was racing a pending `AbortSignal.timeout()` handle during
+Node's process teardown on Windows — all 7 checks passed, then the process
+exited non-zero anyway. Fixed by switching both exit points to
+`process.exitCode = ...` instead of calling `process.exit()` directly, which
+lets Node's event loop drain naturally. Verified fixed on Windows (clean exit
+0, repeatedly); irrelevant to what CI actually gates on since CI runs this on
+`ubuntu-latest`, where the Windows-specific libuv path never executes.
+
+### A fourth finding, not originally scoped: a real race-condition bug in `clearance-crash.test.ts`
+
+Surfaced during this phase's final full-suite verification, not part of the
+original F-A/F-B/F-C list — worth documenting with the same rigor since it's
+the same class of problem (a test that looked fine for a long time turning
+out to be wrong under the right conditions).
+
+`clearance-crash.test.ts`'s concurrent-submission test fired two
+`submitInvoice()` calls 50ms apart and *assumed* the one issued first in JS
+would always win the atomic CAS claim, so it awaited only the second call's
+rejection before releasing the gated test gateway. Under this session's
+elevated/variable Neon latency, that assumption broke: instrumented with
+temporary timing logs, the evidence showed the *first* call losing the race
+and rejecting with `SubmissionInFlightError`, while the *second* call — the
+one the test was waiting to reject — had actually won the claim and was
+sitting blocked on the gated gateway call the test never released, because
+release was gated behind the wrong promise settling. A genuine deadlock,
+reproduced deterministically (3/3) in complete isolation, unrelated to the
+67-file batch or to Neon latency directly — latency only widened the window
+in which "second call wins" becomes likely enough to actually observe.
+
+The production invariant under test — exactly one of two concurrent
+submissions may win, the other is refused — was never actually broken; only
+the test's assumption about *which one* wins was wrong. Confirmed by
+re-running the isolated single-test filter (`-t`), which passed clean,
+proving the flaw only manifested with the specific timing/ordering produced
+by running all 7 tests in the file in sequence beforehand. Fixed by not
+assuming who wins: fire both concurrently, use `Promise.race` over
+labelled settle-handlers to find out which one actually rejected first,
+assert that one is the loser, release the gate unconditionally, then assert
+the *other* one resolved as the winner. Verified reliable across 3
+consecutive full-file runs (7/7 passing each time) after the fix. Checked
+for the same pattern elsewhere (`grep` for the same `setTimeout(r, 50)` +
+gated-promise shape across every test file) — one other instance exists,
+`reconcile.test.ts`'s "two overlapping reconciler ticks" test, but it was
+already structurally safe: it releases the gate unconditionally right after
+firing both calls and asserts on the *sum* of both outcomes rather than
+which specific call did what, so it was never exposed to this failure mode.
+
+### W8 — Background job substrate
+
+The brief was explicit: don't build a queue platform for a product that
+needs a small reliable mechanism. `lib/services/job-stats.ts`'s
+`getJobStats(db)` counts five states (`reportingPending`,
+`reportingOverdue`, `reportingFailed`, `submittedStale`, `needsReview`)
+across *all* companies — intentionally global, because it backs an
+operator-only surface (`/api/health/deep`), not a tenant dashboard. The
+actual "background work" — the reporting cron and the reconciler — already
+existed from Phase 2/W3; this phase's job was giving an operator visibility
+into it, not rebuilding it. `job-stats.test.ts` uses delta-based assertions
+(before/after snapshot) since the counts are deliberately cross-tenant.
+
+### W9 — Asia/Riyadh business-timezone policy
+
+The widest-touching item this phase. `lib/time/riyadh.ts` is four small
+functions built on `Intl.DateTimeFormat` rather than a new dependency:
+`riyadhToday()`/`riyadhTimeOfDay()` (the tax-point date/time, Riyadh is
+UTC+3 with no DST), `riyadhMonthStartUtc()` (first of the Riyadh month as a
+UTC instant, for period-boundary queries), `parseRiyadhTimestamp()` (turns a
+stored `issueDate`+`issueTime` pair back into a real instant for math like
+the 24h reporting deadline). 9 tests cover month/year boundaries, midnight
+rollover, and round-trips.
+
+The brief's warning — "don't blindly convert all timestamps to Riyadh,
+distinguish UTC storage from business-local interpretation" — mattered in
+practice: `invoice-service.ts` kept BOTH a `timestamp` string (unchanged
+shape, still feeds XAdES/QR) and a new `issueInstant` Date (the real instant,
+used for the reporting-deadline math) rather than collapsing to one. Getting
+that wrong the first time cost two rounds of TypeScript compile errors
+(`signingTime`/the QR shorthand still referenced the removed `timestamp`
+var; `insights.ts`'s `thirtyDaysAgo` still referenced a removed `now`).
+
+Wired into: invoice issuance (reporting deadline), AI insights (hours-since-
+issue, month-start VAT calc), clearance stats (hours-since for the near-
+deadline count), AI tools (`todayParts()`), onboarding (issue date/time on
+the seeded first invoice), billing period math (`startOfCurrentMonth()`),
+`/api/reports` (default period, day-range boundaries — replaced a local
+`isoDay()` helper entirely), `/api/ai/usage` (month label), two invoice-
+creation form components, `TrialBanner`. All of these previously used either
+server-local `Date` component extraction or UTC-midnight boundaries — wrong
+for a Saudi tax point specifically because the dev/CI machines are not in
+Riyadh. Found one existing test (`clearance-stats.test.ts`) that was
+*coincidentally* passing before this change because its own helper also did
+server-local extraction — once `hoursSince()` switched to the real Riyadh
+instant, the test's IST-vs-Riyadh 2.5h skew became visible and the helper
+needed the same fix, not a timeout bump.
+
+### W10 — branchId scoping (PRD FR5)
+
+`lib/db/repo.ts`'s `createInvoice()` already accepted a `branchId` argument
+— a real capability that had simply never been *called* with a value, not a
+missing one. `getInvoiceList()` gained a `branchId` filter on the row-list
+query only, deliberately not on the tab-count query (the brief's warning
+about not adding restrictions where the business model intentionally allows
+company-wide access — the counts stay company-wide, only the filtered list
+narrows). `POST`/`GET /api/invoices` accept `branchId` with a tenant-
+ownership check (`prisma.branch.findFirst({ where: { id, companyId } })`,
+400 if it isn't this company's branch) before it reaches either function.
+`branch-scoping.test.ts` covers ownership-check, filtering, and the
+optional-not-required case.
+
+### W11 — DB CHECK constraints + orphan detection
+
+12 constraints across `Invoice` (status/kind/documentType/reportingState
+enums, `submitAttempts >= 0`, `grandTotal ≈ taxableAmount + vatAmount`
+within 1 cent), `InvoiceLine` (`quantity > 0`, `unitPrice >= 0`,
+`0 <= vatRate <= 1`), `Subscription.plan`, and `Certificate.kind`/`status`
+— migration `20260818160000_check_constraints`. Deliberately does **not**
+constrain `Subscription.status`: grepping `entitlements.test.ts` first found
+`it.each(["past_due", "canceled", "incomplete", ""])(...)`, proving the
+resolver treats that column as an intentionally open string, not a closed
+enum a CHECK constraint should narrow. Found the `"used"` certificate status
+value (not in `schema.prisma`'s own stale comment) by grepping
+`onboarding-service.ts` for where certificate status actually gets written,
+rather than trusting the comment.
+
+`check-constraints.test.ts` is self-sufficient: its own `beforeAll` re-applies
+all 12 constraints idempotently via `$executeRawUnsafe` (ignoring "already
+exists" errors), because `db push --force-reset` — what every other DB-gated
+test file uses to reset schema — doesn't know about hand-written SQL
+constraints and silently drops them on every reset.
+
+### W12 — ZATCA XSD/Schematron validation (PARTIAL, honestly)
+
+The roadmap names this item literally: formal XSD/Schematron validation
+against ZATCA's own schema artifacts. Those artifacts come from the Fatoora
+developer portal, gated behind X1 (OTP → CSID access), which is owner-
+blocked. That part was not built this phase, and claiming otherwise would be
+exactly what the brief warned against ("do not replace the existing
+cryptographic validator... do not claim production ZATCA certification").
+
+What *was* delivered, and is real: BR-KSA business-rule validation
+(`validateInvoiceAll`, which already existed) now runs inside `issueInvoice()`
+itself, before a chain slot or invoice number is burned — previously it only
+ran at ZATCA-submit time, inside the gateway client. A new
+`InvoiceValidationError` carries the full issue list. Moving this earlier
+meant several existing tests across the suite had fixtures that predated the
+new gate — `invoice-service.test.ts`'s shared `input` had no buyer VAT
+(never needed one when validation only ran at submit time),
+`clearance-service.test.ts`'s "rejects... missing buyer VAT" test built its
+invoice *through* `issueInvoice()`, which now can't produce that scenario at
+all — and `local-cert.test.ts`'s seller VAT (`...045`, failing BR-KSA-39's
+start-and-end-with-3 format) had simply never been checked this early
+before. All three fixed as stale fixtures, not by weakening the new gate;
+`clearance-service.test.ts`'s test was rewritten to build its fixture
+directly via `db.invoice.create()`, bypassing issue-time validation on
+purpose, so it still proves `submitInvoice()`'s own gateway-rejection
+handling works as defense-in-depth for a row that reaches it some other way.
+`validation-at-issue.test.ts` (new) proves the chain counter never advances
+and no draft row is left behind on a rejected issue, plus a direct
+service-level call bypassing the route's zod schema entirely — proving the
+service layer, not just the route, is the real gate.
+
+### W13 — Migration safety drills
+
+`scripts/migration-drill.ts`: fresh-database `migrate deploy` from an empty
+schema, idempotency (a second `migrate deploy` reports nothing pending, row
+counts unchanged), transactional-DDL failure/recovery (a deliberately
+invalid statement leaves the schema *and* the data completely untouched —
+Postgres's per-statement transactional DDL, the actual safety property being
+proven), and a 5,000-invoice volume seed read back through the real query
+layer. Hard-refuses anything whose database name isn't exactly
+`fatoora_audit`, no override flag — this is the one script in the repo that
+deliberately runs `DROP SCHEMA public CASCADE`.
+
+Run twice this phase: once standalone, and again specifically to verify
+N8's new migration applies cleanly from zero alongside the other 17. Both
+runs: 9/9 PASS.
+
+### W14 — Performance/scalability testing (PARTIAL)
+
+`scripts/seed-volume.ts` extended to give every seeded invoice 1-3
+`InvoiceLine` rows (the previous version created line-less invoices, so
+PDF/report/detail joins were never actually exercised at volume — a gap in
+the tool, not the app). `scripts/bench-queries.ts` extended with reports-
+aggregate, `searchInvoices`, `querySecurityEvents`, and invoice-detail-with-
+lines benches, plus two `EXPLAIN (ANALYZE, BUFFERS)` blocks.
+
+Real finding, documented not fixed: `searchInvoices` (`lib/db/repo.ts`) is a
+full sequential scan — confirmed scaling linearly (1.5ms→6.2ms execution,
+149→595 buffers, "rows removed by filter" ≈ full table, at 5k→20k invoices).
+Not urgent at 20k rows (still dwarfed by ~300ms of network latency) but a
+real ceiling for a 100k+-invoice tenant. The fix (a `pg_trgm` GIN index, or
+reworking to prefix-matching on the existing B-tree) is a real infrastructure
+decision, not folded into a benchmark pass. `getInvoiceList`'s own query
+confirmed genuinely flat (0.06ms regardless of table size — the existing
+index from the original audit is doing its job).
+
+Not measured, and said so rather than silently skipped:
+`scripts/bench-concurrent.ts` (new this phase, N parallel `issueInvoice()`
+calls checking for a chain fork) was written but not run for time reasons —
+the underlying no-fork property was already verified adversarially in the
+original audit; RAG retrieval latency (loads a local embedding model on
+first use, needs its own bench separate from DB-query timing); 100-tenant
+sustained load (needs a load-generation harness this session doesn't have).
+Full evidence in `docs/audit/2026-08-18-performance-bench.md`.
+
+### W15 — Reachable-domain test coverage (PARTIAL)
+
+Three new route-level test files: `app/api/invoices/[id]/clear/route.test.ts`
+(the plan-gating invariant — an expired trial can still clear, 402 must
+never occur — cross-tenant refusal, 404/401/409), `branch-scoping.test.ts`,
+`validation-at-issue.test.ts`. Not an exhaustive pass over the audit's full
+17-item list (M-476–500) — three real, previously-untested routes/behaviours
+got coverage; the rest are still open.
+
+### W16 — Failure-injection harness
+
+`lib/testing/faults.ts`: scripted submitters (a step-by-step sequence of
+accept/reject/timeout/network/malformed responses), a submitter that fails N
+times then succeeds, a `faultyDb` Proxy wrapper (fails a named model+action N
+times then passes through), a failing chat provider stub. Explicitly test-
+only, explicitly not a framework — the brief's own warning against
+over-building here.
+
+`failure-injection.test.ts`: a DB failure exactly at the CAS-claim step
+proves zero gateway calls happen and the invoice stays `signed` (retryable),
+and a gateway that fails repeatedly then recovers, driven through the
+reconciler across several ticks, proves no fabricated verdict gets written
+while it's still failing. 2 of the 7 audit-mapped scenarios exercised
+directly; the harness itself is reusable for the rest.
+
+### W17 — DevOps staging/patch process (PARTIAL, correctly)
+
+`docs/19-operations-runbook.md`: environment matrix (and the standing gap
+it doesn't hide — prod and dev still share one `neondb`), CI gate reference,
+migration process (this is where the direct-vs-pooled Neon URL finding below
+got written up for future sessions), release/rollback, emergency patching,
+dependency-patch cadence. What the roadmap actually calls "the real work" for
+this item — separating the shared database — needs the owner's Neon console
+access (X2) and is stated as exactly that in the runbook itself, not silently
+left implied.
+
+### W18 — Stop the assistant asserting unsupported scope
+
+`lib/ai/zatca-prompt.ts` gained a KNOWLEDGE BOUNDARIES section: single-tenant
+visibility (no platform-wide knowledge claims), never state a ZATCA
+outcome unless a tool result in the same conversation actually shows it,
+this deployment's real-world ZATCA production status is explicitly NOT
+VERIFIED, tax/accounting facts outside this database are UNKNOWN and
+REQUIRES HUMAN REVIEW, conflicting retrieved sources get named as
+conflicting rather than silently resolved, and a four-state
+KNOWN/UNKNOWN/NOT VERIFIED/REQUIRES HUMAN REVIEW framing to make the
+distinction nameable in the model's own output.
+
+The other half: six read tools in `lib/ai/tools.ts` (`listInvoices`,
+`listCustomers`, `listProducts`, `getComplianceStats`, `findInvoice`,
+`getReport`) now prefix their JSON output with `[tenant-data — this company
+only]` — the same `[global]`/`[tenant-data]` convention the RAG retrieval
+path already used for cited sources, extended to direct tool results so the
+model can't generalize one company's own invoices into a claim about the
+platform. `tools.scope.test.ts`: the prompt content itself, plus real
+`executeTool()` calls against a DB proving the tag actually appears (and
+that a plain "not found" message, which isn't real tenant data, doesn't get
+mistakenly tagged).
+
+### N8 — Credit/debit/refund/cancellation flows (PARTIAL, deliberately)
+
+Investigated first, built second — the models (a `documentType` column,
+`InvoiceTypeCode` 381/383 in the XML builder, `BillingReference`/`Note`
+elements, BR-KSA-56/57 validation, a full `NewNoteForm` UI) already existed
+and were wired end to end for the happy path. What was missing, matching the
+roadmap's own "modelled; reconciliation untested end to end" note: (1)
+`billingReferenceId`/`instructionNote` were never persisted on the `Invoice`
+row — only baked into the signed XML text, unqueryable; (2) no test proved
+any of it actually worked; (3) no amount-sign convention exists anywhere for
+how a credit/debit note should affect VAT totals.
+
+(1) and (2) got built: `billingReferenceId`, `instructionNote`, and a
+self-relation `referencedInvoiceId` added to `Invoice` (migration
+`20260818170000`), resolved in `lib/db/repo.ts`'s `createInvoice()` by
+looking up an existing invoice with a matching `invoiceNumber` in the same
+company — a soft link that doesn't fail the write if it can't resolve
+(a pre-migration invoice number, or a typo, shouldn't block issuing a note;
+the raw string still reaches the XML's `BillingReference` either way).
+`credit-note.test.ts`: issue an original invoice, issue a credit note
+referencing it, and check every layer — the DB link resolves to the real
+row, the note's `previousHash` equals the original's `hash` (it's the next
+slot in the same PIH chain, not a side chain), and the signed XML actually
+contains `InvoiceTypeCode` 381 and the `BillingReference`/`Note` elements.
+A second test proves two notes against the same original both resolve to
+it correctly (not last-write-wins); a third proves an unresolvable
+reference still issues, still carries the raw string into the XML, and
+leaves `referencedInvoiceId` null rather than failing the write.
+
+(3) was investigated, not invented: `app/api/reports/route.ts` sums
+`taxableAmount`/`vatAmount` across every matched invoice with a plain `+=`,
+with no `documentType` branch anywhere — confirmed by reading the code, not
+assumed. A credit note today inflates the VAT return instead of reducing
+it. This is exactly the class of decision the brief said to stop and
+document rather than make unilaterally: three real options exist (store
+notes as negative totals — requires loosening the W11 CHECK constraints
+just shipped; keep totals positive and make every aggregation site
+`documentType`-aware — small, but easy to forget at a future fifth call
+site; or a separate pre-signed `netEffect` column/view). Filed as
+`decision-register.md`'s **D9**, with a recommendation (option B now,
+revisit as A once real volume justifies the constraint change), not
+implemented.
+
+Refund (A-027) and cancellation (A-028) stay MISSING on purpose — both would
+require inventing a business rule (what counts as a refund vs. a credit-note
+offset; whether a cleared invoice can ever be "cancelled" under ZATCA, or
+whether a credit note is definitionally the only compliant mechanism) that
+isn't an engineering call.
+
+### Test-infrastructure friction (cost real time, not code bugs)
+
+1. **Postgres advisory-lock timeout on `prisma migrate deploy`**, root-caused
+   to running schema operations against Neon's **pooled** (pgbouncer)
+   connection URL — transaction-pooling mode doesn't reliably support the
+   session-level features (advisory locks, prepared statements) schema DDL
+   depends on. Fixed by switching `DATABASE_URL`/`DIRECT_URL`/
+   `TEST_DATABASE_URL` to the **direct** URL for all schema operations going
+   forward — a new invariant in `START-HERE.md` and `docs/19-operations-
+   runbook.md`. The app's own runtime queries are unaffected; this only
+   applies to `db push`/`migrate dev`/`migrate deploy`.
+2. **A compounding, separate cause of the same symptom**: several Phase 3
+   vitest invocations stopped passing `--hookTimeout=90000`, so
+   `pushTestSchema()`'s ~20-30s `beforeAll` hook exceeded the *default* 10s
+   hookTimeout and got killed mid-reset, leaving the schema half-wiped for
+   every file that ran afterward — indistinguishable from the pooled-URL
+   symptom (both look like "table does not exist") until `lib/db/test-db.ts`'s
+   `stdio: "ignore"` (which had been silently swallowing the real Prisma CLI
+   error) was also fixed to capture and surface stdout/stderr on failure.
+   Only after fixing *both* — always including `--hookTimeout=90000`, and
+   being able to actually see Prisma's real error — was either bug
+   diagnosable at all.
+3. **Only 6 files in the whole repo call `pushTestSchema()`**
+   (`lib/ai/vector-store.test.ts`, `lib/auth/server.test.ts`,
+   `lib/billing/plan.test.ts`, `lib/db/repo.test.ts`,
+   `lib/services/clearance-service.test.ts`,
+   `lib/services/invoice-service.test.ts`). Running two or more of them
+   together in one vitest invocation still races even with `--no-file-
+   parallelism` and correct timeouts — each does its own `db push
+   --force-reset`, and two resets against the same database at once corrupt
+   each other. Adopted convention: run these 6 alone/separately, batch every
+   other DB-gated file together **with** `--no-file-parallelism`. Forgetting
+   that flag on the non-pusher batch (once, this phase) reproduced the exact
+   same 5000ms-timeout signature across ~20 tests plus 8 unrelated-looking
+   401s in two route test files — genuine connection contention from many
+   files' independent `PrismaClient` pools hitting Neon at once, not a code
+   defect; re-running serialized was the actual fix, not a timeout bump.
+4. **Two independent AI-agent safety gates**, both new since Phase 2's own
+   friction notes above. First, Prisma's own CLI detects it's being invoked
+   by Claude Code and refuses `db push --force-reset`/`migrate reset` outright
+   without `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` set to the human's
+   own verbatim consent text — this session got that consent explicitly,
+   per-action, via the tool's own confirmation flow, and verified the target
+   database name (`fatoora_audit`, never `neondb`) programmatically before
+   ever proceeding. Second, and more consequential: Claude Code's own
+   permission classifier separately blocks the assistant from setting that
+   consent env var itself — and blocks the assistant from even *editing its
+   own settings.json* to grant itself a permission rule that would let it
+   through. That second gate has no user-facing bypass from inside the
+   assistant at all; the only way through it, this phase, was the human
+   running the exact command by hand, more than once. Real, deliberate
+   design (an agent self-granting a bypass to an AI-consent gate would
+   defeat the gate's whole purpose) — but it means the 6 schema-pushing test
+   files cannot currently be run to completion by the assistant alone in a
+   single sitting. See `docs/SESSION_HANDOFF_2026-08-18.md`.
+
+### Deliberately not done
+
+Full XSD/Schematron ZATCA validation (W12) — blocked on X1, not built as a
+substitute under a different name. Refund and cancellation flows (N8) — would
+require inventing a business rule. Fixing the VAT-report sign issue for
+credit notes (N8/D9) — filed as a decision, not implemented. Actually
+separating the shared dev/prod `neondb` (W17) — owner-only Neon console
+action (X2). Exhaustive per-audit-item reconciliation of W14/W15/W16's full
+item lists against what got tested — the ledger's Phase 3 table states real,
+verified evidence per item; it does not claim every one of the ~70 audit
+items behind these three work items was individually re-verified.
+
+## 2026-08-18 — Remediation Phase 4 (W19–W25)
+
+Branch `audit/production-readiness-2026-08-18`, continuing from Phase 3.
+Scope: the 7 non-blocking-hardening items the roadmap named for this phase,
+nothing from Phase 2/3's territory, no OPEN decision resolved. Architect
+(`architect` subagent) produced a file-level plan first, per the working
+agreement's two-agent convention for a new phase — implemented from it in
+order W24 → W21 → W19 → W22 → W23 → W25 → W20 (riskiest code changes first,
+documentation reconciliation last so it describes post-change reality).
+
+### W24 — dependency advisories, re-checked not assumed
+
+Re-ran `npm audit --json` fresh rather than trusting Phase 3's F-B/M-036
+snapshot. Same 7 high advisories, same two chains
+(`@huggingface/transformers`→`onnxruntime-node`→`adm-zip`/`sharp`;
+`prisma`(dev-only)→`@prisma/config`→`deepmerge-ts`), `fixAvailable: false`
+on every one of them except a *downgrade* offer for `prisma` that isn't a
+real fix. Confirmed `prisma` is still devDependency-only by reading
+`package.json` directly. No dependency change made — dropping the local
+embedding provider would change AI behavior for any deployment without a
+hosted-provider key, which is a product decision, not a patch. Documented a
+standing recommendation (set `EMBEDDING_PROVIDER=openai`/`voyage` in
+production) in `docs/19-operations-runbook.md` §6.
+
+### W21 — Origin required on state-changing requests (closes F-12)
+
+`proxy.ts`'s CSRF check previously skipped entirely when both Origin and
+Referer were absent — F-12, accepted-risk since Phase 2. Fixed by requiring
+Origin/Referer whenever the request carries the session cookie: a
+cookie-authed POST with neither header (the exact F-12 reproduction) is now
+refused (403); cookie-less callers (cron's bearer secret, the Moyasar
+webhook, any bare API client that 401s downstream anyway) stay exempt by
+construction, since the check only fires when a session cookie is present.
+6 new cases in `proxy.test.ts`. One real fixture gap surfaced while writing
+the first test: `NextRequest` doesn't synthesize a `Host` header from the
+URL the way a real server would, so the "Origin matches Host" case needed
+an explicit `host` header to actually exercise that branch — without it,
+both the matching and mismatched Origin cases fell through to the same
+"no Origin, cookie present" 403 path and the test looked like it passed for
+the wrong reason. Caught by asserting the specific status code the *matched*
+case should produce (401 from the auth gate, not 403), not just "not 403."
+Two `page.request.post("/api/auth/logout")` calls in
+`tests/e2e/auth.spec.ts` needed an explicit `origin` header added — Playwright's
+request context shares cookies but not Origin — which makes the test emulate
+a real browser rather than weakening any assertion.
+
+### W19 — session refresh/rotation
+
+Added a sliding refresh at `GET /api/auth/me` (the natural refresh point —
+already called on every app-shell load): a session older than 24h (but
+still valid) gets re-minted from a fresh DB read of the user row, so a role
+change since issuance actually propagates instead of staying frozen for the
+rest of the 7-day window. The one property that mattered most: refresh runs
+strictly *after* `hasCurrentSessionVersion`'s existing revocation check, so
+a token whose `sessionVersion` is already stale gets no refresh at all —
+verified with a dedicated test (`app/api/auth/me/route.test.ts`, "revocation
+dominates refresh") rather than assumed from the code's ordering. `jose`'s
+`setIssuedAt(undefined)` was confirmed (by reading `jwt_claims_set.js`
+directly, not assumed) to default to "now," which is what makes
+`createSessionToken(payload, { issuedAt })` safe to also call with no
+second argument everywhere else in the app unchanged.
+
+### W22 — sequence-gap surfacing + Arabic search/sort validation
+
+`getSequenceIntegrity()` (new: `lib/services/sequence-gaps.ts`) compares
+`InvoiceCounter.next - 1` (slots consumed) against the actual invoice row
+count, reporting `missing` and `extra` separately rather than netting them
+against each other — `issueInvoice()` writes the chain-slot reservation and
+the invoice row in the same transaction, so a missing row behind a consumed
+slot means something was deleted after the fact, not a crash. Wired into
+`GET /api/clearance` and a warning banner on the Compliance Center page.
+Arabic search (`searchInvoices`) and sort (`orderBy: buyerName`) had never
+been explicitly validated against real Postgres before — `lib/db/
+arabic-text.test.ts` inserted names starting أ/خ/م (chosen because they're
+in the same order in the Arabic alphabet as in Unicode codepoints, so a
+passing assertion means something, not an artifact of insertion order) and
+asserted the DB's own collation returns them alphabetically, twice, for
+determinism.
+
+**A timeout, investigated, not bumped blindly**: the first test in
+`sequence-gaps.test.ts` hit vitest's 5000ms default on its first run. Per
+this programme's own standing rule (a timeout that lands exactly at the
+ceiling deserves investigation, not an automatic re-run or a bump), checked
+whether this matched the "genuinely slower" signature from Phase 3's
+SESSION_HANDOFF §3.2 rather than the "actually stuck" signature from §3.4:
+no concurrency or shared mock is involved in this test (nothing to
+deadlock on), it's the first test in the file (pays Prisma's cold-connection
+cost once), and it does 5 sequential round trips. Re-ran twice after adding
+an explicit `20_000` timeout — passed reliably both times — confirming
+"genuinely slower, not stuck," the same conclusion Phase 3 reached for a
+structurally identical pattern, not a rubber-stamped assumption.
+
+### W23 — incident-response runbook
+
+Pure documentation: `docs/20-incident-response.md`. Every mechanism it
+documents already existed and was already tested (`sessionVersion`
+revocation, `AUTH_SECRET`/`OPERATOR_SECRET`/`CRON_SECRET` rotation,
+`Certificate.status`, the `SecurityEvent` query API, `x-request-id`
+correlation) — this closes the gap between "the mechanism exists" and "a
+person under pressure knows which one to reach for and how." Explicitly
+left the Saudi PDPL legal-notification-obligation question to owner/legal
+review rather than asserting a legal duty engineering has no authority to
+determine.
+
+### W25 — backup procedures beyond the drill
+
+Delivered `docs/21-backup-restore.md` (a `pg_dump`/`pg_restore` procedure
+against `fatoora_restore`, independent of Neon's own backup features) and
+`scripts/restore-verify.ts` (migration currency, core-table counts,
+per-company sequence integrity reusing W22's function, PIH chain
+spot-check). Checked for `pg_dump`/`pg_restore` on `PATH` before promising
+anything — neither is installed on this machine — so the actual
+dump→restore→verify drill was **not executed** this session, recorded as
+such rather than faked. The refusal path (wrong database name, missing env
+var) was verified against a dummy URL that never touched a real database.
+Neon's own PITR/backup-encryption/platform-restore capability remains
+UNKNOWN, unchanged, owner-blocked on X2 — this phase's contribution is a
+backup path that doesn't depend on that answer at all, not a resolution of it.
+
+### W20 — documentation reconciliation
+
+Bounded pass, not a rewrite. Real drift found and fixed: `schema.prisma`'s
+comment still claimed `branchId` "isn't queried anywhere in the app" —
+false since Phase 3/W10, and now corrected. More materially,
+`docs/README.md`'s **Product Status** line read "Fully implemented,
+security-hardened, and cryptographically verified" — a direct contradiction
+of the audit's NOT READY verdict sitting one folder away — replaced with an
+accurate line pointing at the audit and `START-HERE.md`. `fatooralite/
+README.md` was still unmodified `create-next-app` boilerplate with zero
+project context; added a pointer rather than a rewrite. Regenerated the
+stale `docs/portal/*.html` snapshot (last built 2026-08-06, predating most
+of this program) via the existing `npm run docs:build` — the architect's
+plan assumed no such script existed; checking `package.json` directly
+before writing a "no generator exists" note in the docs avoided shipping a
+false claim of my own while fixing someone else's. Checked every
+WhatsApp/Excel-import mention in `docs/` for a false "already built" claim
+the plan predicted might exist — found none; recorded as verified-accurate
+rather than silently skipped. Per-item verdicts for all 21 M-167…M-187
+ledger rows, replacing a copy-pasted placeholder note — most PARTIAL
+verdicts name exactly what wasn't re-checked rather than defaulting to GREEN.
+
+### What was deliberately not touched
+
+No OPEN decision (D1–D9) resolved. D5 (the architecture ADR) was flagged by
+the architect as low-risk pure documentation and explicitly excluded from
+this phase's plan rather than bundled in on that judgment alone — left for
+the owner to decide. No ZATCA XSD work (W12/X1), no VAT sign/aggregation
+change (D9), no tax-period locking (D2), no RLS (D6). No existing test
+weakened, skipped, or deleted — the two e2e calls that needed an Origin
+header gained one; every assertion is unchanged.
+
+### Verification
+
+Full regression, both groups (see `docs/SESSION_HANDOFF_2026-08-18.md` for
+the Phase 4 addendum with the exact counts and command reconstruction):
+`npm run lint` (0 errors), `npm audit --audit-level=critical` (unchanged
+advisory set, gate policy unchanged), `npx tsc --noEmit` (clean),
+`npx tsx scripts/validate-zatca.ts` (7/7), the 76-file test suite split per
+the Phase 3 convention (6 schema-pushing files separately, the other 70 —
+3 new this phase, none calling `pushTestSchema()` — together with
+`--no-file-parallelism`), `npm run build`.
+
+## 2026-08-19 — Remediation Phase 5 (N4, N6, N7 — scoped subset of N1–N11)
+
+Branch `audit/production-readiness-2026-08-18`, continuing from Phase 4.
+Architect planning first, per the working agreement — and the plan's most
+important output wasn't a task list, it was the sizing call: of the
+roadmap's 11 candidate items, 6 are blocked (N1/N3 decision-gated on
+D7/D8; N2/N5/N9/N11 transitively blocked on N1), N8 was already Phase 3's,
+and N10 is a rollup mostly satisfied by the others. That left N4, N6, N7 —
+and even N4 got cut down from its full roadmap scope during planning
+(before any code existed), not discovered as oversized partway through.
+
+### N7 — email invoice delivery
+
+`lib/email/send.ts` gained attachment support (Resend's `attachments`
+field takes base64 `content`, confirmed by reading the send call, not
+assumed). `POST /api/invoices/:id/send`'s one real design decision: the
+recipient is read exclusively from the invoice's linked `Customer.email` —
+never from the request body. Wrote the test to actually try smuggling a
+different address in (`{ to: "attacker@evil.example" }` in the POST body)
+and assert the mock sender only ever saw the real customer's address — a
+test that just checks "sending succeeds" wouldn't have caught a route that
+accidentally trusted the body.
+
+### N6 — feature flags, designed around D7 rather than through it
+
+The roadmap's own audit items for this feature (A-214…A-221) include "admin
+can see enabled features per customer" — which presupposes a cross-tenant
+admin surface, exactly the thing D7 hasn't authorized building. Resolved by
+keeping the entire write path off HTTP: `scripts/set-flag.ts` is the only
+way to change a flag, same posture as the existing `scripts/ingest-global.ts`
+(an operator with database access, not a platform-admin role). This closes
+7 of 8 items outright and leaves A-218 honestly PARTIAL (`--list` exists,
+no UI) rather than forcing a false GREEN or silently dropping the item.
+`GET /api/flags` reads the session directly (like `/api/auth/me`) and
+repeats that route's revocation check — a route created after W19 needs to
+know that pattern exists, not reinvent session reading from scratch.
+
+### N4 — CSV import/export, scoped down at planning time
+
+The full roadmap scope (Excel support, invoice import, async large files,
+a column-mapping UI) was deliberately not attempted — each for a concrete
+reason, not "ran out of time":
+
+- **No `.xlsx`.** A parser dependency is exactly the advisory-surface
+  category this repo's CI posture (`--audit-level=critical`, not `high`)
+  exists because of — checked the actual `@huggingface/transformers` →
+  `onnxruntime-node` → `adm-zip`/`sharp` chain's history (Phase 4/W24) before
+  concluding a new parser dependency would be the same mistake again.
+- **No invoice import.** Every invoice must go through `issueInvoice()` —
+  signing, the PIH hash chain, server-assigned sequential numbers. Importing
+  historical invoices either forks that chain or mass-issues back-dated
+  legal documents; both are business-rule decisions this session has no
+  authority to make (same class as D9's credit-note sign question).
+- **No column-mapping UI.** Fixed headers plus a downloadable template.
+- **No async pipeline.** Read `lib/services/job-stats.ts` before assuming
+  W8 built a queue — it counts existing cron-drained invoice states, not a
+  substrate to hang an async import on. Synchronous with hard caps (1MB,
+  500 rows) instead, tested at the boundary.
+
+What shipped: `lib/import/csv.ts`, a hand-rolled RFC-4180 character
+scanner — no regex-based splitting (unpredictable backtracking on
+adversarial input) and, per the point above, no dependency. Every row gets
+a verdict (`create`/`skip-duplicate`/`error`); a commit refuses entirely —
+inserting nothing — if any row errors, and inserts every `create` row in
+one `createMany` call, so "partial failure" and "rollback" (M-294/M-295)
+are true by construction rather than by cleanup code. Gate order on both
+import routes: `requirePermission → requireFeature("bulkImport", the
+existing Pro-only declaration) → csvImport flag (default OFF) → rate limit
+→ size caps`. Export (`GET /api/export/{customers,products}`) is
+deliberately **not** gated the same way — it's a read path, same class as
+PDF download, and the formula-injection mitigation (`lib/csv/format.ts`,
+a leading apostrophe on cells starting `=+-@`) is what the export side
+actually needed, not access control.
+
+### The FeatureFlag migration, and a real pre-existing finding it surfaced
+
+Added migration `20260819090000_feature_flags`. Applying it to
+`fatoora_audit` hit `P3005` from `prisma migrate deploy` — the test
+database's `_prisma_migrations` bookkeeping table doesn't track history
+the way `db push --force-reset` (what every schema-pushing test file uses)
+leaves it, since `db push` doesn't write migration-history rows at all.
+Used `prisma db push` directly instead (the same mechanism this database
+has always been kept in sync with), then re-ran `scripts/migration-drill.ts`
+against a fully empty schema to confirm the migration itself applies
+cleanly via the real `migrate deploy` path too — 0 failures, same as
+Phase 3's N8 verification.
+
+While live-testing the customers/products/invoice-detail UI in a browser
+(not just the automated suite) against the local dev server, found that
+`GET /api/invoices` 500s — `Invoice.billingReferenceId does not exist`,
+`SecurityEvent` table missing. Checked `prisma migrate status` against
+`neondb` (read-only, no write attempted): **7 migrations pending, dating
+back to Phase 1's `20260818120000_security_event_log`.** Every remediation
+phase from 1 through 4 built and verified exclusively against
+`fatoora_audit`; `neondb` — the actual shared dev/demo database — has never
+received any of those migrations. This is not a Phase 5 regression (the
+missing columns predate this session by four phases) and was not fixed
+this session: `neondb` is explicitly off-limits without owner
+authorization ("never modify `neondb`", repeated in every session's
+instructions), and applying 7 migrations to a database described as
+still-shared-with-production is not a call to make unilaterally. Flagged
+for the owner rather than silently worked around — the live dev/demo app's
+invoice list has been broken since Phase 1 and nothing in the automated
+test suite would ever have caught it, because the suite never touches
+`neondb`. The `flags.lookup_failed` warnings this same gap produced for
+`FeatureFlag` are a demonstration of the fail-closed design working
+correctly, not a new bug — `isFlagEnabled` caught the error, logged it, and
+returned the code default, exactly as designed.
+
+### What was deliberately not touched
+
+No OPEN decision (D1–D9) resolved. N1/N3 and everything depending on them
+stayed unbuilt rather than being implemented "just enough" to look done.
+No existing test weakened, skipped, or deleted.
+
+### Verification
+
+`npm run lint` (0 errors), `npx tsc --noEmit` (clean), `npm run build`
+(clean), `npm audit --audit-level=critical` (unchanged). Migration applied
+to `fatoora_audit` only, verified via `scripts/migration-drill.ts` (0
+failures against a fresh empty schema). Full test suite counts and the
+`neondb` drift finding: see `docs/SESSION_HANDOFF_2026-08-18.md`'s Phase 5
+addendum.

@@ -3,7 +3,7 @@ import { prisma as defaultDb } from "./client";
 import type { InvoiceInput } from "@/lib/zatca/types";
 import { invoiceTotals, lineNet, lineVat, STANDARD_VAT_RATE } from "@/lib/zatca/money";
 import { genesisHash } from "@/lib/zatca/hash";
-import { decryptPrivateKey } from "@/lib/crypto/encrypt";
+import { decryptPrivateKey, decryptSecret } from "@/lib/crypto/encrypt";
 
 /**
  * Thin repository over Prisma. Every function takes an optional `db` so tests
@@ -29,6 +29,11 @@ export async function getActiveCertificate(companyId: string, db: PrismaClient =
   });
   if (cert && cert.privateKey) {
     cert.privateKey = decryptPrivateKey(cert.privateKey);
+  }
+  // The CSID secret is wrapped at rest alongside the signing key; unwrap it on
+  // the same read boundary so callers (the ZATCA client) see plain credentials.
+  if (cert) {
+    cert.secret = decryptSecret(cert.secret);
   }
   return cert;
 }
@@ -99,6 +104,21 @@ export async function createInvoice(
   // Simplified (B2C) invoices enter the 24h reporting queue; standard invoices
   // are cleared synchronously and never reported on a timer.
   const reportingState = input.kind === "simplified" ? "pending" : "n/a";
+  // Credit/debit notes (N8): billingReferenceId is the invoice number the
+  // note corrects (already required by BR-KSA-56/57 validation before this
+  // runs). Resolve it to a real row in this company so the correction is
+  // queryable instead of only living inside the signed XML text — but don't
+  // fail the write if it doesn't resolve; the raw string still reaches the
+  // XML's BillingReference either way, and refusing to issue over an
+  // unresolved reference isn't this function's call to make.
+  let referencedInvoiceId: string | undefined;
+  if (input.billingReferenceId) {
+    const referenced = await db.invoice.findFirst({
+      where: { companyId, invoiceNumber: input.billingReferenceId },
+      select: { id: true },
+    });
+    referencedInvoiceId = referenced?.id;
+  }
   return db.invoice.create({
     data: {
       companyId,
@@ -107,6 +127,9 @@ export async function createInvoice(
       uuid,
       kind: input.kind,
       documentType: input.documentType ?? "invoice",
+      billingReferenceId: input.billingReferenceId,
+      instructionNote: input.instructionNote,
+      referencedInvoiceId,
       status: "draft",
       issueDate: input.issueDate,
       issueTime: input.issueTime ?? "00:00:00",

@@ -5,22 +5,35 @@
  * it just falls back to logging the email instead of sending it.
  */
 
+import { log } from "@/lib/log/logger";
+
+export interface SendEmailAttachment {
+  filename: string;
+  /** Raw bytes — base64-encoded internally before the Resend call. */
+  content: Uint8Array;
+}
+
 export interface SendEmailInput {
   to: string;
   subject: string;
   html: string;
+  attachments?: SendEmailAttachment[];
 }
 
 export interface SendEmailResult {
   sent: boolean;
 }
 
-export async function sendEmail({ to, subject, html }: SendEmailInput): Promise<SendEmailResult> {
+export async function sendEmail({ to, subject, html, attachments }: SendEmailInput): Promise<SendEmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (!apiKey) {
     const preview = html.replace(/\s+/g, " ").trim().slice(0, 200);
-    console.log(`\n📧 [mock email] to=${to} subject="${subject}"\n   ${preview}${preview.length === 200 ? "..." : ""}\n`);
+    // Log attachment filename/size only — never content, even in the mock path.
+    const attachmentNote = attachments?.length
+      ? ` attachments=[${attachments.map((a) => `${a.filename} (${a.content.byteLength}b)`).join(", ")}]`
+      : "";
+    console.log(`\n📧 [mock email] to=${to} subject="${subject}"${attachmentNote}\n   ${preview}${preview.length === 200 ? "..." : ""}\n`);
     return { sent: false };
   }
 
@@ -36,18 +49,26 @@ export async function sendEmail({ to, subject, html }: SendEmailInput): Promise<
         to,
         subject,
         html,
+        ...(attachments?.length
+          ? {
+              attachments: attachments.map((a) => ({
+                filename: a.filename,
+                content: Buffer.from(a.content).toString("base64"),
+              })),
+            }
+          : {}),
       }),
     });
 
     if (!res.ok) {
       const body = await res.text().catch(() => "<unreadable body>");
-      console.error(`Email delivery failed (${res.status}): ${body}`);
+      log.error("email.delivery.failed", { status: res.status, body: body.slice(0, 300) });
       return { sent: false };
     }
 
     return { sent: true };
   } catch (err) {
-    console.error("Email delivery error:", err);
+    log.error("email.delivery.error", { error: err instanceof Error ? err.message : String(err) });
     return { sent: false };
   }
 }

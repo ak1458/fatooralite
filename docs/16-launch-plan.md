@@ -434,3 +434,279 @@ over another reading pass.
 
 The owner-blocked items at the top gate the actual launch date regardless of
 where engineering gets to.
+
+---
+
+## Production audit — 2026-08-18
+
+Ran the Master Production Audit and the Advanced Audit Addendum together as one
+specification: **1069 actionable items**, all reconciled. Full report, findings
+register and per-item ledger in `docs/audit/`.
+
+**Verdict: NOT READY**, on two blockers, neither of which is engineering work
+left undone in this repository:
+
+1. No ZATCA round trip has ever been performed — blocked on a Fatoora portal OTP.
+   Local validation (7/7) and sandbox reachability are the only levels verified.
+2. Arabic invoice PDFs cannot be generated at all (`WinAnsi cannot encode "ش"`).
+
+### Delivered versus planned
+
+Planned: audit, report, and fix what is safely fixable.
+Delivered: **13 defects fixed**, each FAILED → FIXED → RETESTED → GREEN, and the
+test suite moved from **285 passed / 43 skipped to 363 passed / 0 skipped**.
+
+Four of the thirteen were financial or compliance-affecting:
+
+- Document-level discounts computed VAT on the undiscounted base, and the XML's
+  TaxSubtotal rows disagreed with the document total (EN16931 BR-CO-13/17).
+  Latent — no caller supplies allowances yet — but the UBL builder emits them.
+- VAT returns filtered on `createdAt` against server-local month boundaries, so
+  invoices landed in the wrong tax period.
+- The ZATCA CSID secret was stored in clear text beside an encrypted private key.
+- The `submitted` invoice state was documented and read but never written, so a
+  crash after ZATCA accepted looked exactly like never having sent.
+
+### What this phase confirmed about method
+
+The single highest-value action was **running the tests that had never run**.
+CI had reported 285 passed / 43 skipped for a long time; the skipped half
+included a suite that was itself broken (a hard-coded VAT number on a unique
+column), so 18 licensing assertions had never executed once. A skipped test is
+not a passing test, and the CI gate was structurally unable to say so.
+
+That extends the note above: prefer running the app, prefer tests whose
+expectations come from the schema — and check that your tests actually execute.
+
+### Not done, deliberately
+
+Arabic PDF rendering (needs a shaping engine, not a patch), the security audit
+trail (needs a migration and a read surface), and the VAT-return scope question
+(a tax decision, not an engineering one) are all documented in the report with
+the reasoning, rather than half-built.
+
+---
+
+## Remediation Phase 1 — 2026-08-18
+
+Programme planned in full (`docs/audit/remediation-roadmap.md`), then **one phase
+executed**. Delivered W1 (Arabic invoice PDF) and W2 (security/actor audit
+trail), the two P0 blockers that were solvable in this repository.
+
+Ledger moved **461 → 481 GREEN** of 1069. Test suite **363 → 402 passed, 0
+skipped**. All five CI gates green.
+
+W1 chose an embedded Unicode font over an HTML→PDF pipeline because pdf-lib
+already runs fontkit's OpenType shaper — the joining behaviour was there, only
+the font and a bidi pass were missing. That avoided putting Chromium into a
+serverless deployment for a capability the codebase nearly had.
+
+Three RTL items stay PARTIAL rather than being claimed: Arabic text renders
+correctly everywhere, but a *mirrored* right-to-left page layout is a design
+change and was not done.
+
+Phase 2 (W3 idempotency/reconciliation, W4 observability, W5, W6, W7, W26) is
+planned and **not started**. Three decisions — D1 VAT-return scope, D7 Control
+Center launch requirement, D8 WhatsApp launch scope — are analysed with
+recommendations and await the owner.
+
+---
+
+## Remediation Phase 2 — 2026-08-18
+
+All six planned work items delivered: W3 (idempotency + ZATCA submission
+reconciliation + retry policy), W4 (observability), W5 (server-minted AI
+confirmation tokens), W6 (global RAG re-index restriction + AI usage
+accounting), W7 (deployment configuration correctness), W26 (closed the
+remaining RISK findings). Full write-up in `handoff.md`'s 2026-08-18 Phase 2
+entry; ledger detail in `docs/audit/remediation-ledger.md` and
+`docs/audit/2026-08-18-ledger.md`.
+
+W3's design decision — an atomic compare-and-swap `updateMany` on the
+`signed`/`rejected` → `submitted` transition, instead of a row lock held
+across the gateway call — came from the `architect` subagent, invoked
+because the crash-window/retry-policy problem had real architectural
+ambiguity (schema shape, what "reconciliation" can honestly mean when ZATCA
+has no status-lookup endpoint). Everything else in the phase was
+unambiguous enough to implement directly.
+
+W26 turned up one genuine surprise: F-16 ("invalid UTF-8 in a URL yields a
+framework-level 500"), carried as an accepted risk since the original audit,
+does not reproduce anymore — reconfirmed live against the current Next.js
+version with the original byte sequences plus four more aggressive ones, on
+both a page and an API route. Most likely fixed incidentally by the Next.js
+16.3.0 upgrade done for Phase 1/5's security work. Locked in with a
+regression test rather than left as an unverified carried-over assumption.
+
+Two pre-existing tests in `lib/billing/plan.test.ts` (unrelated to Phase 2
+scope) time out under current Neon latency — a 25-30-iteration sequential
+insert loop, not a logic bug. Documented in `handoff.md`, not fixed
+(out of scope: billing/licensing, not W3–W7/W26).
+
+---
+
+## Remediation Phase 3 — 2026-08-18
+
+12 planned items (W8–W18, N8) plus three investigations carried over from
+Phase 2's own completion report (F-A, F-B, F-C), plus one more real bug
+found during final verification. Full write-up in `handoff.md`'s
+2026-08-18 Phase 3 entry; per-item evidence in `docs/audit/
+remediation-ledger.md`'s Phase 3 table and Phase 3 outcome section. Full
+regression confirmed clean before closing: 73 test files, 497 tests, 0
+failed, 0 skipped — see `docs/SESSION_HANDOFF_2026-08-18.md` for the exact
+run mechanics and root-cause detail.
+
+**F-A/F-B/F-C closed first**, per the brief: F-A (`plan.test.ts` timeouts)
+root-caused to the sequential-insert loop flagged in Phase 2's own note above
+— fixed with a single batched `createMany`, not a timeout bump. F-B
+(`deepmerge-ts` advisory) investigated to an accepted-risk conclusion: dev-
+dependency-only, unreachable code path, no fix at any Prisma version — no
+blind up/downgrade. F-C (Windows `validate-zatca.ts` libuv teardown) fixed by
+switching `process.exit()` to `process.exitCode` — the real race, not
+exit-code suppression. A fourth, unplanned finding surfaced during the
+phase's own final regression: `clearance-crash.test.ts`'s concurrent-
+submission test deadlocked under real network latency because it assumed
+JS call order matched the database's claim-race order — fixed the same way
+as the other three, by finding the real mechanism (temporary timing
+instrumentation) rather than raising its timeout indefinitely.
+
+**W8–W11, W13, W18 are DONE outright.** W9 (Asia/Riyadh timezone) touched the
+widest surface of the phase — every place issue-time/period-boundary math
+previously used server-local `Date` or UTC midnight now goes through
+`lib/time/riyadh.ts`. W12 (ZATCA XSD/Schematron validation) is **PARTIAL by
+necessity**: the roadmap itself gates full validation on X1 (owner-blocked
+Fatoora portal access for the actual schema files); what shipped instead is
+issue-time BR-KSA business-rule validation, moving an existing check earlier
+in the pipeline rather than adding the schema validation X1 blocks. W14, W15,
+W17 are PARTIAL with the gap named plainly (infra this session doesn't have,
+partial route coverage, and an owner-only Neon console action, respectively).
+
+**N8** (credit/debit notes, promoted from Phase 5) shipped the part that was
+missing and testable — persisted `billingReferenceId`/`instructionNote`/
+`referencedInvoiceId`, verified end to end against a real signed XML and a
+real PIH chain — and explicitly did **not** invent the two things that
+needed a business decision it isn't this session's to make: refund and
+cancellation flows stay MISSING, and a new decision (**D9**, whether credit
+notes should subtract from VAT totals instead of adding) was filed rather
+than resolved unilaterally.
+
+A meaningful chunk of this phase's time went to test-infrastructure
+archaeology, not application code: a Postgres advisory-lock timeout on
+`prisma migrate deploy` root-caused to using Neon's **pooled** connection URL
+for schema operations (pgbouncer's transaction-pooling mode doesn't reliably
+support the session-level features schema DDL needs) — fixed by switching to
+the **direct** URL for all schema operations, a new invariant recorded in
+`START-HERE.md`. Separately, two independent AI-agent safety gates (Prisma's
+own consent check, and Claude Code's own permission classifier — which also
+blocks an agent from self-granting that consent by editing its own
+`settings.json`) meant the schema-pushing DB-gated test files needed a human
+to literally run the command by hand at several points in this phase, not
+just once.
+
+---
+
+## Remediation Phase 4 — 2026-08-18
+
+7 planned items (W19–W25), non-blocking hardening per the roadmap. Full
+write-up in `handoff.md`'s 2026-08-18 Phase 4 entry; per-item evidence in
+`docs/audit/remediation-ledger.md`'s Phase 4 table and Phase 4 outcome
+section.
+
+**W19, W21, W22, W23, W24 are DONE outright.** W19 (session refresh/
+rotation) adds a sliding refresh at `GET /api/auth/me`, re-minted from a
+fresh DB read so a role change actually propagates instead of staying
+frozen for the token's remaining life — strictly after the existing
+`sessionVersion` revocation check, so revocation always dominates. W21
+(Origin required on state-changing requests) closes F-12 by requiring
+Origin/Referer whenever the session cookie is present, with cookie-less
+machine clients (`cron`, the Moyasar webhook) exempt by construction. W22
+adds `getSequenceIntegrity` (a consumed chain slot with no invoice row
+behind it means a record was lost, not a crash — `issueInvoice` writes both
+in one transaction) surfaced on the Compliance Center page, plus explicit
+Arabic search/sort validation against real Postgres collation (previously
+assumed, never checked). W23 is a pure-documentation close:
+`docs/20-incident-response.md` turns five already-existing revocation
+mechanisms into an actual playbook. W24 re-ran `npm audit` fresh rather than
+trusting Phase 3's snapshot — same 7 advisories, still no fix at either
+chain; no dependency change, a standing recommendation to set a hosted
+embedding provider in production documented instead.
+
+**W20 and W25 are PARTIAL, honestly.** W20 (documentation reconciliation)
+found and fixed real drift — a stale schema comment claiming branchId isn't
+queried (false since Phase 3/W10), and, more materially, `docs/README.md`
+asserting "Fully implemented, security-hardened, and cryptographically
+verified" as the **Product Status** line, directly contradicted by the
+audit's NOT READY verdict — but this was a bounded reconciliation pass
+against 21 named items, not an exhaustive line-by-line diff of every doc;
+the items not deeply re-checked are named as such rather than marked GREEN
+by default. W25 (backup procedures) delivers a working `pg_dump`/
+`pg_restore` procedure and `scripts/restore-verify.ts` (its refusal path
+verified against a dummy URL), but the actual dump→restore→verify drill
+was **not executed** — this machine has no postgres client tools installed,
+checked rather than assumed. Neon's own PITR/backup-encryption/
+platform-restore capability stays unverified, owner-blocked on X2, exactly
+as it was before this phase.
+
+No OPEN decision (D1–D9) was touched. D5 (the architecture ADR) was
+explicitly flagged by the architect as excluded from this phase's plan
+rather than bundled in — a call left to the owner, not made here.
+
+Full regression: see `docs/SESSION_HANDOFF_2026-08-18.md`'s Phase 4
+addendum for the exact count and the run mechanics (three new test files
+added, all joining the existing non-schema-pushing batch — none call
+`pushTestSchema()`).
+
+---
+
+## Remediation Phase 5 — 2026-08-19
+
+The roadmap named 11 candidate product features (N1–N11) for this phase.
+Architect planning (per the working agreement's two-agent convention)
+established up front that most were not actually buildable this phase: **N1**
+(Customer Control Center) and **N3** (WhatsApp) are each gated on an OPEN
+decision (D7, D8) — building either would resolve that decision by fiat,
+which this program's own rules forbid doing unilaterally. **N2, N5, N9, N11**
+all depend on N1 in the roadmap's own dependency column, so they're
+transitively blocked with it. **N8** was already handled in Phase 3 and
+wasn't Phase 5's to redo. That left **N4** (CSV import/export), **N6**
+(feature flags) and **N7** (email invoice delivery) as the actually-buildable
+set — all three shipped, plus **N10** closed as a rollup (mostly satisfied by
+N4/N7, one item — "External APIs" — recorded as underspecified rather than
+invented scope).
+
+**N7 (email invoice delivery)** extends the existing `lib/email/send.ts`
+with PDF attachment support and adds `POST /api/invoices/:id/send`. Its
+single load-bearing design decision: the recipient comes exclusively from
+the invoice's linked `Customer.email`, never the request body — this
+removes the "free email relay to any address" abuse shape by construction,
+not by validation. Not plan-gated (same read-path reasoning as PDF
+download).
+
+**N6 (feature flags)** had to be designed around D7 rather than through it:
+one audit item (A-218, "admin can see enabled features per customer")
+presupposes a cross-tenant admin surface this program has no authority to
+build. The resolution — flags are set only via `scripts/set-flag.ts`, an
+operator-with-database-access tool, never over HTTP — keeps the whole
+feature D7-neutral while still closing 7 of 8 A-214…A-221 items outright
+(A-218 stays honestly PARTIAL). Precedence is env override (a kill switch)
+over per-company row over code default; a DB failure resolves to the code
+default rather than erroring.
+
+**N4 (CSV import/export)** was deliberately cut down from the roadmap's full
+scope during planning, not mid-implementation: no `.xlsx` support (would
+need a parser dependency this repo's CI posture exists specifically to
+avoid — see the transformers/adm-zip/sharp advisory history), no invoice
+import (would either fork the ZATCA signing/PIH chain or mass-issue
+back-dated legal documents — an undecided business rule, same class as D9),
+no column-mapping UI (fixed headers + a template instead), no async
+pipeline for large files (no job queue exists to hang one off — confirmed by
+reading W8, which turned out to be stats over cron-drained states, not a
+queue). What shipped: synchronous CSV import/export of customers and
+products, gated `requirePermission → requireFeature("bulkImport", Pro-only)
+→ per-company csvImport flag (default OFF) → rate limit → 1MB/500-row caps`,
+with a hand-rolled RFC-4180 parser (zero new dependencies) and a commit that
+refuses entirely — inserting nothing — if any row fails validation.
+
+No OPEN decision (D1–D9) was touched. Full regression, migration
+verification, and exact counts: `docs/SESSION_HANDOFF_2026-08-18.md`'s
+Phase 5 addendum.

@@ -8,7 +8,9 @@ import {
 } from "@/lib/zatca/onboarding";
 import type { ZatcaMode } from "@/lib/zatca/client";
 import type { InvoiceInput } from "@/lib/zatca/types";
-import { encryptPrivateKey, decryptPrivateKey } from "@/lib/crypto/encrypt";
+import { encryptPrivateKey, decryptPrivateKey, encryptSecret, decryptSecret } from "@/lib/crypto/encrypt";
+import { recordSecurityEvent, SECURITY_EVENTS } from "@/lib/audit/events";
+import { riyadhToday, riyadhTimeOfDay } from "@/lib/time/riyadh";
 
 export class OnboardingStateError extends Error {
   constructor(message: string) {
@@ -68,12 +70,24 @@ export async function provisionLocalCertificate(
       // Local placeholder CSID — valid base64 so the XAdES cert digest computes;
       // replaced by a real binarySecurityToken when ZATCA onboarding runs.
       token: publicKeyDerBase64(kp.publicKeyPem),
-      secret: "LOCAL-DEV-SECRET",
+      secret: encryptSecret("LOCAL-DEV-SECRET"),
       issuedAt: new Date(),
       expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       serial: "LOCAL-DEV",
     },
   });
+  await recordSecurityEvent(
+    {
+      action: SECURITY_EVENTS.certificateIssued,
+      outcome: "success",
+      companyId,
+      targetType: "certificate",
+      targetId: cert.id,
+      // kind, never the key or the CSID secret beside it.
+      metadata: { kind: "local", serial: cert.serial },
+    },
+    db as never,
+  );
   return { certificateId: cert.id, created: true };
 }
 
@@ -127,11 +141,22 @@ export async function startOnboarding(
       privateKey: encryptPrivateKey(kp.privateKeyPem),
       publicKey: kp.publicKeyPem,
       token: compliance.token,
-      secret: compliance.secret,
+      secret: encryptSecret(compliance.secret),
       requestId: compliance.requestId,
     },
   });
 
+  await recordSecurityEvent(
+    {
+      action: SECURITY_EVENTS.certificateIssued,
+      outcome: "success",
+      companyId,
+      targetType: "certificate",
+      targetId: cert.id,
+      metadata: { kind: "compliance", mode },
+    },
+    db as never,
+  );
   return { certificateId: cert.id, requestId: compliance.requestId };
 }
 
@@ -190,10 +215,8 @@ export async function runComplianceChecks(
     publicKeyPem: compliance.publicKey,
   };
 
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  const issueDate = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-  const issueTime = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  const issueDate = riyadhToday();
+  const issueTime = riyadhTimeOfDay();
 
   const seller = { name: company.name, vatNumber: company.vatNumber };
   // ZATCA's documented sample buyer VAT for compliance checks.
@@ -231,7 +254,7 @@ export async function runComplianceChecks(
         invoiceHash: signed.hash,
         uuid: signed.uuid,
       },
-      { token: compliance.token, secret: compliance.secret },
+      { token: compliance.token, secret: decryptSecret(compliance.secret)! },
       mode,
     );
     results.push({
@@ -273,7 +296,7 @@ export async function completeOnboarding(
   }
 
   const production = await requestProductionCsid(
-    { token: compliance.token, secret: compliance.secret, requestId: compliance.requestId },
+    { token: compliance.token, secret: decryptSecret(compliance.secret)!, requestId: compliance.requestId },
     mode,
   );
 
@@ -291,7 +314,7 @@ export async function completeOnboarding(
       privateKey: compliance.privateKey, // already encrypted in the compliance record
       publicKey: compliance.publicKey,
       token: production.token,
-      secret: production.secret,
+      secret: encryptSecret(production.secret),
       requestId: production.requestId,
       issuedAt: new Date(),
     },

@@ -8,7 +8,9 @@ import type { Feature } from "@/lib/billing/entitlements";
 import { issueInvoice } from "@/lib/services/invoice-service";
 import { submitInvoice } from "@/lib/services/clearance-service";
 import { computeClearanceStats } from "@/lib/services/clearance-stats";
+import { sumNet } from "@/lib/zatca/reconciliation";
 import type { InvoiceInput } from "@/lib/zatca/types";
+import { riyadhToday, riyadhTimeOfDay } from "@/lib/time/riyadh";
 
 export interface ToolContext {
   companyId: string;
@@ -48,13 +50,19 @@ const lineSchema = z.object({
   unitPrice: z.number().min(0),
 });
 
+// The AI-created invoice's issue date/time is the Saudi tax point — Asia/Riyadh, not server-local (Phase 3 / W9).
 function todayParts() {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return {
-    date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
-    time: `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`,
-  };
+  return { date: riyadhToday(), time: riyadhTimeOfDay() };
+}
+
+// Phase 3 / W18: every read tool below returns rows scoped to ctx.companyId —
+// one tenant's own data, never platform-wide. Tag it the same way retrieved
+// [tenant-data] hits are tagged (app/api/ai/agent/route.ts) so the model
+// can't generalize "this company's invoices" into "how businesses on this
+// platform typically do X" — the KNOWLEDGE BOUNDARIES block in
+// zatca-prompt.ts tells it to read this tag as scope, not as content to cite.
+function tenantScoped(data: unknown): string {
+  return `[tenant-data — this company only] ${JSON.stringify(data)}`;
 }
 
 const TOOLS: Record<string, ToolDef> = {
@@ -72,7 +80,10 @@ const TOOLS: Record<string, ToolDef> = {
         take: a.limit ?? 10,
         select: { invoiceNumber: true, kind: true, status: true, grandTotal: true, buyerName: true, issueDate: true },
       });
-      return { content: JSON.stringify(invoices) };
+      // Money columns are Decimal; JSON.stringify renders them as strings
+      // ("230"), and the model then has to do arithmetic on strings. Convert at
+      // this boundary like every other read path does (lib/db/decimal.ts).
+      return { content: tenantScoped(invoices.map((i) => ({ ...i, grandTotal: num(i.grandTotal) }))) };
     },
   },
   listCustomers: {
@@ -85,7 +96,7 @@ const TOOLS: Record<string, ToolDef> = {
         where: { companyId: ctx.companyId }, orderBy: { createdAt: "desc" }, take: 50,
         select: { name: true, vatNumber: true, city: true, email: true },
       });
-      return { content: JSON.stringify(customers) };
+      return { content: tenantScoped(customers) };
     },
   },
   listProducts: {
@@ -98,7 +109,7 @@ const TOOLS: Record<string, ToolDef> = {
         where: { companyId: ctx.companyId }, orderBy: { createdAt: "desc" }, take: 50,
         select: { name: true, sku: true, unitPrice: true, vatCategory: true },
       });
-      return { content: JSON.stringify(products) };
+      return { content: tenantScoped(products.map((p) => ({ ...p, unitPrice: num(p.unitPrice) }))) };
     },
   },
   getComplianceStats: {
@@ -109,9 +120,9 @@ const TOOLS: Record<string, ToolDef> = {
     async handler(_args, ctx) {
       const invoices = await prisma.invoice.findMany({
         where: { companyId: ctx.companyId },
-        select: { kind: true, status: true, vatAmount: true, issueDate: true, issueTime: true, resultCode: true },
+        select: { kind: true, status: true, vatAmount: true, issueDate: true, issueTime: true, resultCode: true, documentType: true },
       });
-      return { content: JSON.stringify(computeClearanceStats(invoices.map((i) => ({ ...i, vatAmount: num(i.vatAmount) })))) };
+      return { content: tenantScoped(computeClearanceStats(invoices.map((i) => ({ ...i, vatAmount: num(i.vatAmount) })))) };
     },
   },
   findInvoice: {
@@ -125,7 +136,11 @@ const TOOLS: Record<string, ToolDef> = {
         where: { companyId: ctx.companyId, invoiceNumber: a.invoiceNumber },
         select: { invoiceNumber: true, kind: true, status: true, grandTotal: true, vatAmount: true, buyerName: true, resultCode: true, issueDate: true },
       });
-      return { content: inv ? JSON.stringify(inv) : `No invoice found with number ${a.invoiceNumber}.` };
+      return {
+        content: inv
+          ? tenantScoped({ ...inv, grandTotal: num(inv.grandTotal), vatAmount: num(inv.vatAmount) })
+          : `No invoice found with number ${a.invoiceNumber}.`,
+      };
     },
   },
   getReport: {
@@ -137,14 +152,23 @@ const TOOLS: Record<string, ToolDef> = {
       const a = args as { rangeDays?: number };
       const days = a.rangeDays ?? 30;
       const start = new Date(Date.now() - days * 86_400_000);
-      const invoices = await prisma.invoice.findMany({
-        where: { companyId: ctx.companyId, status: { in: ["cleared", "reported"] }, createdAt: { gte: start } },
-        select: { taxableAmount: true, vatAmount: true },
+      // D1: report both the declarable figure (every issued invoice, the tax
+      // point per Saudi VAT time-of-supply rules) and the cleared-by-ZATCA
+      // figure side by side — see docs/audit/decision-register.md D1. Both
+      // are D9-net-adjusted so a credit note reduces rather than inflates them.
+      const declarableRows = await prisma.invoice.findMany({
+        where: { companyId: ctx.companyId, status: { not: "draft" }, createdAt: { gte: start } },
+        select: { taxableAmount: true, vatAmount: true, grandTotal: true, documentType: true, status: true },
       });
-      const totalTaxable = invoices.reduce((s, i) => s + num(i.taxableAmount), 0);
-      const totalVat = invoices.reduce((s, i) => s + num(i.vatAmount), 0);
+      const clearedRows = declarableRows.filter((i) => i.status === "cleared" || i.status === "reported");
+      const declarable = sumNet(declarableRows.map((i) => ({ ...i, taxableAmount: num(i.taxableAmount), vatAmount: num(i.vatAmount), grandTotal: num(i.grandTotal) })));
+      const cleared = sumNet(clearedRows.map((i) => ({ ...i, taxableAmount: num(i.taxableAmount), vatAmount: num(i.vatAmount), grandTotal: num(i.grandTotal) })));
       return {
-        content: JSON.stringify({ period: `Last ${days} days`, totalInvoices: invoices.length, totalTaxable, totalVat }),
+        content: tenantScoped({
+          period: `Last ${days} days`,
+          declarable: { totalInvoices: declarableRows.length, totalTaxable: declarable.taxableAmount, totalVat: declarable.vatAmount },
+          cleared: { totalInvoices: clearedRows.length, totalTaxable: cleared.taxableAmount, totalVat: cleared.vatAmount },
+        }),
         navigate: `/reports?rangeDays=${days}`,
       };
     },

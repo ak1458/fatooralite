@@ -1,3 +1,6 @@
+import { parseRiyadhTimestamp } from "@/lib/time/riyadh";
+import { netSign } from "@/lib/zatca/reconciliation";
+
 export interface ClearanceInvoice {
   kind: string;
   status: string;
@@ -5,6 +8,8 @@ export interface ClearanceInvoice {
   issueDate: string;
   issueTime: string;
   resultCode?: string | null;
+  /** invoice | credit | debit — defaults to "invoice" when omitted (existing callers). */
+  documentType?: string;
 }
 
 export interface ClearanceStats {
@@ -23,7 +28,7 @@ const ACCEPTED = new Set(["cleared", "reported"]);
 const REPORTED = new Set(["reported", "cleared", "rejected"]);
 
 function hoursSince(issueDate: string, issueTime: string): number {
-  const ts = Date.parse(`${issueDate}T${issueTime || "00:00:00"}`);
+  const ts = parseRiyadhTimestamp(issueDate, issueTime || "00:00:00").getTime();
   if (Number.isNaN(ts)) return 0;
   return (Date.now() - ts) / 3_600_000;
 }
@@ -39,7 +44,9 @@ export function computeClearanceStats(invoices: ClearanceInvoice[]): ClearanceSt
     else if (inv.status === "rejected") rejected++;
     else pending++;
 
-    if (ACCEPTED.has(inv.status)) vatCollected += inv.vatAmount;
+    // D9: a credit note's stored vatAmount is positive; net it out here so an
+    // accepted credit note reduces vatCollected instead of inflating it.
+    if (ACCEPTED.has(inv.status)) vatCollected += netSign(inv.documentType ?? "invoice") * inv.vatAmount;
 
     if (inv.kind === "simplified" && !REPORTED.has(inv.status)) {
       const h = hoursSince(inv.issueDate, inv.issueTime);

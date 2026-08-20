@@ -60,98 +60,116 @@ main input[type=checkbox]{accent-color:var(--ac)}
 <nav><div class="brand">Fatoora<span>Lite</span> Docs</div>
 <div class="sub">ZATCA Phase-2 e-invoicing SaaS</div><div class="group">Overview</div><a href="index.html" class="active">Start Here</a><a href="00-tldr.html">TL;DR</a><div class="group">Product</div><a href="01-prd.html">PRD</a><a href="02-architecture.html">Architecture</a><a href="03-user-flows.html">User Flows</a><a href="04-functional-spec.html">Functional Spec</a><a href="05-features.html">Feature Docs</a><div class="group">History</div><a href="06-gap-analysis.html">Gap Analysis</a><a href="07-roadmap.html">Roadmap</a><a href="08-remaining-work.html">Final Build Plan</a><div class="group">Operations</div><a href="09-deployment.html">Deployment Guide</a><a href="10-ai-architecture.html">AI Architecture</a></nav>
 <main>
-<h1>Fatoora Lite Pro — Product Documentation</h1>
-<p>This folder is the <strong>single source of truth</strong> for what Fatoora Lite Pro is and how every
-feature must behave. Code is written to match these documents — not the other way
-around. If code and docs disagree, the docs win until a doc is deliberately revised.</p>
+<h1>FatooraLite Pro — Master Product Documentation Suite</h1>
+<p>This folder is the <strong>single source of truth</strong> for what FatooraLite Pro is, how every feature behaves, and the technical specifications governing ZATCA Phase-2 compliance.</p>
 <blockquote>
-<p><strong>Browsable portal:</strong> run <code>npm run docs:build</code> inside <code>fatooralite/</code> and open
-<code>docs/portal/index.html</code> — the same documents as a styled, navigable HTML site
-(self-contained, works offline, light/dark aware).</p>
+<p>💡 <strong>Browsable Web Portal</strong>: Run <code>npm run docs:build</code> inside <code>fatooralite/</code> and open <code>docs/portal/index.html</code> to browse this complete documentation suite as a responsive, offline-ready HTML site with dark/light mode support.</p>
 </blockquote>
-<p>Read in this order:</p>
+<hr>
+<h2>Master Documentation Index</h2>
 <table>
 <thead>
 <tr>
-<th>#</th>
-<th>Document</th>
-<th>Purpose</th>
+<th align="center">#</th>
+<th align="left">Document</th>
+<th align="left">Target Audience &amp; Purpose</th>
 </tr>
 </thead>
 <tbody><tr>
-<td>00</td>
-<td><a href="00-tldr.html">TL;DR</a></td>
-<td>One-page overview: what, who, why, how it makes money</td>
+<td align="center"><strong>00</strong></td>
+<td align="left"><strong><a href="00-tldr.html">Executive Summary &amp; Product Architecture</a></strong></td>
+<td align="left">Executive overview of business model, regulatory problem, customer personas, and differentiators.</td>
 </tr>
 <tr>
-<td>01</td>
-<td><a href="01-prd.html">PRD</a></td>
-<td>Product requirements: vision, personas, scope, success metrics</td>
+<td align="center"><strong>01</strong></td>
+<td align="left"><strong><a href="01-prd.html">Product Requirements Document (PRD)</a></strong></td>
+<td align="left">Core product requirements: vision, user personas, module scope, and success metrics.</td>
 </tr>
 <tr>
-<td>02</td>
-<td><a href="02-architecture.html">Architecture</a></td>
-<td>Tech stack, data model, AI/RAG + vector DB, security, deploy</td>
+<td align="center"><strong>02</strong></td>
+<td align="left"><strong><a href="02-architecture.html">Enterprise System Architecture Reference</a></strong></td>
+<td align="left">Tech stack, multi-tenant isolation, Prisma/Neon Postgres schema, crypto subsystem, and RAG vector store architecture.</td>
 </tr>
 <tr>
-<td>03</td>
-<td><a href="03-user-flows.html">User Flows</a></td>
-<td>End-to-end journeys (signup → onboarding → daily use)</td>
+<td align="center"><strong>03</strong></td>
+<td align="left"><strong><a href="03-user-flows.html">User Flows &amp; System Navigation</a></strong></td>
+<td align="left">Step-by-step user journeys (signup, onboarding wizard, daily invoicing, clearance, AI dock).</td>
 </tr>
 <tr>
-<td>04</td>
-<td><a href="04-functional-spec.html">Functional Spec</a></td>
-<td>Exact behaviour, endpoints, and states per module</td>
+<td align="center"><strong>04</strong></td>
+<td align="left"><strong><a href="04-functional-spec.html">Functional Specification</a></strong></td>
+<td align="left">Comprehensive module specifications, REST API endpoint schemas, and status state machines.</td>
 </tr>
 <tr>
-<td>05</td>
-<td><a href="05-features.html">Feature Docs</a></td>
-<td>What each module is, why it exists, how it works</td>
+<td align="center"><strong>05</strong></td>
+<td align="left"><strong><a href="05-features.html">Feature Documentation</a></strong></td>
+<td align="left">Deep breakdown of each functional module (Invoices, Customers, Products, RBAC, Subscriptions).</td>
 </tr>
 <tr>
-<td>06</td>
-<td><a href="06-gap-analysis.html">Gap Analysis</a></td>
-<td>Historical current-vs-target state; full mock inventory (closed)</td>
+<td align="center"><strong>06</strong></td>
+<td align="left"><strong><a href="06-gap-analysis.html">Gap Analysis</a></strong></td>
+<td align="left">Architectural evolution and historical mock inventory resolution log.</td>
 </tr>
 <tr>
-<td>07</td>
-<td><a href="07-roadmap.html">Roadmap</a></td>
-<td>Phased build plan with acceptance criteria</td>
+<td align="center"><strong>07</strong></td>
+<td align="left"><strong><a href="07-roadmap.html">Roadmap</a></strong></td>
+<td align="left">Phased development roadmap with acceptance criteria and delivery milestones.</td>
 </tr>
 <tr>
-<td>08</td>
-<td><a href="08-remaining-work.html">Remaining Work</a></td>
-<td>The final build plan — <strong>completed</strong>, kept for history</td>
+<td align="center"><strong>08</strong></td>
+<td align="left"><strong><a href="08-remaining-work.html">Remaining Work</a></strong></td>
+<td align="left">Archive of completed development tasks and verification checklists.</td>
 </tr>
 <tr>
-<td>09</td>
-<td><a href="09-deployment.html">Deployment Guide</a></td>
-<td>Step-by-step production deployment, start to finish</td>
+<td align="center"><strong>09</strong></td>
+<td align="left"><strong><a href="09-deployment.html">Deployment &amp; Disaster Recovery Guide</a></strong></td>
+<td align="left">Step-by-step production deployment guide, environment secrets, and Neon PITR backup/restore drills.</td>
 </tr>
 <tr>
-<td>10</td>
-<td><a href="10-ai-architecture.html">AI Architecture</a></td>
-<td>Provider-agnostic AI layer, RAG/pgvector, app-wide tool calling</td>
+<td align="center"><strong>10</strong></td>
+<td align="left"><strong><a href="10-ai-architecture.html">AI Layer &amp; RAG Architecture</a></strong></td>
+<td align="left">OpenRouter streaming integration, <code>pgvector</code> RAG search, system prompts, and tool calling.</td>
 </tr>
 <tr>
-<td>11</td>
-<td><a href="11-onboarding-pipeline-handoff.html">Onboarding Pipeline Handoff</a></td>
-<td>In-flight: automated ZATCA CCSID→compliance→PCSID orchestration</td>
+<td align="center"><strong>11</strong></td>
+<td align="left"><strong><a href="11-onboarding-pipeline-handoff.html">Onboarding Pipeline Handoff</a></strong></td>
+<td align="left">Automated ZATCA CSID issuance pipeline (CCSID → compliance checks → PCSID).</td>
 </tr>
 <tr>
-<td>12</td>
-<td><a href="12-master-roadmap.html">Master Roadmap</a></td>
-<td><strong>Start here for new work.</strong> Onboarding-wizard vision, gap list, priorities</td>
+<td align="center"><strong>12</strong></td>
+<td align="left"><strong><a href="12-master-roadmap.html">Master Roadmap</a></strong></td>
+<td align="left">Strategic vision, future feature backlogs, and priority items.</td>
+</tr>
+<tr>
+<td align="center"><strong>13</strong></td>
+<td align="left"><strong><a href="13-production-readiness-report.html">Production Readiness Report</a></strong></td>
+<td align="left">18-category production readiness audit report with detailed bug fix verification.</td>
+</tr>
+<tr>
+<td align="center"><strong>14</strong></td>
+<td align="left"><strong><a href="14-easy-business-setup-guide.html">Business Administration &amp; Operations Manual</a></strong></td>
+<td align="left"><strong>Non-Developer &amp; Business Manual</strong>: Step-by-step 5-minute setup guide, National Address rules, ZATCA OTP guide, RBAC, and AI commands.</td>
+</tr>
+<tr>
+<td align="center"><strong>15</strong></td>
+<td align="left"><strong><a href="15-zatca-e-invoicing-integration-guide.html">ZATCA Phase-2 Technical &amp; Integration Guide</a></strong></td>
+<td align="left"><strong>Technical Compliance Spec</strong>: UBL 2.1 XML schema, ECDSA secp256k1 keys, XAdES C14N-11, TLV QR code, and REST API clearance.</td>
+</tr>
+<tr>
+<td align="center"><strong>16</strong></td>
+<td align="left"><strong><a href="16-launch-plan.html">Launch Plan</a></strong></td>
+<td align="left">Sequenced pre-launch phases: codebase organization, trial/Pro licensing, AI depth, product and security audits, deployment, tenant provisioning.</td>
+</tr>
+<tr>
+<td align="center"><strong>18</strong></td>
+<td align="left"><strong><a href="18-production-checklist.html">Production Readiness &amp; Deployment</a></strong></td>
+<td align="left">Owner-facing: blockers only you can clear, every environment variable, pre-deploy gates, deploy and rollback steps, and what not to claim.</td>
 </tr>
 </tbody></table>
-<p><strong>Domain:</strong> Saudi Arabia ZATCA &quot;Fatoora&quot; Phase 2 (Integration Phase) e-invoicing
-compliance for SMEs. The product is intended to become a commercial SaaS.</p>
-<p><strong>Status:</strong> Implemented through the production-readiness phase (2026-07-03).
-Docs 00–08 defined the build; 09–10 document deploying and extending it; 11–12
-are the current, still-open direction — read 12 first, then check
-<a href="../handoff.md"><code>/handoff.md</code></a> for exact session-to-session progress.</p>
+<hr>
+<p><strong>Domain:</strong> Saudi Arabia ZATCA &quot;Fatoora&quot; Phase-2 (Integration Phase) E-Invoicing Compliance.<br><strong>Product Status:</strong> Fully implemented, security-hardened, and cryptographically verified.</p>
 
-<div class="footer">Fatoora Lite Pro documentation · built 2026-07-21 · source: docs/README.md</div>
+<div class="footer">Fatoora Lite Pro documentation · built 2026-08-18 · source: docs/README.md</div>
 </main>
 </div>
 </body>

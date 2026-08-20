@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { registerSchema } from "./schemas";
+import { registerSchema, loginSchema } from "./schemas";
 
 const valid = {
   name: "Ali Hassan",
@@ -39,5 +39,32 @@ describe("registerSchema", () => {
 
   it("accepts registration with terms accepted", () => {
     expect(registerSchema.safeParse({ ...valid, acceptedTerms: true }).success).toBe(true);
+  });
+});
+
+describe("email normalisation", () => {
+  it("lower-cases the address on registration", () => {
+    const parsed = registerSchema.parse({ ...valid, email: "Owner@Example.COM" });
+    expect(parsed.email).toBe("owner@example.com");
+  });
+
+  it("trims surrounding whitespace instead of failing validation", () => {
+    const parsed = registerSchema.parse({ ...valid, email: "  ali@acme.com  " });
+    expect(parsed.email).toBe("ali@acme.com");
+  });
+
+  it("normalises the login address the same way, so sign-in is case-insensitive", () => {
+    const parsed = loginSchema.parse({ email: "Owner@Example.COM", password: "anything" });
+    expect(parsed.email).toBe("owner@example.com");
+  });
+
+  it("still rejects a non-string email rather than passing it to the database", () => {
+    // {"email":{"contains":"@"}} used to reach Prisma as a where clause and
+    // surface as a 500 on the login endpoint.
+    expect(loginSchema.safeParse({ email: { contains: "@" }, password: "x" }).success).toBe(false);
+  });
+
+  it("requires a password to be present at login", () => {
+    expect(loginSchema.safeParse({ email: "ali@acme.com", password: "" }).success).toBe(false);
   });
 });

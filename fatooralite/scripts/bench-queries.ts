@@ -19,6 +19,8 @@ import {
   getInvoiceList,
   getAnalyticsData,
 } from "@/lib/db/queries";
+import { searchInvoices } from "@/lib/db/repo";
+import { querySecurityEvents } from "@/lib/audit/events";
 
 const prisma = new PrismaClient();
 
@@ -57,12 +59,42 @@ async function main() {
   await time("getDashboardIntegration", () => getDashboardIntegration(id, prisma));
   await time("getInvoiceList (page 1)", () => getInvoiceList(id, undefined, prisma), (r) => r.invoices.length);
   await time("getAnalyticsData", () => getAnalyticsData(id, prisma));
+  // Same query shape as app/api/reports/route.ts's month aggregate.
+  await time("reports month aggregate", () =>
+    prisma.invoice.findMany({
+      where: { companyId: id, status: { in: ["cleared", "reported"] }, issueDate: { gte: "2026-01-01", lt: "2026-02-01" } },
+      orderBy: [{ issueDate: "asc" }, { invoiceNumber: "asc" }],
+    }),
+    (r) => r.length,
+  );
+  // Three `contains` ORs, no index support — the prime seq-scan suspect at volume.
+  await time("searchInvoices('almarai')", () => searchInvoices(id, "almarai", prisma), (r) => r.length);
+  await time("querySecurityEvents (tenant timeline)", () => querySecurityEvents({ companyId: id }, prisma), (r) => r.length);
+  await time("invoice detail + lines", async () => {
+    const one = await prisma.invoice.findFirst({ where: { companyId: id } });
+    return prisma.invoice.findUnique({ where: { id: one!.id }, include: { lines: true } });
+  });
 
   console.log("\nRaw counts for comparison:");
   await time("invoice.count", () => prisma.invoice.count({ where: { companyId: id } }));
   await time("invoice.findMany take 50", () =>
     prisma.invoice.findMany({ where: { companyId: id }, orderBy: { createdAt: "desc" }, take: 50 }),
   );
+
+  console.log("\nEXPLAIN ANALYZE — searchInvoices (the seq-scan suspect):");
+  const explainSearch = await prisma.$queryRawUnsafe<{ "QUERY PLAN": string }[]>(
+    // LIKE, not ILIKE — matches Prisma's `contains` without mode:"insensitive" (repo.ts's actual query).
+    `EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM "Invoice" WHERE "companyId" = $1 AND ("invoiceNumber" LIKE $2 OR "uuid" LIKE $2 OR "buyerName" LIKE $2) ORDER BY "createdAt" DESC LIMIT 100`,
+    id, "%almarai%",
+  );
+  console.log(explainSearch.map((r) => r["QUERY PLAN"]).join("\n"));
+
+  console.log("\nEXPLAIN ANALYZE — invoice list (getInvoiceList's row query):");
+  const explainList = await prisma.$queryRawUnsafe<{ "QUERY PLAN": string }[]>(
+    `EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM "Invoice" WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 50`,
+    id,
+  );
+  console.log(explainList.map((r) => r["QUERY PLAN"]).join("\n"));
 }
 
 main().finally(() => prisma.$disconnect());
