@@ -46,6 +46,17 @@ jobs:
 
       - name: Unit tests
         run: npm test
+        env:
+          # Same placeholder values the Build step below already uses.
+          # Without these, lib/env.ts's validateEnv() throws at module-import
+          # time (lib/db/client.ts is a transitive import of most service
+          # files vitest collects), before any test or skip logic can run --
+          # this crashed the whole step, not any individual test. No real
+          # DB connection is attempted: TEST_DATABASE_URL stays unset in CI,
+          # so every describe.skipIf(!hasTestDb) integration test skips
+          # cleanly, exactly as it does locally without a test database.
+          AUTH_SECRET: ci-non-production-secret-value-1234567890
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_placeholder
 
       - name: ZATCA signature validation
         # Independent from the unit-test suite on purpose: engine.test.ts and
