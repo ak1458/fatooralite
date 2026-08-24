@@ -343,63 +343,65 @@ function LoginForm() {
             </p>
           </div>
 
-          {/* Quick 1-Click Demo Credentials Pills */}
-          <div
-            style={{
-              padding: "12px 14px",
-              borderRadius: 14,
-              background: "rgba(56, 189, 248, 0.06)",
-              border: "1px solid rgba(56, 189, 248, 0.2)",
-              marginBottom: 22,
-            }}
-          >
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: "#38bdf8", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-              <span>⚡</span>
-              <span>{t("quickDemo")}</span>
+          {/* Quick 1-Click Demo Credentials Pills (DEV ONLY) */}
+          {process.env.NODE_ENV === "development" && (
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: 14,
+                background: "rgba(56, 189, 248, 0.06)",
+                border: "1px solid rgba(56, 189, 248, 0.2)",
+                marginBottom: 22,
+              }}
+            >
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#38bdf8", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                <span>⚡</span>
+                <span>[DEV ONLY] {t("quickDemo")}</span>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => fillDemo("owner")}
+                  style={{
+                    flex: 1,
+                    padding: "7px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(56, 189, 248, 0.3)",
+                    background: "var(--s1)",
+                    color: "var(--tx)",
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    textAlign: "center",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  👔 {t("demoOwner")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fillDemo("accountant")}
+                  style={{
+                    flex: 1,
+                    padding: "7px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(56, 189, 248, 0.3)",
+                    background: "var(--s1)",
+                    color: "var(--tx)",
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    textAlign: "center",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  📊 {t("demoAcc")}
+                </button>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="button"
-                onClick={() => fillDemo("owner")}
-                style={{
-                  flex: 1,
-                  padding: "7px 10px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(56, 189, 248, 0.3)",
-                  background: "var(--s1)",
-                  color: "var(--tx)",
-                  fontSize: 11.5,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  textAlign: "center",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                👔 {t("demoOwner")}
-              </button>
-              <button
-                type="button"
-                onClick={() => fillDemo("accountant")}
-                style={{
-                  flex: 1,
-                  padding: "7px 10px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(56, 189, 248, 0.3)",
-                  background: "var(--s1)",
-                  color: "var(--tx)",
-                  fontSize: 11.5,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  textAlign: "center",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                📊 {t("demoAcc")}
-              </button>
-            </div>
-          </div>
+          )}
 
           {/* Form */}
           <form onSubmit={submit}>
