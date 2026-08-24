@@ -8,73 +8,76 @@
 
 :root,
 [data-theme="dark"] {
-  --bg: #07090b;
-  --s1: #0e1216;
-  --s2: #141a1f;
-  --s3: #1b232a;
+  --bg: #07090e;
+  --s1: #0e121a;
+  --s2: #141924;
+  --s3: #1a2230;
+  --s4: #222c3d;
   --bd: rgba(255, 255, 255, 0.08);
-  --bds: rgba(255, 255, 255, 0.15);
-  --tx: #eef2f1;
-  --t2: #98a29e;
-  --t3: #5d6863;
+  --bds: rgba(255, 255, 255, 0.16);
+  --tx: #f8fafc;
+  --t2: #94a3b8;
+  --t3: #64748b;
   --ac: #059669;
   --acb: #10b981;
-  --acs: rgba(16, 185, 129, 0.13);
-  --acbd: rgba(16, 185, 129, 0.22);
-  /* Foreground for text sitting ON --ac / --warn. These must flip with the
-     theme: --warn is light amber in dark mode (needs dark text) and dark
-     ochre in light mode (needs light text), so a literal fails contrast in
-     one theme or the other. --on-ac happens to be the same in both because
-     --ac is, but it is a token so the rule has no exceptions. */
+  --acs: rgba(16, 185, 129, 0.14);
+  --acbd: rgba(16, 185, 129, 0.28);
   --on-ac: #04130d;
   --on-warn: #1a1200;
-  /* --dang is a light rose here; white on it is ~2:1. */
   --on-dang: #3b0210;
-  --scrim: rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.65);
   --warn: #f59e0b;
   --warns: rgba(245, 158, 11, 0.14);
   --dang: #fb7185;
   --dangs: rgba(244, 63, 94, 0.14);
-  --info: #60a5fa;
-  --infos: rgba(96, 165, 250, 0.14);
-  --sh: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 34px -20px rgba(0, 0, 0, 0.75);
-  --glow: rgba(16, 185, 129, 0.16);
-  --glow2: rgba(59, 130, 246, 0.09);
+  --info: #38bdf8;
+  --infos: rgba(56, 189, 248, 0.14);
+  --sh: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 40px -15px rgba(0, 0, 0, 0.85);
+  --sh-sm: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 6px 16px -4px rgba(0, 0, 0, 0.6);
+  --glow: rgba(16, 185, 129, 0.18);
+  --glow2: rgba(56, 189, 248, 0.15);
+  --glow-blue: rgba(59, 130, 246, 0.22);
+  --glow-purple: rgba(168, 85, 247, 0.2);
+  --glow-amber: rgba(245, 158, 11, 0.2);
 }
 
 [data-theme="light"] {
-  --bg: #eef1ef;
+  --bg: #f1f5f9;
   --s1: #ffffff;
-  --s2: #f7faf9;
-  --s3: #eaefec;
-  --bd: rgba(12, 22, 17, 0.09);
-  --bds: rgba(12, 22, 17, 0.18);
-  --tx: #0b1411;
-  --t2: #56615d;
-  --t3: #8a938f;
+  --s2: #f8fafc;
+  --s3: #e2e8f0;
+  --s4: #cbd5e1;
+  --bd: rgba(15, 23, 42, 0.08);
+  --bds: rgba(15, 23, 42, 0.16);
+  --tx: #0f172a;
+  --t2: #475569;
+  --t3: #64748b;
   --ac: #059669;
   --acb: #059669;
   --acs: rgba(5, 150, 105, 0.12);
   --acbd: rgba(5, 150, 105, 0.28);
   --on-ac: #04130d;
-  /* --warn is #b45309 here; #1a1200 on it is ~3.2:1, below AA. */
   --on-warn: #fffaf2;
   --on-dang: #ffffff;
-  --scrim: rgba(12, 22, 17, 0.42);
+  --scrim: rgba(15, 23, 42, 0.42);
   --warn: #b45309;
   --warns: rgba(180, 83, 9, 0.1);
   --dang: #e11d48;
   --dangs: rgba(225, 29, 72, 0.1);
-  --info: #2563eb;
-  --infos: rgba(37, 99, 235, 0.09);
-  --sh: 0 1px 2px rgba(12, 22, 17, 0.05), 0 18px 44px -24px rgba(12, 22, 17, 0.2);
+  --info: #0284c7;
+  --infos: rgba(2, 132, 199, 0.09);
+  --sh: 0 1px 2px rgba(15, 23, 42, 0.05), 0 18px 44px -24px rgba(15, 23, 42, 0.18);
+  --sh-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px -2px rgba(15, 23, 42, 0.08);
   --glow: rgba(5, 150, 105, 0.1);
-  --glow2: rgba(37, 99, 235, 0.06);
+  --glow2: rgba(2, 132, 199, 0.08);
+  --glow-blue: rgba(37, 99, 235, 0.1);
+  --glow-purple: rgba(147, 51, 234, 0.08);
+  --glow-amber: rgba(217, 119, 6, 0.08);
 }
 
 /* Motion tokens (Framer Motion + CSS transitions) */
 :root {
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --dur-fast: 150ms;
   --dur-normal: 250ms;
@@ -106,23 +109,28 @@ body {
   color: var(--tx);
   font-family: var(--fui);
   -webkit-font-smoothing: antialiased;
+  background-image: 
+    radial-gradient(at 15% 10%, rgba(16, 185, 129, 0.07) 0px, transparent 50%),
+    radial-gradient(at 85% 15%, rgba(56, 189, 248, 0.06) 0px, transparent 50%),
+    radial-gradient(at 50% 85%, rgba(168, 85, 247, 0.04) 0px, transparent 60%);
+  background-attachment: fixed;
 }
 
 ::selection {
   background: rgba(16, 185, 129, 0.28);
 }
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.28);
+  background: rgba(148, 163, 184, 0.25);
   border-radius: 20px;
-  border: 3px solid transparent;
+  border: 2px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(128, 128, 128, 0.45);
+  background: rgba(148, 163, 184, 0.4);
   background-clip: content-box;
 }
 
@@ -142,14 +150,14 @@ body {
   }
   70%,
   100% {
-    transform: scale(2.6);
+    transform: scale(2.4);
     opacity: 0;
   }
 }
 @keyframes flFade {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -166,9 +174,99 @@ body {
     stroke-dashoffset: -200;
   }
 }
+@keyframes flShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
 
-/* Visible to assistive technology only. Used where colour or position carries
-   meaning that needs a text equivalent (e.g. wizard step completion state). */
+/* Luxury Glass Card Utilities */
+.glass-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.01) 100%), var(--s1);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--bd);
+  box-shadow: var(--sh);
+}
+
+.glass-card-hover {
+  transition: transform var(--dur-normal) var(--ease), border-color var(--dur-normal) var(--ease), box-shadow var(--dur-normal) var(--ease);
+}
+.glass-card-hover:hover {
+  transform: translateY(-2px);
+  border-color: var(--bds);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 24px 48px -16px rgba(0, 0, 0, 0.9);
+}
+
+/* Folder Tab Cutout Geometry (Inspired by Reference 1 - Mytasky) */
+.folder-tab-card {
+  position: relative;
+  background: var(--s1);
+  border: 1px solid var(--bd);
+  border-radius: 20px;
+  box-shadow: var(--sh);
+}
+.folder-tab-notch {
+  position: absolute;
+  top: -1px;
+  inset-inline-start: -1px;
+  height: 42px;
+  background: var(--s2);
+  border: 1px solid var(--bd);
+  border-bottom: none;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 14px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--tx);
+  z-index: 2;
+}
+
+/* Capsule action tags */
+.action-capsule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 12px;
+  background: var(--s2);
+  border: 1px solid var(--bd);
+  color: var(--tx);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: all var(--dur-fast) var(--ease);
+  cursor: pointer;
+}
+.action-capsule:hover {
+  background: var(--s3);
+  border-color: var(--bds);
+  transform: translateY(-1px);
+}
+
+/* Shimmer gradient line */
+.shimmer-border {
+  position: relative;
+}
+.shimmer-border::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Visible to assistive technology only */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -181,18 +279,13 @@ body {
   border-width: 0;
 }
 
-/* ============================================================
-   Focus ring — visible only via keyboard, never via mouse.
-   Applied globally to all interactive elements so every component
-   gets a consistent ring without per-component styles.
-   ============================================================ */
+/* Focus ring */
 :focus-visible {
   outline: 2px solid var(--ac);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
-/* Buttons and inputs get a slightly tighter radius to match their shape */
 button:focus-visible,
 [role="button"]:focus-visible,
 input:focus-visible,
@@ -201,14 +294,11 @@ textarea:focus-visible {
   border-radius: 8px;
 }
 
-/* Remove default outline on non-keyboard focus */
 :focus:not(:focus-visible) {
   outline: none;
 }
 
-/* ============================================================
-   Skip-to-content link — hidden until focused.
-   ============================================================ */
+/* Skip-to-content link */
 .skip-link {
   position: fixed;
   top: -100%;
@@ -228,15 +318,13 @@ textarea:focus-visible {
   top: 12px;
 }
 
-/* ============================================================
-   Sidebar drawer overlay (mobile < 768px)
-   ============================================================ */
+/* Sidebar drawer overlay */
 .sidebar-overlay {
   position: fixed;
   inset: 0;
   z-index: 39;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--dur-normal) var(--ease);
@@ -246,9 +334,7 @@ textarea:focus-visible {
   pointer-events: auto;
 }
 
-/* ============================================================
-   Responsive table wrapper — enables horizontal scroll on overflow
-   ============================================================ */
+/* Responsive table wrapper */
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -257,6 +343,6 @@ textarea:focus-visible {
   height: 6px;
 }
 .table-scroll::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.24);
+  background: rgba(148, 163, 184, 0.2);
   border-radius: 3px;
 }

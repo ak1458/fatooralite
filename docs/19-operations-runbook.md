@@ -139,9 +139,11 @@ down-migration.
 
 **Version tracking**: semver tags on `main` (`v0.1.0`–`v0.4.0` as of this
 writing), release/branching conventions documented in `handoff.md`'s
-codebase-organization entry. Branch protection on `main` is confirmed unset
-(`START-HERE.md`, "Blocked on the owner") — until it is, a force-push to
-`main` is not blocked by GitHub itself, only by convention.
+codebase-organization entry. **Branch protection on `main` was enabled
+2026-08-20**: PR required, `lint · test · build` CI checks required and
+current with `main`, force-push and branch deletion blocked
+(`enforce_admins: false`, so the owner can still bypass in a genuine
+emergency). See `docs/18-production-checklist.md` row 6.
 
 ---
 

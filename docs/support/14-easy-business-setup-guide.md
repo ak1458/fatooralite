@@ -135,6 +135,23 @@ $$\text{Invoice Grand Total} = \text{Taxable Amount Total} + \text{Total VAT}$$
 
 * **Line Item Read Boundary**: Financial numbers are maintained in high-precision `Decimal(14,2)` in PostgreSQL to prevent JavaScript floating-point drift.
 
+### 4.3 Invoice Delivery & Bulk Data Tools
+
+**Sending invoices.** Every invoice can be emailed (PDF attached) or sent via WhatsApp
+directly from its detail screen. The recipient is always the customer record on file — you
+cannot type in a different address, which is a deliberate anti-fraud control, not a
+limitation. WhatsApp delivery is a Pro-plan feature and is toggled on per account.
+
+**Bulk CSV import/export (Pro).** Customers and Products can each be imported from a CSV
+template (download it, fill it in, upload it) or exported in full. A file with any invalid
+row is rejected in full — you never end up with a half-imported list. Caps: 1MB / 500 rows
+per import.
+
+**VAT return reporting.** The Reports screen shows two totals for a period: a *declarable*
+figure (everything issued) and a *cleared* figure (only what ZATCA has confirmed). They will
+usually match; a gap near a period boundary means something is still in flight to ZATCA, not
+an error. Both already subtract any credit/debit notes issued in the period.
+
 ---
 
 ## 5. Team Management & Role-Based Access Control (RBAC)

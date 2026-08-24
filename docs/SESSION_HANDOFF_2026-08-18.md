@@ -4,7 +4,7 @@
 current state, not a summary of intentions. `START-HERE.md` points here.
 Filename is dated 2026-08-18 (when this handoff doc was created, in Phase
 3) but this file is kept current across phases by convention — it now
-covers through Phase 5, run 2026-08-19.
+covers through §14, PR #16 merged to `main`, 2026-08-20.
 
 ---
 
@@ -19,8 +19,9 @@ covers through Phase 5, run 2026-08-19.
 | Phase 4 | **COMPLETE, with honestly-documented PARTIALs**, committed as `7dec667`+`8995a81`. 76 test files, 519 tests, 0 failed, 0 skipped at the time |
 | Phase 5 | **COMPLETE — a deliberately scoped subset.** Of the roadmap's N1–N11, only N4/N6/N7 were buildable this phase (N1/N3 decision-gated on D7/D8; N2/N5/N9/N11 transitively blocked on N1; N8 already Phase 3's; N10 closed as a rollup). All three of N4/N6/N7 shipped. See §2 for the test count |
 | `neondb` migration drift | **RESOLVED, 2026-08-19, with explicit owner approval.** All 18/18 migrations now applied to `neondb`. See §3.7 |
-| Phase 6 & 7 | **SCOPE-CHECKED, 2026-08-19 — 0 implementable.** X1–X4 (Phase 6) are all owner/external-access-blocked; D1–D9 (Phase 7) are all OPEN and this session was instructed not to resolve them unilaterally. Nothing was built, nothing changed. Full detail in §7 |
-| Never do | modify `neondb` **without explicit owner approval, per-action** (the drift fix in §3.7 was one such approved action, not a standing exception) · drop `fatoora_audit`/`fatoora_restore` · migrate to Supabase · push to `main` · resolve D1–D9 unilaterally · start Phase 8 without reading this file |
+| Phase 6 & 7 | **SCOPE-CHECKED 2026-08-19** (X1–X4 owner-blocked); **D1–D9 all APPROVED and IMPLEMENTED same day** — see §8 |
+| Push / PR / merge | **DONE.** Pushed 2026-08-20, PR #16 opened and green, `main` branch-protected, **merged to `main`** via `69dca91` 2026-08-20 03:27 UTC. See §13–14 |
+| Never do | modify `neondb` **without explicit owner approval, per-action** (the drift fix in §3.7 and the D6 migration in §12 were both approved actions, not a standing exception) · drop `fatoora_audit`/`fatoora_restore` · migrate to Supabase · resolve future decisions unilaterally · start a new phase without reading this file |
 
 **Updated (2026-08-19, post-Phase-5):** §3.7's finding — `neondb` missing 7
 migrations dating back to Phase 1 — is now **RESOLVED**. The owner reviewed
@@ -858,3 +859,39 @@ was left for the owner explicitly.
 **Commits this session, in order:** `605f029`, `0794dcf`, `7240cf9`,
 `c953798` — all on `audit/production-readiness-2026-08-18`, all pushed,
 all included in PR #16.
+
+---
+
+## 14. PR #16 merged to main (2026-08-20)
+
+**Supersedes §13's "PR #16 was not merged" note** — the owner reviewed
+and approved the merge in a follow-up step the same day.
+
+PR #16 merged via merge commit `69dca91`, 2026-08-20 03:27 UTC. `main`
+was stuck at `95ac6fa` (2026-08-06) until this merge; it now carries all
+31 commits of the remediation programme — Phases 1–7, all nine D1–D9
+decisions, the OpenWA interim WhatsApp transport, the production `proxy.ts`
+operator-route fix, and the CI env-var fixes from §13. Branch protection
+(PR required, `lint · test · build` required and current, no force-push)
+held through the merge as designed — no admin bypass was used.
+
+**This does not, by itself, change what's live.** Vercel is not
+git-connected to this repo (confirmed since the original 2026-08-06
+release — see `START-HERE.md`'s "Previous state"), so merging to `main`
+triggers nothing on Vercel's side. The production deploy from §12
+(`vercel --prod`, same day) already carries this exact code, so
+`fatooralite.vercel.app` and `main` are now in sync by coincidence of
+timing, not by a deploy hook. If `main` is ever git-connected to Vercel
+later, a push to `main` would then auto-deploy — it doesn't today.
+
+**Updated to match:** `docs/18-production-checklist.md` row 7 ("nothing
+is pushed"), `docs/16-launch-plan.md`'s branch-protection line and new
+"Push, CI fix, PR #16, branch protection, merge" section, `handoff.md`'s
+2026-08-20 entries, `START-HERE.md`'s current-state summary.
+
+**Next session:** nothing left to push or merge from this programme.
+Remaining work is exactly what `START-HERE.md`'s "Blocked on the owner"
+and "What is left" sections already say — owner-gated verification
+(Fatoora OTP, Moyasar KYC, Meta Business/legal review) or a new
+engineering increment explicitly requested, not a re-run of this
+push/merge sequence.

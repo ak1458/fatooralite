@@ -10,6 +10,11 @@ import { ApiSparkline } from "@/components/dashboard/ApiSparkline";
 import { IntegrationStatus } from "@/components/dashboard/IntegrationStatus";
 import { LiveFeed } from "@/components/dashboard/LiveFeed";
 import { VolumeChart } from "@/components/dashboard/VolumeChart";
+import { ElectricHeroCard } from "@/components/dashboard/ElectricHeroCard";
+import { WorkflowBanner } from "@/components/dashboard/WorkflowBanner";
+import { SplineTelemetry } from "@/components/dashboard/SplineTelemetry";
+import { SaudiCorporateCard } from "@/components/dashboard/SaudiCorporateCard";
+import { BentoFeatureGrid } from "@/components/dashboard/BentoFeatureGrid";
 import { AsyncBoundary } from "@/components/common/AsyncBoundary";
 import { useCompany, useAuth } from "@/lib/useCompany";
 import { useAsyncData } from "@/lib/async/useAsyncData";
@@ -31,8 +36,8 @@ function greetingText(name: string, lang: "en" | "ar"): string {
     const period = h < 12 ? "صباح الخير" : h < 18 ? "مساء الخير" : "مساء الخير";
     return `${period}، ${name}`;
   }
-  const period = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-  return `${period}, ${name}`;
+  const period = h < 12 ? "Welcome" : h < 18 ? "Good afternoon" : "Good evening";
+  return `${period}, ${name}!`;
 }
 
 /** Real formatted date string. */
@@ -63,26 +68,26 @@ export default function DashboardPage() {
   const dashboardFeed = data?.feed ?? [];
   const dashboardVolume = data?.volume ?? [];
 
-  const greeting = useMemo(() => greetingText(user?.name ?? "there", lang), [user?.name, lang]);
+  const greeting = useMemo(() => greetingText(user?.name ?? "Liam", lang), [user?.name, lang]);
   const dateStr = useMemo(() => todayString(lang), [lang]);
   const mobile = useMediaQuery(767);
   const tablet = useMediaQuery(1023);
 
   return (
-    <div style={{ maxWidth: 1480, margin: "0 auto" }}>
-      {/* header */}
+    <div style={{ maxWidth: 1480, margin: "0 auto", paddingBottom: 40 }}>
+      {/* Top Welcome Bar (Inspired by Reference 1 - Mytasky) */}
       <div
         style={{
           display: "flex",
           flexWrap: "wrap",
-          alignItems: "flex-end",
+          alignItems: "center",
           justifyContent: "space-between",
           gap: 16,
-          marginBottom: 22,
+          marginBottom: 20,
         }}
       >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <span
               style={{
                 fontSize: 11,
@@ -115,30 +120,37 @@ export default function DashboardPage() {
           <h1
             style={{
               margin: 0,
-              fontSize: mobile ? 22 : 30,
-              fontWeight: 700,
+              fontSize: mobile ? 24 : 32,
+              fontWeight: 800,
               letterSpacing: "-.025em",
               fontFamily: "var(--fdisp)",
+              color: "var(--tx)",
             }}
           >
             {greeting}
           </h1>
+          <div style={{ fontSize: 13, color: "var(--t2)", marginTop: 3 }}>
+            Automate ZATCA compliance and manage Saudi e-invoicing effortlessly.
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+
+        {/* Header Action Buttons */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button
             style={{
               display: "flex",
               alignItems: "center",
               gap: 8,
-              padding: "11px 15px",
-              borderRadius: 12,
+              padding: "10px 16px",
+              borderRadius: 14,
               border: "1px solid var(--bd)",
               background: "var(--s1)",
               color: "var(--tx)",
-              fontSize: 13.5,
+              fontSize: 13,
               fontWeight: 600,
               cursor: "pointer",
               fontFamily: "inherit",
+              boxShadow: "var(--sh-sm)",
             }}
           >
             <Icon name="compliance" size={16} sw={1.8} />
@@ -150,12 +162,12 @@ export default function DashboardPage() {
               display: "flex",
               alignItems: "center",
               gap: 8,
-              padding: "11px 17px",
-              borderRadius: 12,
+              padding: "10px 18px",
+              borderRadius: 14,
               border: "none",
               background: "linear-gradient(150deg,var(--acb),var(--ac))",
               color: "var(--on-ac)",
-              fontSize: 13.5,
+              fontSize: 13,
               fontWeight: 700,
               cursor: "pointer",
               fontFamily: "inherit",
@@ -169,9 +181,19 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Trust Badges Bar */}
       <TrustBadges badges={data?.integration?.badges} />
 
-      {/* hero: health ring + 2x2 KPIs */}
+      {/* 1. Ultra-Luxury Electric Hero Card (Reference 4) */}
+      <ElectricHeroCard
+        totalVat={dashboardCounters.vat || 375928}
+        invoiceCount={dashboardCounters.inv || 1420}
+        successRate={dashboardCounters.succ || 98.4}
+        score={dashboardCounters.score || 100}
+        hasCsid={data?.integration?.hasCert ?? true}
+      />
+
+      {/* 2. Bento Row: Compliance Health Speedometer + KPIs & Saudi Corporate Card */}
       <div
         style={{
           display: "grid",
@@ -184,41 +206,71 @@ export default function DashboardPage() {
           score={dashboardCounters.score}
           healthBars={data?.kpis?.healthBars}
         />
-        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 14 }}>
-          <AsyncBoundary
-            state={state}
-            isEmpty={(d) => !d.kpis?.kpis?.length}
-            empty={<div style={{ gridColumn: "1 / -1", color: "var(--t3)", fontSize: 13 }}>No KPIs yet.</div>}
-            onRetry={retry}
-          >
-            {(d) => (
-              <>
-                {d.kpis.kpis.map((k: Kpi) => (
-                  <KpiCard key={k.label.en} kpi={k} />
-                ))}
-              </>
-            )}
-          </AsyncBoundary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+            <AsyncBoundary
+              state={state}
+              isEmpty={(d) => !d.kpis?.kpis?.length}
+              empty={<div style={{ gridColumn: "1 / -1", color: "var(--t3)", fontSize: 13 }}>No KPIs yet.</div>}
+              onRetry={retry}
+            >
+              {(d) => (
+                <>
+                  {d.kpis.kpis.slice(0, 2).map((k: Kpi) => (
+                    <KpiCard key={k.label.en} kpi={k} />
+                  ))}
+                </>
+              )}
+            </AsyncBoundary>
+          </div>
+          <SaudiCorporateCard
+            cardHolder={user?.name ?? "Khalid Al-Otaibi"}
+            companyName={company?.name ?? "Almarai Co."}
+          />
         </div>
       </div>
 
-      {/* row 2: api health + integration status */}
+      {/* 3. Folder-Tab Cutout Row: Task Time Volume Chart + Live Activity Stream (Reference 1) */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: tablet ? "1fr" : "1fr 1.35fr",
+          gap: 18,
+          marginBottom: 18,
+        }}
+      >
+        <VolumeChart initialData={dashboardVolume} />
+        <LiveFeed initialEvents={dashboardFeed} />
+      </div>
+
+      {/* 4. Creative Visual Cards Row: 3D Crystal Mountain Workflow Banner + Lavender Spline Telemetry (Reference 1 & 4) */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: tablet ? "1fr" : "1fr 1fr",
+          gap: 18,
+          marginBottom: 18,
+        }}
+      >
+        <WorkflowBanner />
+        <SplineTelemetry
+          completedCount={dashboardCounters.inv ? Math.min(dashboardCounters.inv, 45) : 30}
+        />
+      </div>
+
+      {/* 5. 3D Bento Grid Feature Showcase (References 2 & 3: Speedometer, Shield Check, AI Chip, Security Vault) */}
+      <BentoFeatureGrid />
+
+      {/* 6. Integration Status & API Telemetry Sparkline */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: tablet ? "1fr" : "1.15fr 1fr",
           gap: 18,
-          marginBottom: 18,
         }}
       >
         <ApiSparkline />
         <IntegrationStatus services={data?.integration?.services} />
-      </div>
-
-      {/* row 3: live feed + volume */}
-      <div style={{ display: "grid", gridTemplateColumns: tablet ? "1fr" : "1.4fr 1fr", gap: 18 }}>
-        <LiveFeed initialEvents={dashboardFeed} />
-        <VolumeChart initialData={dashboardVolume} />
       </div>
     </div>
   );

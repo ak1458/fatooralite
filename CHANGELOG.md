@@ -9,6 +9,42 @@ conventions: [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ### Added
 
+- **Production-readiness audit and remediation programme (2026-08-18 →
+  2026-08-20).** A full audit against 1,069 checklist items, then seven
+  remediation phases plus nine explicit product decisions (D1–D9), merged
+  to `main` 2026-08-20. Full write-up: `docs/16-launch-plan.md`'s
+  remediation sections; day-by-day detail: `handoff.md`.
+- **CSV import and export** for customers and products (Pro plan),
+  synchronous with size/row caps, refuses the whole file rather than
+  partially importing on any row error.
+- **Email invoice delivery** — send a PDF invoice by email directly from
+  the app; the recipient is always the invoice's own customer record,
+  never an address supplied by the caller.
+- **WhatsApp invoice delivery** via the Meta Cloud API, with a temporary
+  self-hosted (OpenWA) transport available as an interim option while
+  Meta Business verification is pending. Off by default.
+- **Server-side feature flags**, admin-controlled, fail closed to the
+  code default if the flag store is unreachable.
+- **Dual VAT reporting.** `/api/reports` now returns both a "declarable"
+  figure (every issued invoice) and a "cleared" figure (ZATCA-cleared
+  only), both net of credit/debit notes, shown side by side.
+- A **non-blocking warning** when an invoice is dated into an
+  already-elapsed VAT reporting period.
+- A **read-only, fully audited cross-tenant support surface**
+  (`/api/operator/*`), credential-gated, for diagnosing a customer's
+  account without giving any role standing tenant-wide access.
+- **Row-Level Security** at the Postgres level as an additional,
+  independently-tested defence layer (opt-in — not yet the primary
+  access path for every query).
+- A **structured security and administrative audit trail** — logins,
+  permission denials, role changes, and certificate issuance are now
+  recorded and queryable, not just invoice actions.
+- All legal pages (`/terms`, `/privacy`, `/refund-policy`,
+  `/cancellation-policy`, `/data-retention`, `/acceptable-use`) rewritten
+  from placeholder text into real drafts describing what the product
+  actually does. **Still pending review by qualified legal counsel.**
+- ZATCA submission retries are now idempotent, with an automatic
+  reconciliation job for anything stuck mid-submission.
 - **Paid-only licensing: a 7-day trial and Pro.** The free tier is gone. The
   trial gets the whole ZATCA compliance path (sign, clear, report, QR, PDF)
   capped at 25 invoices a month, 1 branch and 2 seats; Pro removes the caps and
@@ -31,6 +67,12 @@ conventions: [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ### Security
 
+- **`main` is now branch-protected on GitHub**: a pull request and
+  passing CI (lint, tests, build) are required before merge, and
+  force-push / branch deletion are blocked.
+- The AI assistant's global re-index is now restricted to an operator
+  credential (any tenant owner could previously trigger it), and every
+  AI call now records token/latency usage for accounting.
 - **Next.js 16.2.9 → 16.3.0**, closing nine advisories. The one that matters
   most here is a middleware/proxy bypass in App Router applications — this
   app's entire authentication gate is `proxy.ts` — alongside SSRF in rewrites
@@ -53,6 +95,17 @@ conventions: [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ### Fixed
 
+- **Arabic invoice PDFs no longer fail to render.** Any Arabic or
+  mixed-script customer name previously returned a 500 on an
+  already-signed, already-numbered invoice. Now renders correctly with an
+  embedded font and proper bidirectional text shaping.
+- **A credit or debit note was inflating the VAT return instead of
+  reducing it.** Corrected, and both VAT figures are now reconciled
+  through a single shared calculation instead of three separately-wrong
+  ones.
+- **The production support routes (`/api/operator/*`) were unreachable**
+  due to a proxy misconfiguration that pre-dated this fix being noticed —
+  every request 401'd before its own authorization check ever ran.
 - **CI's lint step was failing, so no later CI step had ever run.**
   `npm run lint` exited non-zero on 16 pre-existing errors and runs before the
   `zatca:validate` and `npm audit` gates in the same job. All 16 are fixed and

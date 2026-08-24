@@ -94,11 +94,27 @@ through the same signing/submission pipeline, referencing the original.</p>
 <h2>Customers</h2>
 <p><strong>What:</strong> Your buyers&#39; directory. <strong>Why:</strong> Standard invoices need full buyer identity; reuse
 saves typing. <strong>Problem solved:</strong> stuck on infinite loading. <strong>How:</strong> CRUD; customers appear
-in the invoice buyer picker.</p>
+in the invoice buyer picker. <strong>Bulk import/export (Pro):</strong> upload a CSV of customers via a
+downloadable template, or export the full directory — see &quot;Bulk CSV Import/Export&quot; below.</p>
 <h2>Products</h2>
 <p><strong>What:</strong> Your catalog of goods/services with price + VAT category. <strong>Why:</strong> Fast, consistent
 invoice lines. <strong>Problem solved:</strong> &quot;Loading Products…&quot; forever. <strong>How:</strong> CRUD; products
-appear as selectable invoice line items.</p>
+appear as selectable invoice line items. <strong>Bulk import/export (Pro):</strong> same CSV tool as
+Customers.</p>
+<h2>Invoice Delivery (Email &amp; WhatsApp)</h2>
+<p><strong>What:</strong> Send a finished invoice straight to the customer from the invoice screen, as an
+email with the PDF attached or as a WhatsApp message. <strong>Why:</strong> Issuing an invoice and getting
+it to the buyer used to be two separate steps (download, then send it yourself). <strong>How:</strong> the
+recipient is always read from the customer&#39;s own record on file — never a typed-in address —
+so a delivery can&#39;t accidentally go to the wrong person. WhatsApp delivery is a Pro feature and
+must be turned on for your account before it appears; email delivery has no separate toggle.</p>
+<h2>Bulk CSV Import/Export (Pro)</h2>
+<p><strong>What:</strong> Import customers or products from a spreadsheet, or export either list to CSV.
+<strong>Why:</strong> Setting up a catalog of hundreds of products or a customer list one-by-one doesn&#39;t
+scale. <strong>How:</strong> download the provided template, fill it in, and upload — each row is checked
+before anything is saved, and the whole file is rejected (nothing partially imported) if any
+row has a problem, so you always know exactly what happened. Limits: 1MB / 500 rows per
+upload. Export has no size limit and needs no Pro plan.</p>
 <h2>ZATCA Integration — <em>explained in full</em></h2>
 <p><strong>What it is:</strong> The bridge between Fatoora Lite Pro and the Saudi government&#39;s <strong>Fatoora</strong>
 platform. To issue legal e-invoices, your billing device (an &quot;EGS unit&quot;) must be
@@ -138,7 +154,17 @@ rate). <strong>Why:</strong> Owners want trends, not just compliance. <strong>Pr
 <h2>Reports</h2>
 <p><strong>What:</strong> VAT-return summaries and exports for a chosen period. <strong>Why:</strong> You file VAT with
 ZATCA and your accountant needs CSVs. <strong>How:</strong> period/range selection, totals, CSV export.
-This is also where the AI&#39;s &quot;make a 7-day report&quot; command lands.</p>
+This is also where the AI&#39;s &quot;make a 7-day report&quot; command lands. <strong>Two VAT figures, shown
+side by side:</strong> &quot;Declarable&quot; (every invoice you&#39;ve issued in the period) and &quot;Cleared&quot; (only
+the ones ZATCA has actually cleared/reported). They can differ when something is issued near
+a period boundary and hasn&#39;t cleared yet — both figures are net of any credit/debit notes, so
+a refund correctly reduces what you owe rather than inflating it.</p>
+<h2>Security &amp; Audit Trail</h2>
+<p><strong>What:</strong> A record of who did what, when — logins, permission changes, role changes, and
+every action taken on an invoice or certificate. <strong>Why:</strong> For compliance software, &quot;who
+touched this&quot; needs to be answerable, not just &quot;what does the invoice say now.&quot; <strong>How:</strong>
+every sensitive action is recorded automatically in the background; nothing you do slows down
+or fails because of it.</p>
 <h2>AI Assistant</h2>
 <p><strong>What:</strong> An embedded expert that answers ZATCA questions and <strong>does things for you</strong>. <strong>Why:</strong>
 The rules are complex; users want answers grounded in the actual regulations and the ability
@@ -176,7 +202,7 @@ Arabic-first UX. <strong>Problem solved:</strong> theming is inconsistent and ro
 CSS-variable theme system, consistent across every screen, with standardized motion tokens
 for smooth, premium animations.</p>
 
-<div class="footer">Fatoora Lite Pro documentation · built 2026-08-18 · source: docs/05-features.md</div>
+<div class="footer">Fatoora Lite Pro documentation · built 2026-08-20 · source: docs/support/05-features.md</div>
 </main>
 </div>
 </body>

@@ -122,40 +122,50 @@ export function AssistantDock() {
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
             style={{
               position: "fixed", insetInlineEnd: 24, bottom: 90, zIndex: 90,
-              width: "min(400px, calc(100vw - 48px))", height: "min(560px, calc(100vh - 140px))",
-              background: "var(--s1)", border: "1px solid var(--bd)", borderRadius: 18,
-              boxShadow: "var(--sh)", display: "flex", flexDirection: "column", overflow: "hidden",
+              width: "min(420px, calc(100vw - 48px))", height: "min(580px, calc(100vh - 140px))",
+              background: "linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%), var(--s1)",
+              backdropFilter: "blur(20px)",
+              border: "1px solid var(--bd)", borderRadius: 22,
+              boxShadow: "0 24px 50px -15px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
+              display: "flex", flexDirection: "column", overflow: "hidden",
             }}
           >
-            <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--bd)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--bd)", background: "var(--s2)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                <span style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Icon name="ai" size={17} sw={1.8} />
+                <span style={{ width: 32, height: 32, borderRadius: 10, background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px -2px var(--ac)" }}>
+                  <Icon name="ai" size={18} sw={2} />
                 </span>
-                <div style={{ fontSize: 13.5, fontWeight: 700 }}>Fatoora AI</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "var(--tx)" }}>Fatoora AI</div>
+                  <div style={{ fontSize: 10.5, color: "var(--ac)", fontWeight: 600 }}>ZATCA RAG Copilot</div>
+                </div>
               </div>
               {/* Providers that pick their model by env return no list — an
                   empty picker is worse than none, so it is not rendered. */}
               {models.length > 0 && (
                 <select value={model} onChange={(e) => setModel(e.target.value)} aria-label="Assistant model"
-                  style={{ fontSize: 11.5, padding: "5px 8px", borderRadius: 8, border: "1px solid var(--bd)", background: "var(--s2)", color: "var(--t2)", maxWidth: 150, fontFamily: "inherit" }}>
+                  style={{ fontSize: 11.5, padding: "5px 10px", borderRadius: 10, border: "1px solid var(--bd)", background: "var(--s1)", color: "var(--t2)", maxWidth: 150, fontFamily: "inherit" }}>
                   {models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
                 </select>
               )}
             </div>
 
-            <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
               {messages.length === 0 ? (
-                <div style={{ margin: "auto", textAlign: "center", color: "var(--t3)", fontSize: 13 }}>
-                  Ask about ZATCA, or type a command like<br /><b style={{ color: "var(--t2)" }}>“make a 7-day report”</b> or <b style={{ color: "var(--t2)" }}>“add customer ACME”</b>.
+                <div style={{ margin: "auto", textAlign: "center", color: "var(--t3)", fontSize: 13, padding: "20px 10px" }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>✨</div>
+                  Ask about ZATCA compliance, or type a command like<br /><b style={{ color: "var(--tx)" }}>“make a 7-day report”</b> or <b style={{ color: "var(--tx)" }}>“check CSID status”</b>.
                 </div>
               ) : (
                 messages.map((m, i) => (
                   <div key={i} style={{
                     alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                    maxWidth: "85%", padding: "10px 13px", borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
-                    background: m.role === "user" ? "var(--acs)" : "var(--s2)",
-                    border: "1px solid var(--bd)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word",
+                    maxWidth: "85%", padding: "11px 15px", borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                    background: m.role === "user" ? "linear-gradient(135deg, var(--acb), var(--ac))" : "var(--s2)",
+                    color: m.role === "user" ? "var(--on-ac)" : "var(--tx)",
+                    border: m.role === "user" ? "none" : "1px solid var(--bd)",
+                    boxShadow: m.role === "user" ? "0 4px 14px -4px var(--ac)" : "none",
+                    fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word",
                   }}>
                     {m.text}
                   </div>

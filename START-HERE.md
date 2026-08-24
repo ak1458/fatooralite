@@ -87,6 +87,39 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
   privilege escalation refused, invoice totals recomputed server-side, the
   ZATCA chain did not fork under concurrency, RAG leaked nothing under prompt
   injection. Evidence in the audit report, not inferred from reading code.
+- **Remediation Phase 6 and Phase 7 were scope-checked 2026-08-19** and found
+  0 of 81 combined items implementable by an engineering session (X1–X4
+  owner-access-blocked, D1–D9 owner-decision-blocked). **Later the same day
+  the owner locked all nine D1–D9 decisions and every one was implemented**:
+  D1+D9 fixed a live VAT-report bug, D2 added a back-dating warning, D3
+  confirmed checkout off, D4 drafted all seven legal pages, D5 wrote the
+  architecture ADR, D6 delivered opt-in Postgres RLS, D7 delivered a
+  read-only operator surface, D8 delivered Meta WhatsApp send
+  (feature-flagged off). Same day, a **D8 addendum added OpenWA** as a
+  temporary self-hosted WhatsApp transport alongside Meta — see the
+  invariant below; never document it as production-grade. Verified clean:
+  93 → 95 test files, up to 639 tests, 0 failed, 0 skipped.
+- **2026-08-19–2026-08-20: X2 Neon verification, live deploy, and a
+  production bug fix.** The owner granted CLI access (`gh`/`vercel`/
+  `neonctl`); X2 resolved except encryption-at-rest (console-only); the
+  pending D6 RLS migration was applied to `neondb` (19/19 current).
+  Production was deployed for real and a live-only bug was found and
+  fixed: `proxy.ts` was silently 401-ing both `/api/operator/*` routes in
+  production (no test caught it — every test bypasses the proxy by
+  calling the route handler directly). Fixed in commit `605f029`.
+- **2026-08-20: pushed, CI fixed, PR #16 opened, `main` protected, and
+  merged.** The branch (31 commits) was pushed to `origin` for the first
+  time. A CI env-var gap (`Unit tests` step missing `AUTH_SECRET`/
+  `DATABASE_URL`) and a DB-gate omission in `health/deep`'s tests were
+  found and fixed via PR #16, which went fully green. `main` branch
+  protection was enabled (PR + required CI checks, no force-push). **PR #16
+  was then merged into `main`** (merge commit `69dca91`, 2026-08-20
+  03:27 UTC) — `main` had been stuck at `95ac6fa` (2026-08-06) and now
+  carries the entire remediation programme for the first time. Vercel is
+  not git-connected, so this merge did not itself trigger a deploy — the
+  same-day `vercel --prod` deploy already carries this code. Full detail:
+  `docs/SESSION_HANDOFF_2026-08-18.md` §7–14, `handoff.md`'s 2026-08-19
+  and 2026-08-20 entries, `docs/16-launch-plan.md`'s remediation sections.
 
 ## Previous state (2026-08-06)
 
@@ -399,7 +432,10 @@ identifiers deployment depends on.
    banners; the placeholder text itself was drafted 2026-08-19 (D4), but none
    of it has been reviewed by qualified legal counsel.
 4. **Final Pro pricing** (see Phase 7).
-5. **Branch protection on `main`** — confirmed unset.
+5. ~~**Branch protection on `main`** — confirmed unset.~~ **DONE
+   2026-08-20** — PR required, CI checks required, no force-push. `main`
+   is also now merged current with the remediation programme (PR #16,
+   `69dca91`).
 6. **`GROQ_API_KEY`** if the Groq demo path is wanted; it ships inert without it.
 7. **Meta Business verification + WhatsApp message-template approval**
    (D8, 2026-08-19) — **deferred by explicit owner instruction, not

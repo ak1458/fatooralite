@@ -7,25 +7,40 @@ export function NetworkTopology() {
   return (
     <div
       style={{
-        borderRadius: 18,
-        padding: 22,
+        borderRadius: 22,
+        padding: 24,
         border: "1px solid var(--bd)",
         background:
-          "radial-gradient(90% 120% at 50% 0%, var(--acs), transparent 60%), var(--s1)",
+          "radial-gradient(90% 120% at 50% 0%, rgba(56, 189, 248, 0.15), transparent 60%), linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.01) 100%), var(--s1)",
         boxShadow: "var(--sh)",
-        marginBottom: 18,
+        marginBottom: 20,
       }}
     >
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
-        {t.networkTitle}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--tx)", display: "flex", alignItems: "center", gap: 8 }}>
+          <span>⚡</span>
+          <span>{t.networkTitle}</span>
+        </div>
+        <span style={{ fontSize: 11.5, color: "var(--info)", background: "var(--infos)", padding: "3px 9px", borderRadius: 8, fontWeight: 600 }}>
+          Real-time Telemetry Trace
+        </span>
       </div>
+
       <svg viewBox="0 0 940 300" style={{ width: "100%", height: "auto", display: "block" }}>
+        <defs>
+          <linearGradient id="topoFlowGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#38bdf8" />
+            <stop offset="50%" stopColor="#10b981" />
+            <stop offset="100%" stopColor="#38bdf8" />
+          </linearGradient>
+        </defs>
+
         <g
-          stroke="var(--ac)"
-          strokeWidth="1.6"
+          stroke="url(#topoFlowGrad)"
+          strokeWidth="2"
           fill="none"
-          strokeDasharray="5 7"
-          opacity=".55"
+          strokeDasharray="6 8"
+          opacity=".75"
           style={{ animation: "flFlow 1.6s linear infinite" }}
         >
           <path d="M150 150 H250" />
@@ -47,11 +62,11 @@ export function NetworkTopology() {
         </g>
         {/* engine */}
         <g>
-          <rect x="250" y="112" width="150" height="76" rx="18" fill="var(--s2)" stroke="var(--ac)" strokeWidth="1.5" />
-          <text x="325" y="146" fill="var(--tx)" fontSize="15" fontWeight="700" textAnchor="middle">
+          <rect x="250" y="112" width="150" height="76" rx="18" fill="var(--s2)" stroke="var(--ac)" strokeWidth="1.8" filter="drop-shadow(0 0 10px rgba(16, 185, 129, 0.3))" />
+          <text x="325" y="146" fill="var(--tx)" fontSize="15" fontWeight="800" textAnchor="middle">
             Fatoora Lite Pro
           </text>
-          <text x="325" y="166" fill="var(--ac)" fontSize="11" fontWeight="600" textAnchor="middle">
+          <text x="325" y="166" fill="var(--ac)" fontSize="11" fontWeight="700" textAnchor="middle">
             Compliance Engine
           </text>
         </g>
@@ -69,11 +84,11 @@ export function NetworkTopology() {
           <text x="590" y="244">QR Generation</text>
         </g>
         {/* APIs */}
-        <g fill="var(--s2)" stroke="var(--ac)" strokeWidth="1.3">
+        <g fill="var(--s2)" stroke="var(--info)" strokeWidth="1.5">
           <rect x="770" y="92" width="100" height="36" rx="10" />
           <rect x="770" y="172" width="100" height="36" rx="10" />
         </g>
-        <g fill="var(--ac)" fontSize="12" fontWeight="700" textAnchor="middle">
+        <g fill="var(--info)" fontSize="12" fontWeight="700" textAnchor="middle">
           <text x="820" y="115">Clearance</text>
           <text x="820" y="195">Reporting</text>
         </g>

@@ -71,7 +71,7 @@ User Workflows by Persona
 
 For detailed operational specifications, explore the complete documentation suite:
 
-* **Business & Operations Manual**: [docs/14-easy-business-setup-guide.md](file:///d:/gravity/FatooraLite%28ZATCA%29/docs/14-easy-business-setup-guide.md)
+* **Business & Operations Manual**: [docs/support/14-easy-business-setup-guide.md](file:///d:/gravity/FatooraLite%28ZATCA%29/docs/support/14-easy-business-setup-guide.md)
 * **System Architecture Reference**: [docs/02-architecture.md](file:///d:/gravity/FatooraLite%28ZATCA%29/docs/02-architecture.md)
-* **ZATCA Integration Specification**: [docs/15-zatca-e-invoicing-integration-guide.md](file:///d:/gravity/FatooraLite%28ZATCA%29/docs/15-zatca-e-invoicing-integration-guide.md)
+* **ZATCA Integration Specification**: [docs/support/15-zatca-e-invoicing-integration-guide.md](file:///d:/gravity/FatooraLite%28ZATCA%29/docs/support/15-zatca-e-invoicing-integration-guide.md)
 * **Production Readiness Report**: [docs/13-production-readiness-report.md](file:///d:/gravity/FatooraLite%28ZATCA%29/docs/13-production-readiness-report.md)

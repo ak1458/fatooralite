@@ -47,13 +47,17 @@ export function HealthRing({ score, healthBars: bars, healthValues: values }: He
 
   return (
     <Card
+      folderTab={
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span>🛡️</span>
+          <span>{t.complianceHealth}</span>
+        </div>
+      }
+      glow
       style={{
         position: "relative",
         overflow: "hidden",
-        borderRadius: 20,
-        padding: 26,
-        background:
-          "radial-gradient(120% 120% at 100% 0%, var(--acs), transparent 55%), var(--s1)",
+        minHeight: 250,
       }}
     >
       <div
@@ -62,28 +66,26 @@ export function HealthRing({ score, healthBars: bars, healthValues: values }: He
           alignItems: "center",
           justifyContent: "space-between",
           marginBottom: 18,
+          marginTop: 6,
         }}
       >
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--t2)" }}>
-            {t.complianceHealth}
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--tx)" }}>
+            ZATCA Phase-2 Engine
           </div>
           <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 2 }}>
             {t.healthSub}
           </div>
         </div>
-        {/* Derived from the score this pill sits next to. It was the fixed
-            string "100% Compliant", rendered unconditionally — so a tenant
-            scoring 0 was told it was fully compliant, on a compliance
-            product. */}
         <span
           style={{
             fontSize: 11.5,
             fontWeight: 700,
-            padding: "5px 11px",
+            padding: "5px 12px",
             borderRadius: 20,
             background: score >= 100 ? "var(--acs)" : score > 0 ? "var(--warns)" : "var(--s2)",
             color: score >= 100 ? "var(--ac)" : score > 0 ? "var(--warn)" : "var(--t3)",
+            border: `1px solid ${score >= 100 ? "var(--acbd)" : "var(--bd)"}`,
             display: "flex",
             alignItems: "center",
             gap: 6,
@@ -95,6 +97,7 @@ export function HealthRing({ score, healthBars: bars, healthValues: values }: He
               height: 6,
               borderRadius: "50%",
               background: score >= 100 ? "var(--ac)" : score > 0 ? "var(--warn)" : "var(--t3)",
+              boxShadow: score >= 100 ? "0 0 8px var(--ac)" : "none",
             }}
           />
           {`${Math.round(score)}% ${t.compliant}`}
@@ -140,6 +143,7 @@ export function HealthRing({ score, healthBars: bars, healthValues: values }: He
                 letterSpacing: "-.03em",
                 lineHeight: 1,
                 fontFamily: "var(--fdisp)",
+                color: "var(--tx)",
               }}
             >
               {val.toFixed(1)}

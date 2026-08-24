@@ -27,7 +27,7 @@ const DOCS = [
   ["02-architecture.md", "Architecture", "Product"],
   ["03-user-flows.md", "User Flows", "Product"],
   ["04-functional-spec.md", "Functional Spec", "Product"],
-  ["05-features.md", "Feature Docs", "Product"],
+  ["support/05-features.md", "Feature Docs", "Product"],
   ["06-gap-analysis.md", "Gap Analysis", "History"],
   ["07-roadmap.md", "Roadmap", "History"],
   ["08-remaining-work.md", "Final Build Plan", "History"],
@@ -38,14 +38,15 @@ const DOCS = [
 const pageName = (file) =>
   file === "README.md" ? "index.html" : basename(file, ".md") + ".html";
 
-/** Rewrite ./xx.md links to portal pages. */
+/** Rewrite ./xx.md and ./dir/xx.md links to portal pages (portal output is flat). */
+const MD_LINK = /^\.\/(?:[\w-]+\/)?[\w-]+\.md$/;
 const renderer = new marked.Renderer();
 const origLink = renderer.link.bind(renderer);
 renderer.link = (token) => {
   const href = typeof token === "object" ? token.href : token;
-  if (typeof token === "object" && token.href && /^\.\/[\w-]+\.md$/.test(token.href)) {
+  if (typeof token === "object" && token.href && MD_LINK.test(token.href)) {
     token.href = pageName(token.href.slice(2));
-  } else if (typeof href === "string" && /^\.\/[\w-]+\.md$/.test(href)) {
+  } else if (typeof href === "string" && MD_LINK.test(href)) {
     // older marked signature (href, title, text)
     return origLink(pageName(href.slice(2)), arguments[1], arguments[2]);
   }

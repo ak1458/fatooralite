@@ -91,9 +91,10 @@ export function InvoiceTable({ rows }: { rows: Invoice[] }) {
         role="table"
         aria-label="Invoices"
         style={{
-          borderRadius: 18,
+          position: "relative",
+          borderRadius: 20,
           border: "1px solid var(--bd)",
-          background: "var(--s1)",
+          background: "linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.01) 100%), var(--s1)",
           boxShadow: "var(--sh)",
           overflow: "hidden",
           minWidth: 900,
@@ -106,7 +107,7 @@ export function InvoiceTable({ rows }: { rows: Invoice[] }) {
             display: "grid",
             gridTemplateColumns: GRID,
             gap: 12,
-            padding: "13px 20px",
+            padding: "14px 20px",
             borderBottom: "1px solid var(--bd)",
             background: "var(--s2)",
           }}

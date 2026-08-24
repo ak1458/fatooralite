@@ -40,12 +40,30 @@ through the same signing/submission pipeline, referencing the original.
 ## Customers
 **What:** Your buyers' directory. **Why:** Standard invoices need full buyer identity; reuse
 saves typing. **Problem solved:** stuck on infinite loading. **How:** CRUD; customers appear
-in the invoice buyer picker.
+in the invoice buyer picker. **Bulk import/export (Pro):** upload a CSV of customers via a
+downloadable template, or export the full directory — see "Bulk CSV Import/Export" below.
 
 ## Products
 **What:** Your catalog of goods/services with price + VAT category. **Why:** Fast, consistent
 invoice lines. **Problem solved:** "Loading Products…" forever. **How:** CRUD; products
-appear as selectable invoice line items.
+appear as selectable invoice line items. **Bulk import/export (Pro):** same CSV tool as
+Customers.
+
+## Invoice Delivery (Email & WhatsApp)
+**What:** Send a finished invoice straight to the customer from the invoice screen, as an
+email with the PDF attached or as a WhatsApp message. **Why:** Issuing an invoice and getting
+it to the buyer used to be two separate steps (download, then send it yourself). **How:** the
+recipient is always read from the customer's own record on file — never a typed-in address —
+so a delivery can't accidentally go to the wrong person. WhatsApp delivery is a Pro feature and
+must be turned on for your account before it appears; email delivery has no separate toggle.
+
+## Bulk CSV Import/Export (Pro)
+**What:** Import customers or products from a spreadsheet, or export either list to CSV.
+**Why:** Setting up a catalog of hundreds of products or a customer list one-by-one doesn't
+scale. **How:** download the provided template, fill it in, and upload — each row is checked
+before anything is saved, and the whole file is rejected (nothing partially imported) if any
+row has a problem, so you always know exactly what happened. Limits: 1MB / 500 rows per
+upload. Export has no size limit and needs no Pro plan.
 
 ## ZATCA Integration — *explained in full*
 **What it is:** The bridge between Fatoora Lite Pro and the Saudi government's **Fatoora**
@@ -91,7 +109,18 @@ rate). **Why:** Owners want trends, not just compliance. **Problem solved:** moc
 ## Reports
 **What:** VAT-return summaries and exports for a chosen period. **Why:** You file VAT with
 ZATCA and your accountant needs CSVs. **How:** period/range selection, totals, CSV export.
-This is also where the AI's "make a 7-day report" command lands.
+This is also where the AI's "make a 7-day report" command lands. **Two VAT figures, shown
+side by side:** "Declarable" (every invoice you've issued in the period) and "Cleared" (only
+the ones ZATCA has actually cleared/reported). They can differ when something is issued near
+a period boundary and hasn't cleared yet — both figures are net of any credit/debit notes, so
+a refund correctly reduces what you owe rather than inflating it.
+
+## Security & Audit Trail
+**What:** A record of who did what, when — logins, permission changes, role changes, and
+every action taken on an invoice or certificate. **Why:** For compliance software, "who
+touched this" needs to be answerable, not just "what does the invoice say now." **How:**
+every sensitive action is recorded automatically in the background; nothing you do slows down
+or fails because of it.
 
 ## AI Assistant
 **What:** An embedded expert that answers ZATCA questions and **does things for you**. **Why:**

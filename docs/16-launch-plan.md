@@ -37,7 +37,10 @@ These gate launch and no amount of code closes them:
    `/cancellation-policy`, `/data-retention`, `/acceptable-use`. All currently
    carry DRAFT banners with bracketed placeholders.
 4. **Final Pro pricing.** `PRO_PRICE_HALALAS` is a 149 SAR placeholder.
-5. **Branch protection on `main`** — confirmed unset via `gh api`.
+5. ~~**Branch protection on `main`** — confirmed unset via `gh api`.~~
+   **DONE 2026-08-20.** PR required, `lint · test · build` CI check
+   required and current with `main`, force-push and deletion blocked. See
+   "Push, CI fix, PR #16, branch protection" below.
 
 ---
 
@@ -710,3 +713,81 @@ refuses entirely — inserting nothing — if any row fails validation.
 No OPEN decision (D1–D9) was touched. Full regression, migration
 verification, and exact counts: `docs/SESSION_HANDOFF_2026-08-18.md`'s
 Phase 5 addendum.
+
+---
+
+## Remediation Phase 6 & Phase 7 — 2026-08-19 — 0 implementable
+
+Phase 6 (`docs/audit/remediation-roadmap.md`'s X1–X4, external
+verification) and Phase 7 (the decision register, D1–D9) were both opened
+and scope-checked: **neither had any item an engineering session could
+execute.** X1–X4 each need owner-only credentials (Fatoora portal OTP,
+Neon console, Moyasar KYC); D1–D9 were all still OPEN and this session was
+explicitly instructed not to resolve any of them unilaterally. Verified
+anyway — all 5 CI gates re-run fresh, full 87-file regression reproduced
+the exact Phase 5 baseline (575/575 passed). No code, schema, or ledger
+status changed. Full detail: `docs/audit/remediation-ledger.md`'s "Phase 6
+& Phase 7 outcome," `docs/SESSION_HANDOFF_2026-08-18.md` §7.
+
+## Decisions D1–D9 — 2026-08-19 — all approved and implemented
+
+The owner reviewed a decision-readiness table and locked all nine
+decisions the same day; every one was then implemented, not just
+recorded. D1+D9 fixed a live VAT-report correctness bug (credit notes had
+been inflating totals instead of reducing them). D2 added a non-blocking
+back-dating warning. D3 confirmed checkout stays off, no price invented.
+D4 drafted all seven legal pages from real product practice (still
+unreviewed by counsel). D5 wrote the architecture ADR. D6 delivered
+Postgres RLS as a tested, opt-in mechanism (not adopted at any real call
+site). D7 delivered a read-only cross-tenant operator surface (`GET /api/
+operator/companies`) — not the full Customer Control Center, which stays
+unauthorized. D8 delivered WhatsApp's core send capability via Meta Cloud
+API, feature-flagged off, no production send yet verified. Verified
+clean afterward: 93 test files, 612 tests, 0 failed, 0 skipped, all 5 CI
+gates green. Full per-decision detail: `docs/audit/decision-register.md`;
+session mechanics: `docs/SESSION_HANDOFF_2026-08-18.md` §8.
+
+**D8 addendum, 2026-08-19 (later the same day) — OpenWA added as a
+temporary interim WhatsApp transport.** D8 itself was not reopened; the
+owner directed using a self-hosted gateway (OpenWA) behind the same
+`sendWhatsAppInvoice()` interface while Meta Business verification stays
+deferred — explicitly **not** a replacement for Meta, and never to be
+documented as the production/compliance-grade choice (OpenWA's own docs
+warn of a real account-ban risk). Full regression: 95 files, 639 tests, 0
+failed, 0 skipped. No real send verified through either provider this
+session. Full detail: `docs/audit/decision-register.md` D8's addendum,
+`docs/SESSION_HANDOFF_2026-08-18.md` §10.
+
+**48-hour launch-readiness pass, 2026-08-19.** P0-only scope: baseline
+gates re-verified green, `docs/18-production-checklist.md` (dated
+2026-08-05, actively misstating current reality) rewritten to match
+actual state. No P1 item found actionable — each explicitly deferred as
+high-risk-or-unnecessary for launch, not silently skipped. Full detail:
+`docs/SESSION_HANDOFF_2026-08-18.md` §9.
+
+## Push, CI fix, PR #16, branch protection, merge — 2026-08-20
+
+The branch (`audit/production-readiness-2026-08-18`, 31 commits) was
+pushed to `origin` for the first time. GitHub then showed `main` failing
+CI — root cause: **none of this remediation programme had ever been
+merged into `main`**, and the `Unit tests` CI step lacked
+`AUTH_SECRET`/`DATABASE_URL` placeholders, so `lib/env.ts` threw at import
+time before any test ran. Fixed (`7240cf9`). Opened **PR #16** to trigger
+CI for real, which surfaced a second bug — two DB-touching tests in
+`app/api/health/deep/route.test.ts` were never gated behind `hasTestDb`
+— fixed (`c953798`). Second PR run: fully green (lint, audit, unit tests,
+ZATCA validation, build).
+
+`main` branch protection was enabled: PR required (0 reviewers, solo
+repo), `lint · test · build` required and current with `main`, force-push
+and deletion blocked, `enforce_admins: false`.
+
+**PR #16 was merged into `main` the same day** (merge commit `69dca91`,
+2026-08-20 03:27 UTC) — the entire remediation programme (Phases 1–7, all
+nine D1–D9 decisions, the OpenWA interim transport, the production proxy
+fix, the CI fix) is now live on `main` for the first time; `main` had
+been stuck at `95ac6fa` (2026-08-06) until this merge. Vercel is not
+git-connected, so the merge itself does not trigger a deploy — the
+2026-08-20 CLI-access session's `vercel --prod` deploy already carries
+this same code. Full detail: `docs/SESSION_HANDOFF_2026-08-18.md` §12–13,
+`handoff.md`'s 2026-08-20 entries.

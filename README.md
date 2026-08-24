@@ -50,6 +50,11 @@ accounting suite.
 - 🔐 **Auth + RBAC** — scrypt passwords, role→permission matrix, jose sessions,
   route guard.
 - 📱 **Installable PWA** — manifest, service worker, offline-aware shell.
+- 📤 **Invoice delivery** — email (PDF attached) and WhatsApp, sent straight
+  from the invoice, recipient always the customer's own record on file.
+- 📥 **Bulk CSV import/export** for customers and products (Pro plan).
+- 🛡️ **Full security audit trail** — logins, permission changes, and
+  document actions are recorded and queryable, not just invoice history.
 
 ## Screenshots
 

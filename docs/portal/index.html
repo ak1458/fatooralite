@@ -65,6 +65,12 @@ main input[type=checkbox]{accent-color:var(--ac)}
 <blockquote>
 <p>💡 <strong>Browsable Web Portal</strong>: Run <code>npm run docs:build</code> inside <code>fatooralite/</code> and open <code>docs/portal/index.html</code> to browse this complete documentation suite as a responsive, offline-ready HTML site with dark/light mode support.</p>
 </blockquote>
+<blockquote>
+<p>🤖 <strong><a href="./support/"><code>docs/support/</code></a></strong> is the customer-support-facing subset — plain-language
+feature docs, the business setup guide, and the ZATCA integration guide. Point an external
+support AI agent (or a support team) at that folder alone; everything else in <code>docs/</code> is
+internal engineering/audit material not meant for customers.</p>
+</blockquote>
 <hr>
 <h2>Master Documentation Index</h2>
 <table>
@@ -102,7 +108,7 @@ main input[type=checkbox]{accent-color:var(--ac)}
 </tr>
 <tr>
 <td align="center"><strong>05</strong></td>
-<td align="left"><strong><a href="05-features.html">Feature Documentation</a></strong></td>
+<td align="left"><strong><a href="05-features.html">Feature Documentation</a></strong> 🤖</td>
 <td align="left">Deep breakdown of each functional module (Invoices, Customers, Products, RBAC, Subscriptions).</td>
 </tr>
 <tr>
@@ -147,12 +153,12 @@ main input[type=checkbox]{accent-color:var(--ac)}
 </tr>
 <tr>
 <td align="center"><strong>14</strong></td>
-<td align="left"><strong><a href="14-easy-business-setup-guide.html">Business Administration &amp; Operations Manual</a></strong></td>
+<td align="left"><strong><a href="14-easy-business-setup-guide.html">Business Administration &amp; Operations Manual</a></strong> 🤖</td>
 <td align="left"><strong>Non-Developer &amp; Business Manual</strong>: Step-by-step 5-minute setup guide, National Address rules, ZATCA OTP guide, RBAC, and AI commands.</td>
 </tr>
 <tr>
 <td align="center"><strong>15</strong></td>
-<td align="left"><strong><a href="15-zatca-e-invoicing-integration-guide.html">ZATCA Phase-2 Technical &amp; Integration Guide</a></strong></td>
+<td align="left"><strong><a href="15-zatca-e-invoicing-integration-guide.html">ZATCA Phase-2 Technical &amp; Integration Guide</a></strong> 🤖</td>
 <td align="left"><strong>Technical Compliance Spec</strong>: UBL 2.1 XML schema, ECDSA secp256k1 keys, XAdES C14N-11, TLV QR code, and REST API clearance.</td>
 </tr>
 <tr>
@@ -167,9 +173,17 @@ main input[type=checkbox]{accent-color:var(--ac)}
 </tr>
 </tbody></table>
 <hr>
-<p><strong>Domain:</strong> Saudi Arabia ZATCA &quot;Fatoora&quot; Phase-2 (Integration Phase) E-Invoicing Compliance.<br><strong>Product Status:</strong> Fully implemented, security-hardened, and cryptographically verified.</p>
+<p><strong>Domain:</strong> Saudi Arabia ZATCA &quot;Fatoora&quot; Phase-2 (Integration Phase) E-Invoicing Compliance.<br><strong>Product Status:</strong> Implemented and internally verified (crypto signing, RBAC, multi-tenant
+isolation — see <code>docs/audit/2026-08-18-production-audit.md</code>). <strong>NOT production-ready as of the
+2026-08-18 audit</strong> — no real ZATCA round trip has ever been performed (owner-blocked on <strong>X1</strong>).
+Current state, what&#39;s left, and what&#39;s owner-blocked: <code>START-HERE.md</code> (repo root), not this line.</p>
+<blockquote>
+<p><strong>Docs 00–10 above are the original master suite</strong>, last regenerated into <code>docs/portal/</code>
+2026-08-18. Docs 11 onward, and everything under <code>docs/audit/</code>, are not part of that portal
+build (<code>scripts/build-docs.mjs</code> only covers 00–10) — read them directly as markdown.</p>
+</blockquote>
 
-<div class="footer">Fatoora Lite Pro documentation · built 2026-08-18 · source: docs/README.md</div>
+<div class="footer">Fatoora Lite Pro documentation · built 2026-08-20 · source: docs/README.md</div>
 </main>
 </div>
 </body>

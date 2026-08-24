@@ -2898,3 +2898,212 @@ to `fatoora_audit` only, verified via `scripts/migration-drill.ts` (0
 failures against a fresh empty schema). Full test suite counts and the
 `neondb` drift finding: see `docs/SESSION_HANDOFF_2026-08-18.md`'s Phase 5
 addendum.
+
+## 2026-08-19 — Remediation Phase 6 & Phase 7 scope-check — 0 implementable
+
+A follow-up session opened specifically to run Phase 6 (`docs/audit/
+remediation-roadmap.md`'s X1–X4, external verification) and Phase 7 (the
+decision register, D1–D9). Read the governing docs first, confirmed
+`git status` clean at `94585b1`, then found **neither phase has any item
+an engineering session can execute**: X1–X4 each need a credential or
+access this session doesn't hold (Fatoora portal OTP, Neon console,
+Moyasar KYC — X4 additionally needs D8 first); D1–D9 were all still OPEN
+and this session's instructions explicitly prohibited resolving any of
+them unilaterally. Verified anyway rather than skipping verification along
+with the (absent) work: all 5 CI gates re-run fresh, full 87-file
+regression suite reproduced the exact Phase 5 baseline — **575/575
+passed, 0 failed, 0 skipped**. One process mistake made and caught
+mid-session: the 81-file batch was briefly run concurrently with a
+schema-pushing file against the same live `fatoora_audit`, reproducing the
+known race from Phase 3–5; re-sequenced and the re-run was clean, no
+application code implicated. No code, schema, or ledger status changed —
+this session's only artifacts are documentation (this entry, `docs/audit/
+remediation-ledger.md`'s "Phase 6 & Phase 7 outcome" section, `docs/
+SESSION_HANDOFF_2026-08-18.md` §7). Full detail there.
+
+## 2026-08-19 — D1–D9 decisions locked and implemented (owner review)
+
+Later the same day, the owner reviewed a decision-readiness table and
+explicitly locked all nine decisions — every one was then implemented,
+not merely recorded. **D1 (Option C) + D9 (Option B)**, built together:
+`GET /api/reports` now returns both a "declarable" (every issued invoice)
+and "cleared" (ZATCA-cleared only) VAT figure, both net of credit/debit
+notes via a new shared `lib/zatca/reconciliation.ts` helper that replaced
+three separately-wrong summation sites — this fixed a **currently-live**
+correctness bug (a credit note was inflating the VAT return instead of
+reducing it), not a hypothetical one. **D2 (Option B)**: a non-blocking
+warning on invoices dated into an already-elapsed reporting month, no
+period lock. **D3**: verified already OFF, nothing to build. **D4 (Option
+A)**: all seven legal pages rewritten from placeholder brackets into real
+draft text grounded in this codebase's actual practices, DRAFT banners
+reworded to "drafted, not reviewed by counsel." **D5 (Option A)**:
+`docs/audit/adr-001-hybrid-architecture.md`, pure documentation. **D6
+(Option C)**: real, adversarially-tested Postgres RLS
+(`prisma/migrations/20260819100000_row_level_security`, `lib/db/
+rls-client.ts`) — deliberately **not** wired into the app's runtime
+client yet, an opt-in primitive (`queryAsTenant()`), applied only to
+`fatoora_audit` at the time. **D7 (Option C)**: `GET /api/operator/
+companies`, read-only cross-tenant, `OPERATOR_SECRET`-gated — the full
+Customer Control Center stays BLOCKED. **D8 (Option A)**: WhatsApp
+invoice delivery via Meta Cloud API (`lib/whatsapp/send.ts`, `POST /api/
+invoices/:id/whatsapp`), feature-flagged OFF, no production send verified
+(Meta Business verification still owner-pending).
+
+Verified clean: all 5 CI gates green, full regression **93 files, 612
+tests, 0 failed, 0 skipped** (6 new test files). Three genuine Neon
+connection-latency timeouts surfaced by running the full batch (not
+pre-existing in isolation) were fixed with explicit 20s test timeouts,
+one with a real code fix (`queryAsTenant`'s transaction `maxWait` raised
+from Prisma's 2s default to 15s/20s, mirroring `issueInvoice()`'s
+existing override). Commits: `6b6a623`, `bb68080`, `917331d`, `8685d92`,
+`7b00972`, `b90000a`, `a1315f5`. Not pushed to `main`. Full per-decision
+detail: `docs/audit/decision-register.md`; session mechanics: `docs/
+SESSION_HANDOFF_2026-08-18.md` §8.
+
+## 2026-08-19 — 48-hour launch-readiness pass
+
+Explicit P0/P1-only scope, no new features. P0: baseline gate
+re-verification (all green), and `docs/18-production-checklist.md` —
+dated 2026-08-05, actively misstating current reality (wrong branch,
+wrong test count, gaps listed as open that were fixed phases ago) —
+rewritten to match actual state (commit `fa6b22d`). P1: nothing found
+actionable — RLS app-wide adoption, operator-route rate limiting, the
+backup/restore drill, and `bench-concurrent.ts` were all checked and
+explicitly deferred as high-risk-or-unnecessary for launch, not silently
+skipped. No code changed, documentation only. Full reasoning: `docs/
+SESSION_HANDOFF_2026-08-18.md` §9.
+
+## 2026-08-19 — OpenWA added as temporary interim WhatsApp transport (D8 addendum)
+
+Owner directed a change to D8's *implementation*, not the decision: pause
+Meta Business verification for now and use OpenWA
+(github.com/rmyndharis/OpenWA), a self-hosted WhatsApp gateway, as a
+temporary transport behind the same interface, kept low-cost. **OpenWA is
+not, and must never be documented as, the production/compliance-grade
+WhatsApp path** — it connects via reverse-engineered WhatsApp clients, its
+own docs warn of a real account-ban risk and say "not approved" for
+regulated sectors; Meta's Cloud API remains the intended production path.
+
+`lib/whatsapp/send.ts` became a thin dispatcher over two provider modules
+— `providers/meta.ts` (the prior implementation, unchanged) and
+`providers/openwa.ts` (new: document-send and session-status endpoints,
+PDFs sent as base64 not a fetchable URL). Selection order: explicit
+`WHATSAPP_PROVIDER` override, else Meta if configured (compliance-grade
+always wins automatically), else OpenWA if configured, else mock. New
+read-only operator surface `GET /api/operator/whatsapp-session` reports
+provider/session health without ever exposing the API key or a QR code —
+pairing stays on OpenWA's own dashboard, deliberately not built into this
+app. New optional env vars: `OPENWA_API_URL`, `OPENWA_API_KEY`,
+`OPENWA_SESSION_ID`, `WHATSAPP_PROVIDER`.
+
+All tests against an injected mock `fetch` — no real WhatsApp account or
+running OpenWA instance available this session, per instruction. Full
+regression: **95 files, 639 tests, 0 failed, 0 skipped**. One infra blip
+mid-run (Neon free-tier compute cold-starting after an idle gap) diagnosed
+as transient latency, not a defect — re-ran the affected files once warm,
+clean, no timeout changed. Commit `aa36b7b`. No real send has ever been
+verified through either provider. Full detail: `docs/audit/
+decision-register.md` D8's addendum, `docs/SESSION_HANDOFF_2026-08-18.md`
+§10.
+
+## 2026-08-19 — X2 Neon verification + live deployment check (stale code found)
+
+Read-only pass, no application code modified. X2: 6 of 12 checklist items
+verified directly against the production database; 3 remain console-only
+owner-blocked; 1 (retention) owner-reported, unconfirmed here. Two
+findings carried forward: prod/test share one Neon compute
+(`ep-frosty-bar-ajlzdhux` — the W17 separation gap is confirmed, not just
+suspected), and migration `20260819100000_row_level_security` (D6) was
+genuinely pending on `neondb`, deliberately not applied without owner
+approval.
+
+**The significant finding**: `https://fatooralite.vercel.app` is up and
+healthy (`/api/health` 200, auth boundaries correct) but running **stale
+code** — `/terms` still served the placeholder text D4 had already
+replaced locally, because this branch had never been pushed (`main` 28
+commits behind). Nothing on the live site reflected the remediation
+programme at that point. Full detail: `docs/audit/remediation-ledger.md`'s
+X2 section, `docs/SESSION_HANDOFF_2026-08-18.md` §11.
+
+## 2026-08-20 — CLI access granted, production actually deployed, proxy bug fixed
+
+The owner authenticated `gh`, `vercel`, and `neonctl` on this machine and
+authorized working live. X2 fully resolved except encryption-at-rest
+(genuinely console/vendor-doc-only): Neon plan confirmed Free, retention
+confirmed 21600s = 6h exactly, self-service PITR restore confirmed
+available via `neonctl branches restore`. The pending D6 RLS migration was
+applied to `neondb` — 19/19 migrations now current, verified
+non-breaking (`relrowsecurity=true` on all four target tables, app
+queries and `/api/health` unaffected).
+
+Production was deployed for real (`vercel --prod`) — twice. The first
+deploy surfaced a bug no test could have caught: **`proxy.ts` was
+silently blocking both operator routes in production**, gating every
+`/api/*` path behind a session cookie without exempting `/api/operator/*`
+the way `/api/cron` and `/api/billing/webhook` already are for their own
+bearer/shared-secret auth. Every existing test calls the route handler
+directly, bypassing `proxy.ts` entirely — it only showed up testing the
+real HTTP path. Fixed by adding `/api/operator` to the exemption list
+(commit `605f029`), two new regression tests added, all 28 existing proxy
+and operator-route tests re-run green. Also re-verified `OPERATOR_SECRET`
+properly (the earlier check via `vercel env pull` was reading a
+deliberately-redacted Sensitive value, not a real problem with what was
+stored) — both operator routes now confirmed live with correct 200/403
+behavior. `git push` itself was not yet possible this session — `gh`'s
+OAuth token lacked the `workflow` scope needed to push a change touching
+`.github/workflows/ci.yml`; a scope refresh was started, pending one more
+owner approval. Full detail: `docs/SESSION_HANDOFF_2026-08-18.md` §12.
+
+## 2026-08-20 — Push completed, CI fixed, PR #16 opened, main branch protected
+
+The `workflow`-scope refresh from the prior session succeeded on retry.
+Push landed: 31 commits, `audit/production-readiness-2026-08-18` now
+matches `origin` exactly.
+
+GitHub then showed `main`'s latest check failing — investigated rather
+than assumed: the failure was on `main`'s actual HEAD (`95ac6fa`,
+2026-08-06), because **none of this entire remediation programme had ever
+been merged into `main`**. Root cause: the CI `Unit tests` step had no
+`AUTH_SECRET`/`DATABASE_URL` placeholders, so `lib/env.ts`'s
+`validateEnv()` threw at import time before any test could run. Fixed in
+`.github/workflows/ci.yml` (commit `7240cf9`; turned out partially
+redundant with `vitest.config.ts`'s existing fallback, which also never
+reached `main` — left the belt-and-braces fix in anyway, recorded
+honestly rather than overclaimed).
+
+**Opened PR #16** to trigger CI via `pull_request` and verify
+locally-unverifiable changes for real. First run surfaced a second,
+genuine bug: `app/api/health/deep/route.test.ts` had two DB-touching
+tests never gated behind `hasTestDb` (unlike every other DB-touching test
+in the codebase) — they only ever passed locally because a real
+`DATABASE_URL` was always configured, and CI's is an intentional
+non-connecting placeholder. Fixed (commit `c953798`) by moving the two
+success-path tests under `describe.skipIf(!hasTestDb)`, the codebase's own
+established convention. **Second PR run: fully green** — lint, audit,
+unit tests, ZATCA validation, build all passed.
+
+`main` branch protection enabled per the owner's direct request: PR
+required before merge (0 reviewers — solo repo), `lint · test · build`
+required and must be current with `main`, force-push and branch deletion
+blocked, `enforce_admins: false`. **PR #16 was deliberately not merged
+this session** — merging touches `main`'s content, which every prompt
+this session said not to do; left for the owner. Commits this session:
+`605f029`, `0794dcf`, `7240cf9`, `c953798`, all pushed, all in PR #16.
+Full detail: `docs/SESSION_HANDOFF_2026-08-18.md` §13.
+
+## 2026-08-20 — PR #16 merged to main
+
+The owner reviewed and approved the merge. PR #16 ("Production-readiness
+remediation: Phases 1-7, D1-D9, OpenWA interim transport, X2
+verification") merged into `main` via merge commit `69dca91`, 2026-08-20
+03:27 UTC — **31 commits, the entire remediation programme (Phases 1-7,
+all nine D1-D9 decisions, the OpenWA interim transport, the proxy fix,
+the CI fix), now live on `main`** for the first time. `main` was
+previously stuck at `95ac6fa` (2026-08-06); it is now current with
+`origin/audit/production-readiness-2026-08-18`. Branch protection (PR +
+required checks, no force-push) held through the merge as designed.
+Vercel is not git-connected, so this merge alone does not trigger a
+production deploy — the last real deploy remains the one from the
+2026-08-20 CLI-access session (§ above), which already carries this same
+code. `docs/18-production-checklist.md`'s "nothing is pushed" blocker and
+`docs/16-launch-plan.md`'s branch-protection line are updated to match.
