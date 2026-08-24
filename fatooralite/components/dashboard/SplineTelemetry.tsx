@@ -11,31 +11,30 @@ export function SplineTelemetry({
   completedCount = 30,
   growthPct = "+10% today",
 }: SplineTelemetryProps) {
-  const { t } = useLang();
+  const { lang } = useLang();
   const [period, setPeriod] = useState("Week");
 
-  // Smooth spline curve points representing daily clearances
   return (
     <div
+      className="glass-card"
       style={{
         position: "relative",
         borderRadius: 22,
         overflow: "hidden",
-        background: "linear-gradient(135deg, #c4b5fd 0%, #a78bfa 50%, #8b5cf6 100%)",
-        color: "#1e1b4b",
         padding: "24px 26px 18px",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        minHeight: 200,
-        boxShadow: "0 18px 40px -15px rgba(139, 92, 246, 0.4)",
+        minHeight: 220,
+        boxShadow: "var(--sh)",
+        background: "radial-gradient(100% 100% at 100% 0%, rgba(168, 85, 247, 0.12) 0%, transparent 60%), var(--s1)",
       }}
     >
-      {/* Top Header: Title, +10% pill, Dropdown */}
+      {/* Top Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, zIndex: 2 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: "-.01em" }}>
-            Completed Invoices
+          <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.01em", color: "var(--tx)" }}>
+            {lang === "ar" ? "الفواتير المكتملة" : "Completed Invoices"}
           </span>
           <span
             style={{
@@ -43,8 +42,9 @@ export function SplineTelemetry({
               fontWeight: 700,
               padding: "4px 9px",
               borderRadius: 12,
-              background: "rgba(30, 27, 75, 0.14)",
-              color: "#1e1b4b",
+              background: "rgba(168, 85, 247, 0.15)",
+              border: "1px solid rgba(168, 85, 247, 0.3)",
+              color: "#c084fc",
             }}
           >
             {growthPct}
@@ -57,27 +57,28 @@ export function SplineTelemetry({
             onChange={(e) => setPeriod(e.target.value)}
             aria-label="Select period"
             style={{
-              padding: "4px 8px",
+              padding: "5px 10px",
               borderRadius: 10,
-              border: "1px solid rgba(30, 27, 75, 0.15)",
-              background: "rgba(255, 255, 255, 0.35)",
+              border: "1px solid var(--bd)",
+              background: "var(--s2)",
               fontSize: 12,
               fontWeight: 600,
-              color: "#1e1b4b",
+              color: "var(--tx)",
               cursor: "pointer",
               fontFamily: "inherit",
+              outline: "none",
             }}
           >
-            <option value="Week">Week ▾</option>
-            <option value="Month">Month ▾</option>
-            <option value="Year">Year ▾</option>
+            <option value="Week">{lang === "ar" ? "أسبوعي" : "Week"}</option>
+            <option value="Month">{lang === "ar" ? "شهري" : "Month"}</option>
+            <option value="Year">{lang === "ar" ? "سنوي" : "Year"}</option>
           </select>
         </div>
       </div>
 
       {/* SVG Spline Wave Area Chart with glowing peak callout '30' */}
-      <div style={{ position: "relative", width: "100%", height: 105, marginTop: 10, zIndex: 2 }}>
-        {/* Y Axis Grid lines & Labels */}
+      <div style={{ position: "relative", width: "100%", height: 115, marginTop: 12, zIndex: 2 }}>
+        {/* Y Axis Grid lines */}
         <div
           style={{
             position: "absolute",
@@ -86,75 +87,87 @@ export function SplineTelemetry({
             flexDirection: "column",
             justifyContent: "space-between",
             pointerEvents: "none",
-            opacity: 0.5,
+            opacity: 0.35,
             fontSize: 10,
             fontWeight: 700,
+            color: "var(--t3)",
           }}
         >
-          <div style={{ borderBottom: "1px dashed rgba(30, 27, 75, 0.2)", paddingBottom: 2 }}>40</div>
-          <div style={{ borderBottom: "1px dashed rgba(30, 27, 75, 0.2)", paddingBottom: 2 }}>30</div>
+          <div style={{ borderBottom: "1px dashed var(--bd)", paddingBottom: 2 }}>40</div>
+          <div style={{ borderBottom: "1px dashed var(--bd)", paddingBottom: 2 }}>30</div>
           <div>20</div>
         </div>
 
         {/* Spline Wave SVG */}
         <svg
-          viewBox="0 0 400 100"
+          viewBox="0 0 400 115"
+          width="100%"
+          height="100%"
           preserveAspectRatio="none"
-          style={{ width: "100%", height: "100%", overflow: "visible" }}
+          style={{ overflow: "visible" }}
         >
           <defs>
-            <linearGradient id="splineGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.45" />
-              <stop offset="100%" stopColor="#ffffff" stopOpacity="0.0" />
+            <linearGradient id="splineAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#c084fc" stopOpacity="0.45" />
+              <stop offset="60%" stopColor="#a855f7" stopOpacity="0.15" />
+              <stop offset="100%" stopColor="#a855f7" stopOpacity="0" />
             </linearGradient>
-            <filter id="glowPeak" x="-50%" y="-50%" width="200%" height="200%">
-              <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#ffffff" floodOpacity="0.9" />
+            <filter id="splineGlow" x="-10%" y="-10%" width="120%" height="120%">
+              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
             </filter>
           </defs>
 
           {/* Area Fill */}
           <path
-            d="M 0,90 Q 50,85 100,65 T 200,75 T 300,25 T 400,10 L 400,100 L 0,100 Z"
-            fill="url(#splineGradient)"
+            d="M 15 90 C 80 85, 120 70, 180 50 C 230 35, 270 30, 310 25 C 340 20, 370 45, 395 55 L 395 115 L 15 115 Z"
+            fill="url(#splineAreaGrad)"
           />
 
-          {/* Spline Stroke */}
+          {/* Stroke Curve */}
           <path
-            d="M 0,90 Q 50,85 100,65 T 200,75 T 300,25 T 400,10"
+            d="M 15 90 C 80 85, 120 70, 180 50 C 230 35, 270 30, 310 25 C 340 20, 370 45, 395 55"
             fill="none"
-            stroke="#ffffff"
-            strokeWidth="3.2"
+            stroke="#c084fc"
+            strokeWidth="3"
             strokeLinecap="round"
+            filter="url(#splineGlow)"
           />
 
-          {/* Dots on Curve */}
-          <circle cx="100" cy="65" r="3.5" fill="#ffffff" />
-          <circle cx="200" cy="75" r="3.5" fill="#ffffff" />
-          <circle cx="300" cy="25" r="5" fill="#1e1b4b" stroke="#ffffff" strokeWidth="2.5" filter="url(#glowPeak)" />
-          <circle cx="360" cy="50" r="3.5" fill="#ffffff" />
-        </svg>
+          {/* Glowing Peak Node at 310,25 */}
+          <circle cx="310" cy="25" r="7" fill="#141924" stroke="#c084fc" strokeWidth="2.5" />
+          <circle cx="310" cy="25" r="3.5" fill="#f0abfc" />
 
-        {/* Peak Badge Label '30' above the peak */}
-        <div
-          style={{
-            position: "absolute",
-            top: 2,
-            left: "75%",
-            transform: "translateX(-50%)",
-            background: "#ffffff",
-            color: "#1e1b4b",
-            fontWeight: 800,
-            fontSize: 12,
-            padding: "2px 8px",
-            borderRadius: 6,
-            boxShadow: "0 4px 10px rgba(30, 27, 75, 0.25)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {completedCount}
-        </div>
+          {/* Value Callout Badge */}
+          <g transform="translate(310, 15)">
+            <rect x="-14" y="-22" width="28" height="18" rx="6" fill="#1e1b4b" stroke="#c084fc" strokeWidth="1" />
+            <text x="0" y="-10" fill="#f8fafc" fontSize="10.5" fontWeight="800" textAnchor="middle">
+              {completedCount}
+            </text>
+          </g>
+        </svg>
+      </div>
+
+      {/* Bottom X-Axis Days */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: 11,
+          fontWeight: 600,
+          color: "var(--t3)",
+          marginTop: 8,
+          paddingInline: 8,
+          zIndex: 2,
+        }}
+      >
+        <span>Mon</span>
+        <span>Tue</span>
+        <span>Wed</span>
+        <span style={{ color: "#c084fc", fontWeight: 700 }}>Thu</span>
+        <span>Fri</span>
+        <span>Sat</span>
+        <span>Sun</span>
       </div>
     </div>
   );

@@ -4,18 +4,14 @@ import { useMemo } from "react";
 import { useLang } from "@/lib/i18n/LangProvider";
 import { Icon } from "@/components/ui/Icon";
 import { HealthRing } from "@/components/dashboard/HealthRing";
-import { KpiCard } from "@/components/dashboard/KpiCard";
 import { TrustBadges } from "@/components/dashboard/TrustBadges";
-import { ApiSparkline } from "@/components/dashboard/ApiSparkline";
 import { IntegrationStatus } from "@/components/dashboard/IntegrationStatus";
 import { LiveFeed } from "@/components/dashboard/LiveFeed";
 import { VolumeChart } from "@/components/dashboard/VolumeChart";
 import { ElectricHeroCard } from "@/components/dashboard/ElectricHeroCard";
-import { WorkflowBanner } from "@/components/dashboard/WorkflowBanner";
 import { SplineTelemetry } from "@/components/dashboard/SplineTelemetry";
 import { SaudiCorporateCard } from "@/components/dashboard/SaudiCorporateCard";
 import { BentoFeatureGrid } from "@/components/dashboard/BentoFeatureGrid";
-import { AsyncBoundary } from "@/components/common/AsyncBoundary";
 import { useCompany, useAuth } from "@/lib/useCompany";
 import { useAsyncData } from "@/lib/async/useAsyncData";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
@@ -74,8 +70,8 @@ export default function DashboardPage() {
   const tablet = useMediaQuery(1023);
 
   return (
-    <div style={{ maxWidth: 1480, margin: "0 auto", paddingBottom: 40 }}>
-      {/* Top Welcome Bar (Inspired by Reference 1 - Mytasky) */}
+    <div style={{ maxWidth: 1480, margin: "0 auto", paddingBottom: 48 }}>
+      {/* Top Welcome Bar */}
       <div
         style={{
           display: "flex",
@@ -83,7 +79,7 @@ export default function DashboardPage() {
           alignItems: "center",
           justifyContent: "space-between",
           gap: 16,
-          marginBottom: 20,
+          marginBottom: 22,
         }}
       >
         <div>
@@ -130,13 +126,16 @@ export default function DashboardPage() {
             {greeting}
           </h1>
           <div style={{ fontSize: 13, color: "var(--t2)", marginTop: 3 }}>
-            Automate ZATCA compliance and manage Saudi e-invoicing effortlessly.
+            {lang === "ar"
+              ? "إدارة الفوترة الإلكترونية ومتابعة الاعتماد مع هيئة الزكاة والضريبة والجمارك بسهولة."
+              : "Automate ZATCA Phase-2 compliance and manage Saudi e-invoicing effortlessly."}
           </div>
         </div>
 
         {/* Header Action Buttons */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button
+          <Link
+            href="/reports"
             style={{
               display: "flex",
               alignItems: "center",
@@ -151,11 +150,12 @@ export default function DashboardPage() {
               cursor: "pointer",
               fontFamily: "inherit",
               boxShadow: "var(--sh-sm)",
+              textDecoration: "none",
             }}
           >
             <Icon name="compliance" size={16} sw={1.8} />
-            {t.runAudit}
-          </button>
+            <span>{t.runAudit}</span>
+          </Link>
           <Link
             href="/invoices/new"
             style={{
@@ -176,101 +176,72 @@ export default function DashboardPage() {
             }}
           >
             <Icon name="plus" size={16} sw={2.4} />
-            {t.create}
+            <span>{t.create}</span>
           </Link>
         </div>
       </div>
 
-      {/* Trust Badges Bar */}
-      <TrustBadges badges={data?.integration?.badges} />
-
-      {/* 1. Ultra-Luxury Electric Hero Card (Reference 4) */}
-      <ElectricHeroCard
-        totalVat={dashboardCounters.vat || 375928}
-        invoiceCount={dashboardCounters.inv || 1420}
-        successRate={dashboardCounters.succ || 98.4}
-        score={dashboardCounters.score || 100}
-        hasCsid={data?.integration?.hasCert ?? true}
-      />
-
-      {/* 2. Bento Row: Compliance Health Speedometer + KPIs & Saudi Corporate Card */}
+      {/* Row 1: Ultra-Luxury Electric Hero Card + Saudi Corporate Card */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: tablet ? "1fr" : "1.15fr 1fr",
+          gridTemplateColumns: tablet ? "1fr" : "1.8fr 1fr",
           gap: 18,
-          marginBottom: 18,
+          marginBottom: 20,
+          alignItems: "stretch",
         }}
       >
-        <HealthRing
-          score={dashboardCounters.score}
-          healthBars={data?.kpis?.healthBars}
+        <ElectricHeroCard
+          totalVat={dashboardCounters.vat || 375928}
+          invoiceCount={dashboardCounters.inv || 1420}
+          successRate={dashboardCounters.succ || 98.4}
+          score={dashboardCounters.score || 100}
+          hasCsid={data?.integration?.hasCert ?? true}
         />
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 12 }}>
-            <AsyncBoundary
-              state={state}
-              isEmpty={(d) => !d.kpis?.kpis?.length}
-              empty={<div style={{ gridColumn: "1 / -1", color: "var(--t3)", fontSize: 13 }}>No KPIs yet.</div>}
-              onRetry={retry}
-            >
-              {(d) => (
-                <>
-                  {d.kpis.kpis.slice(0, 2).map((k: Kpi) => (
-                    <KpiCard key={k.label.en} kpi={k} />
-                  ))}
-                </>
-              )}
-            </AsyncBoundary>
-          </div>
-          <SaudiCorporateCard
-            cardHolder={user?.name ?? "Khalid Al-Otaibi"}
-            companyName={company?.name ?? "Almarai Co."}
-          />
-        </div>
+        <SaudiCorporateCard
+          cardHolder={user?.name ?? "Khalid Al-Otaibi"}
+          companyName={company?.name ?? "Almarai Co."}
+        />
       </div>
 
-      {/* 3. Folder-Tab Cutout Row: Task Time Volume Chart + Live Activity Stream (Reference 1) */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: tablet ? "1fr" : "1fr 1.35fr",
-          gap: 18,
-          marginBottom: 18,
-        }}
-      >
-        <VolumeChart initialData={dashboardVolume} />
-        <LiveFeed initialEvents={dashboardFeed} />
-      </div>
-
-      {/* 4. Creative Visual Cards Row: 3D Crystal Mountain Workflow Banner + Lavender Spline Telemetry (Reference 1 & 4) */}
+      {/* Row 2: Analytics & Telemetry (Volume Breakdown Bar Chart + Lavender Spline Wave) */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: tablet ? "1fr" : "1fr 1fr",
           gap: 18,
-          marginBottom: 18,
+          marginBottom: 20,
         }}
       >
-        <WorkflowBanner />
+        <VolumeChart initialData={dashboardVolume} />
         <SplineTelemetry
           completedCount={dashboardCounters.inv ? Math.min(dashboardCounters.inv, 45) : 30}
         />
       </div>
 
-      {/* 5. 3D Bento Grid Feature Showcase (References 2 & 3: Speedometer, Shield Check, AI Chip, Security Vault) */}
-      <BentoFeatureGrid />
-
-      {/* 6. Integration Status & API Telemetry Sparkline */}
+      {/* Row 3: Operations & Stream (ZATCA Live Clearance Stream + Compliance Health Speedometer) */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: tablet ? "1fr" : "1.15fr 1fr",
+          gridTemplateColumns: tablet ? "1fr" : "1.3fr 1fr",
           gap: 18,
+          marginBottom: 20,
         }}
       >
-        <ApiSparkline />
+        <LiveFeed initialEvents={dashboardFeed} />
+        <HealthRing
+          score={dashboardCounters.score}
+          healthBars={data?.kpis?.healthBars}
+        />
+      </div>
+
+      {/* Row 4: 3D Bento Feature Grid (Speedometer Engine, Shield, AI Chip, HSM Vault) */}
+      <BentoFeatureGrid />
+
+      {/* Row 5: Integration Services & Trust Badges */}
+      <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 18 }}>
         <IntegrationStatus services={data?.integration?.services} />
+        <TrustBadges badges={data?.integration?.badges} />
       </div>
     </div>
   );

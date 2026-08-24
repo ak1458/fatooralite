@@ -43,8 +43,8 @@ export function LiveFeed({ initialEvents }: { initialEvents?: FeedEvent[] }) {
           >
             LIVE STREAM
           </span>
-          <span style={{ fontSize: 12, color: "var(--t3)", display: "flex", alignItems: "center", gap: 4 }}>
-            <span>Y Filter</span>
+          <span style={{ fontSize: 11.5, color: "var(--t3)" }}>
+            ZATCA Phase-2 Network
           </span>
         </div>
         <Link

@@ -34,25 +34,36 @@ export function ElectricHeroCard({
         marginBottom: 22,
       }}
     >
-      {/* 3D Liquid Ribbon Background Texture (Generated via Imagen 3) */}
+      {/* Luminous Glowing Electric Mesh Waves (Pure SVG Vector) */}
       <div
         style={{
           position: "absolute",
           inset: 0,
-          opacity: 0.38,
           pointerEvents: "none",
-          mixBlendMode: "screen",
+          opacity: 0.65,
           overflow: "hidden",
         }}
       >
-        <Image
-          src="/images/liquid_ribbon_hero.jpg"
-          alt="3D Flowing Liquid Glass Ribbon"
-          fill
-          priority
-          sizes="(max-width: 1480px) 100vw, 1480px"
-          style={{ objectFit: "cover", objectPosition: "center" }}
-        />
+        <svg viewBox="0 0 1000 400" width="100%" height="100%" preserveAspectRatio="none" fill="none">
+          <defs>
+            <linearGradient id="heroWave1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4" />
+              <stop offset="50%" stopColor="#0284c7" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#10b981" stopOpacity="0.3" />
+            </linearGradient>
+            <linearGradient id="heroWave2" x1="100%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#818cf8" stopOpacity="0.35" />
+              <stop offset="60%" stopColor="#38bdf8" stopOpacity="0.15" />
+              <stop offset="100%" stopColor="#059669" stopOpacity="0.25" />
+            </linearGradient>
+            <filter id="heroMeshGlow" x="-10%" y="-10%" width="120%" height="120%">
+              <feGaussianBlur stdDeviation="20" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+          <path d="M-100 180 C200 80 400 350 700 150 C900 20 1100 250 1200 120" stroke="url(#heroWave1)" strokeWidth="48" strokeLinecap="round" filter="url(#heroMeshGlow)" />
+          <path d="M-50 260 C250 360 550 80 850 280 C1050 400 1150 150 1250 200" stroke="url(#heroWave2)" strokeWidth="32" strokeLinecap="round" filter="url(#heroMeshGlow)" />
+        </svg>
       </div>
 
       {/* Ambient Gradient Overlays */}
@@ -61,7 +72,7 @@ export function ElectricHeroCard({
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(ellipse at top left, rgba(56, 189, 248, 0.15) 0%, transparent 60%), radial-gradient(ellipse at bottom right, rgba(16, 185, 129, 0.12) 0%, transparent 50%)",
+            "radial-gradient(ellipse at top left, rgba(56, 189, 248, 0.18) 0%, transparent 60%), radial-gradient(ellipse at bottom right, rgba(16, 185, 129, 0.15) 0%, transparent 50%)",
           pointerEvents: "none",
         }}
       />
