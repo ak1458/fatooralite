@@ -1,4 +1,69 @@
+@import url('https://fonts.cdnfonts.com/css/apercu');
 @import "tailwindcss";
+
+/* ============================================================
+   Apercu Pro & Basier Circle Luxury Typography System
+   ============================================================ */
+
+/* Apercu Pro Font Aliasing */
+@font-face {
+  font-family: 'Apercu Pro';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: local('Apercu Pro Light'), local('Apercu Light'), url('https://fonts.cdnfonts.com/s/22258/Apercu Light.woff') format('woff');
+}
+@font-face {
+  font-family: 'Apercu Pro';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Apercu Pro Regular'), local('Apercu Regular'), local('Apercu'), url('https://fonts.cdnfonts.com/s/22258/Apercu_Regular.woff') format('woff');
+}
+@font-face {
+  font-family: 'Apercu Pro';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: local('Apercu Pro Medium'), local('Apercu Medium'), url('https://fonts.cdnfonts.com/s/22258/Apercu Medium.woff') format('woff');
+}
+@font-face {
+  font-family: 'Apercu Pro';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Apercu Pro Bold'), local('Apercu Bold'), url('https://fonts.cdnfonts.com/s/22258/Apercu Bold.woff') format('woff');
+}
+
+/* Basier Circle Font Stacks & Geometry */
+@font-face {
+  font-family: 'Basier Circle';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Basier Circle Regular'), local('Basier Circle'), local('BasierCircle-Regular');
+}
+@font-face {
+  font-family: 'Basier Circle';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: local('Basier Circle Medium'), local('BasierCircle-Medium');
+}
+@font-face {
+  font-family: 'Basier Circle';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Basier Circle SemiBold'), local('BasierCircle-SemiBold');
+}
+@font-face {
+  font-family: 'Basier Circle';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Basier Circle Bold'), local('BasierCircle-Bold');
+}
 
 /* ============================================================
    Fatoora Lite Pro design tokens (ported from the approved design).
@@ -91,16 +156,15 @@
   --dur-slow: 400ms;
 }
 
-/* Font stacks. The --font-* vars are provided by next/font on <html>.
-   Arabic swaps the UI + display stacks to IBM Plex Sans Arabic. */
+/* Font stacks: Apercu Pro for Display / Numbers, Basier Circle for Clean UI */
 :root {
-  --fui: var(--font-ui), system-ui, sans-serif;
-  --fdisp: var(--font-display), var(--font-ui), system-ui, sans-serif;
-  --fmono: var(--font-mono), ui-monospace, monospace;
+  --fdisp: 'Apercu Pro', 'Apercu', 'Basier Circle', var(--font-display), system-ui, -apple-system, sans-serif;
+  --fui: 'Basier Circle', 'Apercu Pro', 'Apercu', var(--font-ui), system-ui, -apple-system, sans-serif;
+  --fmono: 'Apercu Mono', var(--font-mono), 'JetBrains Mono', ui-monospace, monospace;
 }
 [data-lang="ar"] {
-  --fui: var(--font-arabic), system-ui, sans-serif;
-  --fdisp: var(--font-arabic), system-ui, sans-serif;
+  --fui: var(--font-arabic), 'Basier Circle', 'Apercu Pro', system-ui, sans-serif;
+  --fdisp: var(--font-arabic), 'Apercu Pro', 'Basier Circle', system-ui, sans-serif;
 }
 
 * {

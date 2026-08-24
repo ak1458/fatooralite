@@ -94,6 +94,8 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <link rel="preconnect" href="https://fonts.cdnfonts.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/apercu" />
         <script dangerouslySetInnerHTML={{ __html: ANTI_FLASH }} />
       </head>
       <body suppressHydrationWarning>
