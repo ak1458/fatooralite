@@ -40,4 +40,16 @@ describe("useAsyncData", () => {
     expect(result.current.state.status).toBe("loading");
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  it("gracefully ignores AbortError on unmount or signal abort", async () => {
+    const abortErr = new Error("signal is aborted without reason");
+    abortErr.name = "AbortError";
+    const fetcher = vi.fn(async (signal: AbortSignal) => {
+      throw abortErr;
+    });
+    const { result, unmount } = renderHook(() => useAsyncData(fetcher, []));
+    unmount();
+    // Should stay in loading or not throw error state
+    expect(result.current.state.status).toBe("loading");
+  });
 });

@@ -48,13 +48,19 @@ export function useAsyncData<T>(
 
     fetcherRef.current(controller.signal).then(
       (data) => {
-        if (settled) return;
+        if (settled || controller.signal.aborted) return;
         settled = true;
         clearTimeout(timer);
         dispatch({ type: "success", data });
       },
       (err) => {
-        if (settled || controller.signal.aborted) return;
+        const isAbort =
+          controller.signal.aborted ||
+          (err instanceof Error &&
+            (err.name === "AbortError" ||
+              err.message?.toLowerCase().includes("abort") ||
+              err.message?.toLowerCase().includes("signal is aborted")));
+        if (settled || isAbort) return;
         settled = true;
         clearTimeout(timer);
         dispatch({ type: "error", error: err instanceof Error ? err.message : String(err) });
@@ -64,7 +70,11 @@ export function useAsyncData<T>(
     return () => {
       settled = true;
       clearTimeout(timer);
-      controller.abort();
+      try {
+        controller.abort("unmounted");
+      } catch {
+        controller.abort();
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, nonce, timeoutMs, ...deps]);
