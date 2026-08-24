@@ -123,10 +123,84 @@ export function SaudiCorporateCard({
         </div>
       </div>
 
-      {/* Quick Action Pill Buttons */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9 }}>
+      {/* Recent Accounts Avatar Row (Reference 1) */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 2px" }}>
+        <span style={{ fontSize: 11.5, color: "var(--t3)", fontWeight: 600 }}>
+          {lang === "ar" ? "الحسابات النشطة" : "Recent Active Accounts"}
+        </span>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          {["#38bdf8", "#34d399", "#a855f7", "#fbbf24"].map((bg, idx) => (
+            <div
+              key={idx}
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                background: bg,
+                border: "2px solid var(--s1)",
+                marginInlineStart: idx === 0 ? 0 : -6,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 9,
+                fontWeight: 800,
+                color: "#080a10",
+              }}
+            >
+              {["K", "S", "A", "M"][idx]}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick Action Buttons (Reference 1: Blue Pills) */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <Link
+            href="/invoices/new"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              padding: "9px 12px",
+              borderRadius: 12,
+              background: "linear-gradient(135deg, #0284c7, #0369a1)",
+              color: "#ffffff",
+              fontSize: 12,
+              fontWeight: 700,
+              textDecoration: "none",
+              boxShadow: "0 4px 14px -4px rgba(2, 132, 199, 0.6)",
+              transition: "transform 0.15s ease",
+            }}
+          >
+            <span>{lang === "ar" ? "تحويل" : "Transfer"}</span>
+            <span>↗</span>
+          </Link>
+          <Link
+            href="/reports"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              padding: "9px 12px",
+              borderRadius: 12,
+              background: "linear-gradient(135deg, #0284c7, #0369a1)",
+              color: "#ffffff",
+              fontSize: 12,
+              fontWeight: 700,
+              textDecoration: "none",
+              boxShadow: "0 4px 14px -4px rgba(2, 132, 199, 0.6)",
+              transition: "transform 0.15s ease",
+            }}
+          >
+            <span>{lang === "ar" ? "طلب تدقيق" : "Request"}</span>
+            <span>↘</span>
+          </Link>
+        </div>
         <Link
-          href="/invoices/new"
+          href="/clearance"
           style={{
             display: "flex",
             alignItems: "center",
@@ -134,38 +208,17 @@ export function SaudiCorporateCard({
             gap: 6,
             padding: "9px 12px",
             borderRadius: 12,
-            background: "var(--s2)",
-            border: "1px solid var(--bd)",
-            color: "var(--tx)",
+            background: "rgba(2, 132, 199, 0.12)",
+            border: "1px solid rgba(56, 189, 248, 0.3)",
+            color: "#38bdf8",
             fontSize: 12,
             fontWeight: 700,
             textDecoration: "none",
             transition: "all 0.15s ease",
           }}
         >
-          <span>＋</span>
-          <span>{lang === "ar" ? "فاتورة جديدة" : "New Invoice"}</span>
-        </Link>
-        <Link
-          href="/reports"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            padding: "9px 12px",
-            borderRadius: 12,
-            background: "var(--s2)",
-            border: "1px solid var(--bd)",
-            color: "var(--tx)",
-            fontSize: 12,
-            fontWeight: 700,
-            textDecoration: "none",
-            transition: "all 0.15s ease",
-          }}
-        >
-          <span>📊</span>
-          <span>{lang === "ar" ? "التقرير الضريبي" : "Tax Audit"}</span>
+          <span>{lang === "ar" ? "مزامنة فورية للهيئة" : "Instant ZATCA Sync"}</span>
+          <span>⇄</span>
         </Link>
       </div>
     </div>

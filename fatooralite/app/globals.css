@@ -8,37 +8,43 @@
 
 :root,
 [data-theme="dark"] {
-  --bg: #07090e;
-  --s1: #0e121a;
-  --s2: #141924;
-  --s3: #1a2230;
-  --s4: #222c3d;
+  --bg: #080a10;
+  --s1: #0e121d;
+  --s2: #161b2a;
+  --s3: #1c2336;
+  --s4: #282a31;
   --bd: rgba(255, 255, 255, 0.08);
   --bds: rgba(255, 255, 255, 0.16);
   --tx: #f8fafc;
   --t2: #94a3b8;
   --t3: #64748b;
-  --ac: #059669;
-  --acb: #10b981;
-  --acs: rgba(16, 185, 129, 0.14);
-  --acbd: rgba(16, 185, 129, 0.28);
+  --ac: #00f2ff;
+  --acb: #0284c7;
+  --acs: rgba(0, 242, 255, 0.12);
+  --acbd: rgba(0, 242, 255, 0.28);
+  --sec: #10b981;
+  --secb: #34d399;
+  --secs: rgba(16, 185, 129, 0.14);
+  --secbd: rgba(16, 185, 129, 0.28);
   --on-ac: #04130d;
   --on-warn: #1a1200;
   --on-dang: #3b0210;
-  --scrim: rgba(0, 0, 0, 0.65);
+  --scrim: rgba(0, 0, 0, 0.75);
   --warn: #f59e0b;
   --warns: rgba(245, 158, 11, 0.14);
   --dang: #fb7185;
   --dangs: rgba(244, 63, 94, 0.14);
   --info: #38bdf8;
   --infos: rgba(56, 189, 248, 0.14);
-  --sh: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 40px -15px rgba(0, 0, 0, 0.85);
-  --sh-sm: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 6px 16px -4px rgba(0, 0, 0, 0.6);
-  --glow: rgba(16, 185, 129, 0.18);
-  --glow2: rgba(56, 189, 248, 0.15);
-  --glow-blue: rgba(59, 130, 246, 0.22);
-  --glow-purple: rgba(168, 85, 247, 0.2);
+  --sh: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 20px 40px -15px rgba(0, 0, 0, 0.9);
+  --sh-sm: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 6px 16px -4px rgba(0, 0, 0, 0.7);
+  --glow: rgba(0, 242, 255, 0.2);
+  --glow2: rgba(16, 185, 129, 0.18);
+  --glow-blue: rgba(2, 132, 199, 0.25);
+  --glow-purple: rgba(168, 85, 247, 0.22);
   --glow-amber: rgba(245, 158, 11, 0.2);
+  --rad: 24px;
+  --rad-sm: 12px;
 }
 
 [data-theme="light"] {

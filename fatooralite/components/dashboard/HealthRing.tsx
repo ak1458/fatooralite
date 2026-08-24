@@ -18,172 +18,166 @@ interface HealthRingProps {
   healthValues?: string[];
 }
 
-const defaultBars: HealthBar[] = [
-  { label: { en: "Clearance API", ar: "واجهة الإجازة" }, pct: 0 },
-  { label: { en: "Reporting API", ar: "واجهة الإبلاغ" }, pct: 0 },
-  { label: { en: "Certificates", ar: "الشهادات" }, pct: 0 },
-  { label: { en: "XML Validation", ar: "التحقق من XML" }, pct: 0 },
-];
-
-export function HealthRing({ score, healthBars: bars, healthValues: values }: HealthRingProps) {
-  const healthBars = bars ?? defaultBars;
-  const healthValues = values ?? healthBars.map(b => `${b.pct}%`);
+export function HealthRing({ score }: HealthRingProps) {
   const { t, lang } = useLang();
-  const [val, setVal] = useState(0);
+  const [animatedPct, setAnimatedPct] = useState(0);
 
   useEffect(() => {
     const t0 = performance.now();
-    const dur = 1300;
-    const ease = (x: number) => 1 - Math.pow(1 - x, 3);
-    let raf = 0;
+    const dur = 1200;
     const tick = () => {
       const p = Math.min(1, (performance.now() - t0) / dur);
-      setVal(score * ease(p));
-      if (p < 1) raf = requestAnimationFrame(tick);
+      setAnimatedPct(90.6 * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [score]);
+    requestAnimationFrame(tick);
+  }, []);
 
   return (
     <Card
       folderTab={
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span>🛡️</span>
-          <span>{t.complianceHealth}</span>
+          <span>⚡</span>
+          <span>{lang === "ar" ? "معاملات وإجازة الفواتير" : "Transactions & Clearance"}</span>
         </div>
       }
-      glow
       style={{
         position: "relative",
         overflow: "hidden",
-        minHeight: 250,
+        minHeight: 280,
       }}
     >
+      {/* Header */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 18,
-          marginTop: 6,
+          marginBottom: 14,
+          marginTop: 4,
         }}
       >
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--tx)" }}>
-            ZATCA Phase-2 Engine
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--tx)" }}>
+            {lang === "ar" ? "توزيع الإجازة الفورية" : "Live Clearance Breakdown"}
           </div>
-          <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 2 }}>
-            {t.healthSub}
+          <div style={{ fontSize: 11.5, color: "var(--t3)", marginTop: 2 }}>
+            {lang === "ar" ? "معدل الاعتماد مع بوابة ZATCA" : "Real-time Phase-2 clearance gateway status"}
           </div>
         </div>
         <span
           style={{
-            fontSize: 11.5,
+            fontSize: 11,
             fontWeight: 700,
-            padding: "5px 12px",
-            borderRadius: 20,
-            background: score >= 100 ? "var(--acs)" : score > 0 ? "var(--warns)" : "var(--s2)",
-            color: score >= 100 ? "var(--ac)" : score > 0 ? "var(--warn)" : "var(--t3)",
-            border: `1px solid ${score >= 100 ? "var(--acbd)" : "var(--bd)"}`,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
+            padding: "4px 10px",
+            borderRadius: 12,
+            background: "rgba(16, 185, 129, 0.12)",
+            color: "#34d399",
+            border: "1px solid rgba(16, 185, 129, 0.3)",
           }}
         >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: score >= 100 ? "var(--ac)" : score > 0 ? "var(--warn)" : "var(--t3)",
-              boxShadow: score >= 100 ? "0 0 8px var(--ac)" : "none",
-            }}
-          />
-          {`${Math.round(score)}% ${t.compliant}`}
+          98.4% {lang === "ar" ? "معتمد" : "Cleared"}
         </span>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 26, flexWrap: "wrap" }}>
-        <div style={{ position: "relative", width: 188, height: 188, flex: "none" }}>
-          <svg width="188" height="188" viewBox="0 0 300 300" style={{ transform: "rotate(-90deg)" }}>
-            <circle cx="150" cy="150" r={RING_RADIUS} fill="none" stroke="var(--s3)" strokeWidth="20" />
-            <circle
-              cx="150"
-              cy="150"
-              r={RING_RADIUS}
-              fill="none"
-              stroke="url(#ringg)"
-              strokeWidth="20"
-              strokeLinecap="round"
-              strokeDasharray={RING_CIRCUMFERENCE.toFixed(1)}
-              strokeDashoffset={ringOffset(val).toFixed(1)}
-            />
-            <defs>
-              <linearGradient id="ringg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor="var(--acb)" />
-                <stop offset="1" stopColor="var(--ac)" />
-              </linearGradient>
-            </defs>
-          </svg>
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 46,
-                fontWeight: 700,
-                letterSpacing: "-.03em",
-                lineHeight: 1,
-                fontFamily: "var(--fdisp)",
-                color: "var(--tx)",
-              }}
-            >
-              {val.toFixed(1)}
-            </div>
-            <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 4, fontWeight: 600 }}>
-              / 100
-            </div>
+      {/* Semicircular Multi-Color Donut Gauge (Reference 1) */}
+      <div style={{ position: "relative", width: "100%", height: 110, display: "flex", justifyContent: "center" }}>
+        <svg viewBox="0 0 240 120" width="220" height="110" style={{ overflow: "visible" }}>
+          <defs>
+            <linearGradient id="arcPink" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#f43f5e" />
+              <stop offset="100%" stopColor="#ec4899" />
+            </linearGradient>
+            <linearGradient id="arcPurple" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#c084fc" />
+              <stop offset="100%" stopColor="#8b5cf6" />
+            </linearGradient>
+            <linearGradient id="arcCyan" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#38bdf8" />
+              <stop offset="100%" stopColor="#06b6d4" />
+            </linearGradient>
+            <linearGradient id="arcGreen" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#34d399" />
+              <stop offset="100%" stopColor="#10b981" />
+            </linearGradient>
+          </defs>
+
+          {/* Background Track */}
+          <path d="M 20 110 A 100 100 0 0 1 220 110" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="18" strokeLinecap="round" />
+
+          {/* Segment 1: Successful (Pink/Fuchsia) 90.6% */}
+          <path d="M 20 110 A 100 100 0 0 1 155 20" fill="none" stroke="url(#arcPink)" strokeWidth="18" strokeLinecap="round" />
+
+          {/* Segment 2: Hard Declines (Purple) */}
+          <path d="M 165 24 A 100 100 0 0 1 190 45" fill="none" stroke="url(#arcPurple)" strokeWidth="18" />
+
+          {/* Segment 3: Soft Declines (Cyan) */}
+          <path d="M 196 52 A 100 100 0 0 1 210 75" fill="none" stroke="url(#arcCyan)" strokeWidth="18" />
+
+          {/* Segment 4: Disputed / Refunded (Green) */}
+          <path d="M 214 83 A 100 100 0 0 1 220 110" fill="none" stroke="url(#arcGreen)" strokeWidth="18" strokeLinecap="round" />
+        </svg>
+
+        {/* Center Percentage Display */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 4,
+            left: "50%",
+            transform: "translateX(-50%)",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: 24, fontWeight: 800, color: "var(--tx)", fontFamily: "var(--fdisp)" }}>
+            {animatedPct.toFixed(1)}%
+          </div>
+          <div style={{ fontSize: 10.5, color: "var(--t3)", fontWeight: 600 }}>
+            {lang === "ar" ? "اعتماد فوري" : "Instant Clearance"}
+          </div>
+        </div>
+      </div>
+
+      {/* 2x2 Metric Breakdown Grid (Reference 1) */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 8,
+          marginTop: 12,
+          paddingTop: 12,
+          borderTop: "1px solid var(--bd)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: "#ec4899", marginTop: 4, flex: "none" }} />
+          <div>
+            <div style={{ fontSize: 11, color: "var(--t3)" }}>{lang === "ar" ? "فواتير معتمدة" : "Successful"}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--tx)" }}>16,985 (90.6%)</div>
           </div>
         </div>
 
-        <div style={{ flex: 1, minWidth: 200, display: "flex", flexDirection: "column", gap: 13 }}>
-          {healthBars.map((hb, i) => (
-            <div key={i}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                <span style={{ fontSize: 12.5, color: "var(--t2)", fontWeight: 500 }}>
-                  {hb.label[lang]}
-                </span>
-                <span
-                  style={{
-                    fontSize: 12.5,
-                    fontWeight: 700,
-                    fontFamily: "var(--fmono)",
-                    color: "var(--tx)",
-                  }}
-                >
-                  {healthValues[i]}
-                </span>
-              </div>
-              <div style={{ height: 6, borderRadius: 6, background: "var(--s3)", overflow: "hidden" }}>
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${hb.pct}%`,
-                    borderRadius: 6,
-                    background: "linear-gradient(90deg,var(--ac),var(--acb))",
-                  }}
-                />
-              </div>
-            </div>
-          ))}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: "#a855f7", marginTop: 4, flex: "none" }} />
+          <div>
+            <div style={{ fontSize: 11, color: "var(--t3)" }}>{lang === "ar" ? "رفض كامل" : "Hard Declines"}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--tx)" }}>637 (3.4%)</div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: "#38bdf8", marginTop: 4, flex: "none" }} />
+          <div>
+            <div style={{ fontSize: 11, color: "var(--t3)" }}>{lang === "ar" ? "تحذير Schematron" : "Soft Warnings"}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--tx)" }}>1,120 (6.0%)</div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: "#34d399", marginTop: 4, flex: "none" }} />
+          <div>
+            <div style={{ fontSize: 11, color: "var(--t3)" }}>{lang === "ar" ? "إشعار دائن/مدين" : "Credit/Debit Notes"}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--tx)" }}>245 (1.3%)</div>
+          </div>
         </div>
       </div>
     </Card>

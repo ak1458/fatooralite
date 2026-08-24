@@ -204,7 +204,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Row 2: Analytics & Telemetry (Volume Breakdown Bar Chart + Lavender Spline Wave) */}
+      {/* Row 2: Volume Bar Chart + Semicircular Donut Clearance Breakdown (Reference 1) */}
       <div
         style={{
           display: "grid",
@@ -214,12 +214,13 @@ export default function DashboardPage() {
         }}
       >
         <VolumeChart initialData={dashboardVolume} />
-        <SplineTelemetry
-          completedCount={dashboardCounters.inv ? Math.min(dashboardCounters.inv, 45) : 30}
+        <HealthRing
+          score={dashboardCounters.score}
+          healthBars={data?.kpis?.healthBars}
         />
       </div>
 
-      {/* Row 3: Operations & Stream (ZATCA Live Clearance Stream + Compliance Health Speedometer) */}
+      {/* Row 3: Operations Stream & Spline Telemetry Wave */}
       <div
         style={{
           display: "grid",
@@ -229,9 +230,8 @@ export default function DashboardPage() {
         }}
       >
         <LiveFeed initialEvents={dashboardFeed} />
-        <HealthRing
-          score={dashboardCounters.score}
-          healthBars={data?.kpis?.healthBars}
+        <SplineTelemetry
+          completedCount={dashboardCounters.inv ? Math.min(dashboardCounters.inv, 45) : 30}
         />
       </div>
 
