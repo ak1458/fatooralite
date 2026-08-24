@@ -25,19 +25,19 @@ export function Topbar({
         height: 68,
         flex: "none",
         borderBottom: "1px solid var(--bd)",
-        background: "color-mix(in srgb, var(--bg) 78%, transparent)",
-        backdropFilter: "blur(18px)",
+        background: "rgba(7, 9, 14, 0.85)",
+        backdropFilter: "blur(20px)",
         position: "sticky",
         top: 0,
         zIndex: 20,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: showMenu ? 10 : 16,
-        padding: showMenu ? "0 14px" : "0 24px",
+        gap: 16,
+        padding: showMenu ? "0 16px" : "0 28px",
       }}
     >
-      {/* Hamburger for mobile drawer mode */}
+      {/* Hamburger for mobile */}
       {showMenu && (
         <button
           onClick={onMenuClick}
@@ -57,27 +57,20 @@ export function Topbar({
             fontFamily: "inherit",
           }}
         >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
       )}
 
-      <div style={{ minWidth: 0, flex: showMenu ? 1 : "none", maxWidth: showMenu ? 160 : 260 }}>
+      {/* Page Title & Context */}
+      <div style={{ minWidth: 0, flex: "0 1 auto" }}>
         <div
           style={{
-            fontSize: showMenu ? 14 : 16,
-            fontWeight: 700,
-            letterSpacing: "-.015em",
+            fontSize: showMenu ? 15 : 17,
+            fontWeight: 800,
+            letterSpacing: "-.02em",
+            fontFamily: "var(--fdisp)",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -86,7 +79,7 @@ export function Topbar({
         >
           {title}
         </div>
-        {!showMenu && (
+        {!showMenu && sub && (
           <div
             style={{
               fontSize: 11.5,
@@ -102,78 +95,34 @@ export function Topbar({
         )}
       </div>
 
-      {/* Middle Interactive AI & Workflow Prompt Capsules (Inspired by Reference 1 - Mytasky) */}
+      {/* Center Search Pill */}
       {!showMenu && (
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, overflowX: "auto", padding: "0 10px" }}>
-          <Link
-            href="/invoices/new"
-            className="action-capsule"
-            style={{
-              padding: "6px 10px",
-              background: "linear-gradient(150deg,var(--acb),var(--ac))",
-              color: "var(--on-ac)",
-              border: "none",
-              boxShadow: "0 4px 12px -4px var(--ac)",
-              textDecoration: "none",
-            }}
-          >
-            <Icon name="plus" size={14} sw={2.4} />
-          </Link>
-          <Link
-            href="/ai"
-            className="action-capsule"
-            style={{ textDecoration: "none" }}
-          >
-            <span style={{ color: "var(--ac)" }}>⚡</span>
-            <span>Invoice Bot</span>
-            <span style={{ fontSize: 11, color: "var(--t3)", marginInlineStart: 2 }}>Generate Invoices</span>
-            <span style={{ fontSize: 10, color: "var(--t3)" }}>›</span>
-          </Link>
-          <Link
-            href="/analytics"
-            className="action-capsule"
-            style={{ textDecoration: "none" }}
-          >
-            <span style={{ color: "var(--info)" }}>📊</span>
-            <span>DataAnalyzer</span>
-            <span style={{ fontSize: 11, color: "var(--t3)", marginInlineStart: 2 }}>Sales & VAT</span>
-            <span style={{ fontSize: 10, color: "var(--t3)" }}>›</span>
-          </Link>
-          <Link
-            href="/audit"
-            className="action-capsule"
-            style={{ textDecoration: "none" }}
-          >
-            <span style={{ color: "var(--warn)" }}>🛡️</span>
-            <span>Report AI</span>
-            <span style={{ fontSize: 11, color: "var(--t3)", marginInlineStart: 2 }}>Compliance Audit</span>
-            <span style={{ fontSize: 10, color: "var(--t3)" }}>›</span>
-          </Link>
+        <div style={{ flex: "1 1 360px", maxWidth: 460, margin: "0 20px" }}>
+          <SearchButton />
         </div>
       )}
 
       {/* Right Controls */}
-      <div style={{ flex: "none", display: "flex", alignItems: "center", gap: showMenu ? 6 : 10 }}>
+      <div style={{ flex: "none", display: "flex", alignItems: "center", gap: showMenu ? 8 : 12 }}>
         {!showMenu && (
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 7,
-              padding: "5px 12px",
+              gap: 6,
+              padding: "6px 12px",
               borderRadius: 20,
-              background: "var(--acs)",
-              border: "1px solid var(--acbd)",
+              background: "rgba(16, 185, 129, 0.1)",
+              border: "1px solid rgba(16, 185, 129, 0.25)",
               fontSize: 12,
-              fontWeight: 600,
-              color: "var(--ac)",
+              fontWeight: 700,
+              color: "#34d399",
             }}
           >
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--acb)", boxShadow: "0 0 8px var(--acb)" }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }} />
             <span>ZATCA Phase-2</span>
           </div>
         )}
-        {!showMenu && <SearchButton />}
         {!showMenu && <LangToggle />}
         <ThemeToggle />
         <NotificationBell />

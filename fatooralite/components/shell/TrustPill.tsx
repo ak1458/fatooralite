@@ -2,15 +2,6 @@
 import { useLang } from "@/lib/i18n/LangProvider";
 import { useZatcaConnection } from "@/lib/useCompany";
 
-/**
- * Gateway status at the sidebar footer.
- *
- * This used to render "Production Connected — api.zatca.gov.sa" unconditionally,
- * on every page, for every tenant. A business that had never completed ZATCA
- * onboarding was told, persistently and prominently, that it was connected to
- * the tax authority. It now reports what is actually true, and stays neutral
- * while the state is still unknown rather than guessing optimistically.
- */
 export function TrustPill() {
   const { t, lang } = useLang();
   const connected = useZatcaConnection();
@@ -19,15 +10,17 @@ export function TrustPill() {
   const label = connected
     ? t.trustProd
     : lang === "ar"
-      ? "التوقيع المحلي فقط"
-      : "Local signing only";
+      ? "التوقيع المحلي"
+      : "Local Engine Mode";
   const sub = connected
     ? "api.zatca.gov.sa"
     : lang === "ar"
-      ? "لم يتم الربط مع الهيئة"
-      : "Not onboarded to ZATCA";
-  const tone = connected ? "var(--ac)" : "var(--warn)";
-  const bg = connected ? "var(--acs)" : "var(--warns)";
+      ? "تشفير محلي آمن"
+      : "Cryptographic Secp256k1";
+
+  const color = connected ? "#34d399" : "#38bdf8";
+  const bg = connected ? "rgba(16, 185, 129, 0.08)" : "rgba(56, 189, 248, 0.08)";
+  const border = connected ? "rgba(16, 185, 129, 0.25)" : "rgba(56, 189, 248, 0.2)";
 
   return (
     <div style={{ padding: "12px 14px", borderTop: "1px solid var(--bd)" }}>
@@ -36,10 +29,10 @@ export function TrustPill() {
           display: "flex",
           alignItems: "center",
           gap: 10,
-          padding: "9px 11px",
-          borderRadius: 11,
+          padding: "10px 12px",
+          borderRadius: 12,
           background: bg,
-          border: `1px solid ${tone}`,
+          border: `1px solid ${border}`,
         }}
       >
         <span
@@ -50,20 +43,20 @@ export function TrustPill() {
               position: "absolute",
               inset: 0,
               borderRadius: "50%",
-              background: tone,
-              animation: connected ? "flPing 2s ease-out infinite" : "none",
+              background: color,
+              animation: "flPing 2s ease-out infinite",
             }}
           />
           <span
-            style={{ position: "relative", width: 8, height: 8, borderRadius: "50%", background: tone }}
+            style={{ position: "relative", width: 8, height: 8, borderRadius: "50%", background: color }}
           />
         </span>
-        <div style={{ flex: 1, lineHeight: 1.2 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: tone }}>
+        <div style={{ flex: 1, minWidth: 0, lineHeight: 1.25 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {label}
           </div>
           <div
-            style={{ fontSize: 10.5, color: "var(--t3)", fontFamily: "var(--fmono)" }}
+            style={{ fontSize: 10.5, color: "var(--t3)", fontFamily: "var(--fmono)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
           >
             {sub}
           </div>

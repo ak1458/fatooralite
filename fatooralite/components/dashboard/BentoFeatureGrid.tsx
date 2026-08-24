@@ -11,8 +11,8 @@ export function BentoFeatureGrid() {
         display: "grid",
         gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
         gap: 18,
-        marginTop: 18,
-        marginBottom: 24,
+        marginTop: 20,
+        marginBottom: 20,
       }}
     >
       {/* Bento Card 1: High-Speed Signing Engine */}
@@ -26,74 +26,78 @@ export function BentoFeatureGrid() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          minHeight: 250,
-          background: "radial-gradient(100% 100% at 100% 0%, rgba(245, 158, 11, 0.12), transparent 60%), var(--s1)",
+          minHeight: 260,
+          background: "radial-gradient(120% 120% at 100% 0%, rgba(245, 158, 11, 0.16), transparent 70%), #0c1017",
+          border: "1px solid rgba(245, 158, 11, 0.2)",
+          boxShadow: "0 20px 40px -15px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
         }}
       >
+        {/* Floating Stat Pill */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", zIndex: 2 }}>
           <div
             style={{
               padding: "8px 14px",
-              borderRadius: 12,
-              background: "rgba(245, 158, 11, 0.12)",
-              border: "1px solid rgba(245, 158, 11, 0.3)",
-              backdropFilter: "blur(10px)",
+              borderRadius: 14,
+              background: "rgba(245, 158, 11, 0.14)",
+              border: "1px solid rgba(245, 158, 11, 0.35)",
+              backdropFilter: "blur(12px)",
             }}
           >
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#fbbf24", fontFamily: "var(--fdisp)" }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#fbbf24", fontFamily: "var(--fdisp)" }}>
               46.9%
             </div>
-            <div style={{ fontSize: 10.5, color: "rgba(251, 191, 36, 0.85)", fontWeight: 600 }}>
-              {lang === "ar" ? "سرعة مضاعفة في الفوترة" : "faster clearance speed"}
+            <div style={{ fontSize: 10.5, color: "#fef08a", fontWeight: 700, letterSpacing: ".02em" }}>
+              {lang === "ar" ? "سرعة إنجاز مضاعفة" : "faster clearance speed"}
             </div>
           </div>
         </div>
 
-        {/* 3D High-Speed Gauge Vector Graphic */}
+        {/* 3D High-Speed Speedometer Graphic */}
         <div
           style={{
             position: "absolute",
-            insetInlineEnd: -10,
-            bottom: -15,
-            width: 170,
-            height: 170,
+            insetInlineEnd: -15,
+            bottom: -20,
+            width: 190,
+            height: 190,
             pointerEvents: "none",
           }}
         >
-          <svg viewBox="0 0 160 160" width="100%" height="100%" fill="none">
+          <svg viewBox="0 0 200 200" width="100%" height="100%" fill="none">
             <defs>
-              <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.2" />
+              <linearGradient id="speedRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.3" />
                 <stop offset="60%" stopColor="#fbbf24" />
-                <stop offset="100%" stopColor="#fef08a" />
+                <stop offset="100%" stopColor="#fffbeb" />
               </linearGradient>
-              <filter id="gaugeGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="6" result="blur" />
+              <filter id="speedGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="8" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
             </defs>
-            {/* Outer Ring & Ticks */}
-            <circle cx="80" cy="80" r="62" stroke="rgba(245, 158, 11, 0.15)" strokeWidth="10" strokeDasharray="260" strokeDashoffset="65" strokeLinecap="round" />
-            <circle cx="80" cy="80" r="62" stroke="url(#gaugeGrad)" strokeWidth="10" strokeDasharray="260" strokeDashoffset="120" strokeLinecap="round" filter="url(#gaugeGlow)" />
-            {/* Inner Scale Lines */}
-            <circle cx="80" cy="80" r="48" stroke="rgba(255, 255, 255, 0.1)" strokeWidth="1.5" strokeDasharray="3 7" />
-            {/* Needle */}
-            <g transform="rotate(45 80 80)">
-              <line x1="80" y1="80" x2="132" y2="80" stroke="#fbbf24" strokeWidth="3" strokeLinecap="round" filter="url(#gaugeGlow)" />
-              <circle cx="80" cy="80" r="9" fill="#141924" stroke="#fbbf24" strokeWidth="2.5" />
-              <circle cx="80" cy="80" r="4" fill="#fbbf24" />
+            {/* Outer Gauge Chrome Bezel */}
+            <circle cx="100" cy="100" r="82" stroke="rgba(245, 158, 11, 0.15)" strokeWidth="14" strokeDasharray="360" strokeDashoffset="90" strokeLinecap="round" />
+            <circle cx="100" cy="100" r="82" stroke="url(#speedRingGrad)" strokeWidth="14" strokeDasharray="360" strokeDashoffset="180" strokeLinecap="round" filter="url(#speedGlow)" />
+            {/* Precision Radial Ticks */}
+            <circle cx="100" cy="100" r="66" stroke="rgba(255, 255, 255, 0.2)" strokeWidth="2" strokeDasharray="3 9" />
+            {/* Center Dial Hub & Metallic Needle */}
+            <circle cx="100" cy="100" r="28" fill="#141924" stroke="rgba(245, 158, 11, 0.4)" strokeWidth="2" />
+            <g transform="rotate(52 100 100)">
+              <polygon points="98,100 102,100 101,34 99,34" fill="#fbbf24" filter="url(#speedGlow)" />
+              <circle cx="100" cy="100" r="10" fill="#1e2433" stroke="#fbbf24" strokeWidth="3" />
+              <circle cx="100" cy="100" r="4" fill="#fbbf24" />
             </g>
           </svg>
         </div>
 
         {/* Content */}
         <div style={{ zIndex: 2, marginTop: 40, maxWidth: "75%" }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--tx)", letterSpacing: "-.01em" }}>
-            {lang === "ar" ? "محرك التوقيع فائق السرعة" : "High-Speed Signing Engine"}
+          <div style={{ fontSize: 17, fontWeight: 800, color: "var(--tx)", letterSpacing: "-.015em" }}>
+            {lang === "ar" ? "محرك التوقيع الفوري" : "High-Speed Signing Engine"}
           </div>
-          <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 6, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 6, lineHeight: 1.45 }}>
             {lang === "ar"
-              ? "توقيع آلاف فواتير UBL 2.1 XML في أجزاء من الثانية بمفاتيح ECDSA secp256k1."
+              ? "توقيع وتشفير آلاف فواتير UBL 2.1 في أجزاء من الثانية بمفاتيح ECDSA secp256k1."
               : "Sign thousands of UBL 2.1 XML invoices in milliseconds with ECDSA secp256k1 keys."}
           </div>
         </div>
@@ -110,8 +114,10 @@ export function BentoFeatureGrid() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          minHeight: 250,
-          background: "radial-gradient(100% 100% at 100% 0%, rgba(6, 182, 212, 0.14), transparent 60%), var(--s1)",
+          minHeight: 260,
+          background: "radial-gradient(120% 120% at 100% 0%, rgba(6, 182, 212, 0.18), transparent 70%), #0c1017",
+          border: "1px solid rgba(6, 182, 212, 0.22)",
+          boxShadow: "0 20px 40px -15px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", zIndex: 2 }}>
@@ -119,11 +125,11 @@ export function BentoFeatureGrid() {
             <span
               style={{
                 fontSize: 11,
-                fontWeight: 600,
+                fontWeight: 700,
                 padding: "4px 10px",
-                borderRadius: 8,
-                background: "rgba(6, 182, 212, 0.15)",
-                border: "1px solid rgba(6, 182, 212, 0.3)",
+                borderRadius: 10,
+                background: "rgba(6, 182, 212, 0.16)",
+                border: "1px solid rgba(6, 182, 212, 0.35)",
                 color: "#38bdf8",
                 display: "inline-flex",
                 alignItems: "center",
@@ -135,11 +141,11 @@ export function BentoFeatureGrid() {
             <span
               style={{
                 fontSize: 11,
-                fontWeight: 600,
+                fontWeight: 700,
                 padding: "4px 10px",
-                borderRadius: 8,
-                background: "rgba(16, 185, 129, 0.15)",
-                border: "1px solid rgba(16, 185, 129, 0.3)",
+                borderRadius: 10,
+                background: "rgba(16, 185, 129, 0.16)",
+                border: "1px solid rgba(16, 185, 129, 0.35)",
                 color: "#34d399",
                 display: "inline-flex",
                 alignItems: "center",
@@ -151,60 +157,63 @@ export function BentoFeatureGrid() {
           </div>
         </div>
 
-        {/* 3D Shield Vector Graphic */}
+        {/* 3D Holographic Emerald Shield Graphic */}
         <div
           style={{
             position: "absolute",
-            insetInlineEnd: -10,
-            bottom: -10,
-            width: 165,
-            height: 165,
+            insetInlineEnd: -15,
+            bottom: -15,
+            width: 185,
+            height: 185,
             pointerEvents: "none",
           }}
         >
-          <svg viewBox="0 0 160 160" width="100%" height="100%" fill="none">
+          <svg viewBox="0 0 200 200" width="100%" height="100%" fill="none">
             <defs>
-              <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <linearGradient id="shield3DGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#38bdf8" />
+                <stop offset="60%" stopColor="#10b981" />
                 <stop offset="100%" stopColor="#059669" />
               </linearGradient>
-              <filter id="shieldGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="8" result="blur" />
+              <filter id="shield3DGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="10" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
             </defs>
+            {/* Outer Shield Frame */}
             <path
-              d="M80 20 L130 40 V85 C130 118 80 145 80 145 C80 145 30 118 30 85 V40 Z"
-              fill="rgba(6, 182, 212, 0.1)"
-              stroke="url(#shieldGrad)"
-              strokeWidth="3.5"
-              filter="url(#shieldGlow)"
+              d="M100 20 L165 48 V105 C165 148 100 180 100 180 C100 180 35 148 35 105 V48 Z"
+              fill="rgba(16, 185, 129, 0.12)"
+              stroke="url(#shield3DGrad)"
+              strokeWidth="4"
+              filter="url(#shield3DGlow)"
             />
+            {/* Inner Cybernetic Bevel */}
             <path
-              d="M80 34 L118 50 V82 C118 107 80 128 80 128 C80 128 42 107 42 82 V50 Z"
-              stroke="rgba(56, 189, 248, 0.4)"
-              strokeWidth="1.5"
+              d="M100 36 L150 58 V100 C150 134 100 160 100 160 C100 160 50 134 50 100 V58 Z"
+              stroke="rgba(56, 189, 248, 0.45)"
+              strokeWidth="2"
             />
-            {/* Glowing Checkmark */}
+            {/* Radiant Glowing Checkmark */}
             <path
-              d="M62 82 L74 94 L100 68"
-              stroke="#10b981"
-              strokeWidth="5"
+              d="M78 102 L92 116 L126 82"
+              stroke="#34d399"
+              strokeWidth="6"
               strokeLinecap="round"
               strokeLinejoin="round"
-              filter="url(#shieldGlow)"
+              filter="url(#shield3DGlow)"
             />
           </svg>
         </div>
 
         {/* Content */}
         <div style={{ zIndex: 2, marginTop: 40, maxWidth: "75%" }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--tx)", letterSpacing: "-.01em" }}>
-            {lang === "ar" ? "جاهزية تامة وثقة في الامتثال" : "Deploy with Confidence"}
+          <div style={{ fontSize: 17, fontWeight: 800, color: "var(--tx)", letterSpacing: "-.015em" }}>
+            {lang === "ar" ? "جاهزية تامة وضمان الامتثال" : "Deploy with Confidence"}
           </div>
-          <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 6, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 6, lineHeight: 1.45 }}>
             {lang === "ar"
-              ? "فحص وتدقيق كل فاتورة وفق لوائح الهيئة الرسمية لضمان عدم رفض أي معاملة."
+              ? "تدقيق استباقي وفق قواعد التحقق الرسمية لضمان قبول الفواتير من المحاولة الأولى."
               : "Pre-flight validation verifies business rules and tax equations prior to submission."}
           </div>
         </div>
@@ -221,8 +230,10 @@ export function BentoFeatureGrid() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          minHeight: 250,
-          background: "radial-gradient(100% 100% at 100% 0%, rgba(168, 85, 247, 0.14), transparent 60%), var(--s1)",
+          minHeight: 260,
+          background: "radial-gradient(120% 120% at 100% 0%, rgba(168, 85, 247, 0.18), transparent 70%), #0c1017",
+          border: "1px solid rgba(168, 85, 247, 0.22)",
+          boxShadow: "0 20px 40px -15px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", zIndex: 2 }}>
@@ -232,9 +243,9 @@ export function BentoFeatureGrid() {
               alignItems: "center",
               gap: 6,
               padding: "6px 12px",
-              borderRadius: 10,
-              background: "rgba(168, 85, 247, 0.15)",
-              border: "1px solid rgba(168, 85, 247, 0.3)",
+              borderRadius: 12,
+              background: "rgba(168, 85, 247, 0.16)",
+              border: "1px solid rgba(168, 85, 247, 0.35)",
               fontSize: 11,
               fontWeight: 700,
               color: "#c084fc",
@@ -245,46 +256,50 @@ export function BentoFeatureGrid() {
           </div>
         </div>
 
-        {/* 3D AI Chip Vector Graphic */}
+        {/* 3D Silicon Processor Graphic */}
         <div
           style={{
             position: "absolute",
-            insetInlineEnd: -10,
+            insetInlineEnd: -15,
             bottom: -15,
-            width: 170,
-            height: 170,
+            width: 185,
+            height: 185,
             pointerEvents: "none",
           }}
         >
-          <svg viewBox="0 0 160 160" width="100%" height="100%" fill="none">
+          <svg viewBox="0 0 200 200" width="100%" height="100%" fill="none">
             <defs>
-              <linearGradient id="chipGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <linearGradient id="chip3DGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#c084fc" />
                 <stop offset="100%" stopColor="#38bdf8" />
               </linearGradient>
-              <filter id="chipGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="6" result="blur" />
+              <filter id="chip3DGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="8" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
             </defs>
-            <path d="M25 80 H50 M110 80 H135 M80 25 V50 M80 110 V135" stroke="rgba(192, 132, 252, 0.4)" strokeWidth="2" strokeLinecap="round" />
-            <circle cx="25" cy="80" r="3" fill="#c084fc" />
-            <circle cx="135" cy="80" r="3" fill="#38bdf8" />
-            <circle cx="80" cy="25" r="3" fill="#c084fc" />
-            <circle cx="80" cy="135" r="3" fill="#38bdf8" />
-            <rect x="50" y="50" width="60" height="60" rx="14" fill="#141924" stroke="url(#chipGrad)" strokeWidth="3" filter="url(#chipGlow)" />
-            <path d="M68 80 L76 72 L84 88 L92 80" stroke="#c084fc" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            {/* Conductive Bus Traces */}
+            <path d="M30 100 H60 M140 100 H170 M100 30 V60 M100 140 V170 M45 45 L70 70 M155 45 L130 70 M45 155 L70 130 M155 155 L130 130" stroke="rgba(192, 132, 252, 0.5)" strokeWidth="2.5" strokeLinecap="round" />
+            <circle cx="30" cy="100" r="4" fill="#c084fc" />
+            <circle cx="170" cy="100" r="4" fill="#38bdf8" />
+            <circle cx="100" cy="30" r="4" fill="#c084fc" />
+            <circle cx="100" cy="170" r="4" fill="#38bdf8" />
+            {/* Silicon Die */}
+            <rect x="60" y="60" width="80" height="80" rx="18" fill="#141924" stroke="url(#chip3DGrad)" strokeWidth="3.5" filter="url(#chip3DGlow)" />
+            {/* Holographic Pulse Core */}
+            <circle cx="100" cy="100" r="22" fill="rgba(192, 132, 252, 0.15)" stroke="#c084fc" strokeWidth="1.5" />
+            <path d="M86 100 L95 91 L105 109 L114 100" stroke="#f0abfc" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
 
         {/* Content */}
         <div style={{ zIndex: 2, marginTop: 40, maxWidth: "75%" }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--tx)", letterSpacing: "-.01em" }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "var(--tx)", letterSpacing: "-.015em" }}>
             {lang === "ar" ? "مساعد الذكاء الاصطناعي الضريبي" : "AI Tax & Compliance Copilot"}
           </div>
-          <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 6, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 6, lineHeight: 1.45 }}>
             {lang === "ar"
-              ? "تحليل الفروقات الضريبية تلقائياً واقتراح التصحيحات الفورية للفواتير."
+              ? "تحليل الفروقات الضريبية تلقائياً واكتشاف الشذوذ المحاسبي في الوقت الفعلي."
               : "Autonomous tax disparity detection, invoice anomaly alerts, and automated Q-filing."}
           </div>
         </div>
@@ -301,17 +316,19 @@ export function BentoFeatureGrid() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          minHeight: 250,
-          background: "radial-gradient(100% 100% at 100% 0%, rgba(16, 185, 129, 0.12), transparent 60%), var(--s1)",
+          minHeight: 260,
+          background: "radial-gradient(120% 120% at 100% 0%, rgba(16, 185, 129, 0.16), transparent 70%), #0c1017",
+          border: "1px solid rgba(16, 185, 129, 0.22)",
+          boxShadow: "0 20px 40px -15px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", zIndex: 2 }}>
           <div
             style={{
               padding: "6px 12px",
-              borderRadius: 10,
-              background: "rgba(16, 185, 129, 0.12)",
-              border: "1px solid rgba(16, 185, 129, 0.3)",
+              borderRadius: 12,
+              background: "rgba(16, 185, 129, 0.14)",
+              border: "1px solid rgba(16, 185, 129, 0.35)",
               fontSize: 11,
               fontWeight: 700,
               color: "#34d399",
@@ -321,43 +338,47 @@ export function BentoFeatureGrid() {
           </div>
         </div>
 
-        {/* 3D Security Vault Dial Vector Graphic */}
+        {/* 3D Titanium Vault Dial Graphic */}
         <div
           style={{
             position: "absolute",
-            insetInlineEnd: -10,
-            bottom: -15,
-            width: 170,
-            height: 170,
+            insetInlineEnd: -15,
+            bottom: -20,
+            width: 190,
+            height: 190,
             pointerEvents: "none",
           }}
         >
-          <svg viewBox="0 0 160 160" width="100%" height="100%" fill="none">
+          <svg viewBox="0 0 200 200" width="100%" height="100%" fill="none">
             <defs>
-              <linearGradient id="vaultGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <linearGradient id="vault3DGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#10b981" />
                 <stop offset="100%" stopColor="#38bdf8" />
               </linearGradient>
-              <filter id="vaultGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="6" result="blur" />
+              <filter id="vault3DGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="8" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
             </defs>
-            <circle cx="80" cy="80" r="58" stroke="rgba(16, 185, 129, 0.2)" strokeWidth="8" />
-            <circle cx="80" cy="80" r="58" stroke="url(#vaultGrad)" strokeWidth="8" strokeDasharray="30 15 45 10" strokeLinecap="round" filter="url(#vaultGlow)" />
-            <circle cx="80" cy="80" r="44" stroke="rgba(255, 255, 255, 0.15)" strokeWidth="2" strokeDasharray="2 8" />
-            <circle cx="80" cy="80" r="28" fill="#141924" stroke="url(#vaultGrad)" strokeWidth="2" />
-            <circle cx="80" cy="76" r="4" fill="#34d399" />
-            <polygon points="78,76 82,76 83,86 77,86" fill="#34d399" />
+            {/* Outer Beveled Ring */}
+            <circle cx="100" cy="100" r="76" stroke="rgba(16, 185, 129, 0.2)" strokeWidth="12" />
+            <circle cx="100" cy="100" r="76" stroke="url(#vault3DGrad)" strokeWidth="12" strokeDasharray="40 20 60 15" strokeLinecap="round" filter="url(#vault3DGlow)" />
+            {/* Notched Dial Calibration */}
+            <circle cx="100" cy="100" r="56" stroke="rgba(255, 255, 255, 0.2)" strokeWidth="2.5" strokeDasharray="2 10" />
+            {/* Titanium Hub */}
+            <circle cx="100" cy="100" r="36" fill="#141924" stroke="url(#vault3DGrad)" strokeWidth="2.5" />
+            {/* Emerald Core LED */}
+            <circle cx="100" cy="94" r="5" fill="#34d399" filter="url(#vault3DGlow)" />
+            <polygon points="97,94 103,94 104,108 96,108" fill="#34d399" />
           </svg>
         </div>
 
         {/* Content */}
         <div style={{ zIndex: 2, marginTop: 40, maxWidth: "75%" }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--tx)", letterSpacing: "-.01em" }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "var(--tx)", letterSpacing: "-.015em" }}>
             {lang === "ar" ? "خزنة التشفير البنكية" : "Bank-Grade Key Vault"}
           </div>
-          <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 6, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 12.5, color: "var(--t2)", marginTop: 6, lineHeight: 1.45 }}>
             {lang === "ar"
               ? "حماية وتخزين شهادات CSID والمفاتيح الخاصة بتشفير AES-256 المقاوم للاختراق."
               : "Encrypted CSID private key custody secured in dedicated cryptographic hardware modules."}

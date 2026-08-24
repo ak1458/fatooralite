@@ -103,14 +103,14 @@ export function AssistantDock() {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         style={{
-          position: "fixed", insetInlineEnd: 24, bottom: 24, zIndex: 90,
-          width: 54, height: 54, borderRadius: "50%", border: "none",
+          position: "fixed", right: 28, bottom: 28, zIndex: 90,
+          width: 52, height: 52, borderRadius: "50%", border: "none",
           background: "linear-gradient(150deg,var(--acb),var(--ac))", color: "var(--on-ac)",
           display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-          boxShadow: "0 12px 30px -8px var(--ac)",
+          boxShadow: "0 10px 25px -6px var(--ac)",
         }}
       >
-        <Icon name={open ? "chevron" : "ai"} size={24} sw={1.8} />
+        <Icon name={open ? "chevron" : "ai"} size={22} sw={2} />
       </motion.button>
 
       <AnimatePresence>
@@ -121,7 +121,7 @@ export function AssistantDock() {
             exit={{ opacity: 0, y: 30, scale: 0.95 }}
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
             style={{
-              position: "fixed", insetInlineEnd: 24, bottom: 90, zIndex: 90,
+              position: "fixed", right: 28, bottom: 90, zIndex: 90,
               width: "min(420px, calc(100vw - 48px))", height: "min(580px, calc(100vh - 140px))",
               background: "linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%), var(--s1)",
               backdropFilter: "blur(20px)",
