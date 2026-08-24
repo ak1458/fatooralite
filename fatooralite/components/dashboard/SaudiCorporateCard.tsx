@@ -19,35 +19,36 @@ export function SaudiCorporateCard({
     <div
       className="glass-card"
       style={{
-        borderRadius: 22,
-        padding: 22,
+        borderRadius: 16,
+        padding: "20px 22px",
         boxShadow: "var(--sh)",
         display: "flex",
         flexDirection: "column",
-        gap: 16,
+        justifyContent: "space-between",
+        gap: 14,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--tx)", letterSpacing: "-.01em" }}>
           {lang === "ar" ? "بطاقة المنشأة والاعتماد" : "Corporate Tax & CSID Card"}
         </span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ac)", background: "var(--acs)", border: "1px solid var(--acbd)", padding: "3px 8px", borderRadius: 8 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--ac)", background: "var(--acs)", border: "1px solid var(--acbd)", padding: "2px 8px", borderRadius: 6 }}>
           {lang === "ar" ? "معتمد لدى ZATCA" : "ZATCA Linked"}
         </span>
       </div>
 
-      {/* 3D Physical Metallic Card (Pure Vector/CSS Luxury Mesh) */}
+      {/* 3D Physical Metallic Card (Strict 1.586 : 1 Ratio) */}
       <div
         style={{
           position: "relative",
           width: "100%",
-          height: 165,
-          borderRadius: 18,
+          aspectRatio: "1.586 / 1",
+          borderRadius: 12,
           overflow: "hidden",
-          border: "1px solid rgba(255, 255, 255, 0.18)",
-          background: "linear-gradient(135deg, #0f172a 0%, #020617 50%, #0f172a 100%)",
-          boxShadow: "0 20px 40px -15px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.25)",
-          padding: "18px 20px",
+          border: "1px solid rgba(255, 255, 255, 0.16)",
+          background: "linear-gradient(135deg, #111827 0%, #030712 50%, #1e293b 100%)",
+          boxShadow: "0 16px 36px -12px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
+          padding: "14px 16px",
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",

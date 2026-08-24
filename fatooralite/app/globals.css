@@ -43,8 +43,9 @@
   --glow-blue: rgba(2, 132, 199, 0.25);
   --glow-purple: rgba(168, 85, 247, 0.22);
   --glow-amber: rgba(245, 158, 11, 0.2);
-  --rad: 24px;
-  --rad-sm: 12px;
+  --rad: 16px;
+  --rad-sm: 10px;
+  --rad-xs: 6px;
 }
 
 [data-theme="light"] {
@@ -186,6 +187,46 @@ body {
   }
   100% {
     background-position: 200% 0;
+  }
+}
+@keyframes fluidWaveFlow {
+  0% {
+    transform: scale(1) translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.06, 1.03) translate(-25px, 8px) rotate(1.5deg);
+  }
+  100% {
+    transform: scale(1) translate(0, 0) rotate(0deg);
+  }
+}
+@keyframes fluidWaveSecondary {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    transform: scale(1.08, 1.04) translate(20px, -10px);
+  }
+  100% {
+    transform: scale(1) translate(0, 0);
+  }
+}
+@keyframes circuitPulse {
+  0%, 100% {
+    opacity: 0.35;
+    filter: drop-shadow(0 0 2px rgba(56, 189, 248, 0.2));
+  }
+  50% {
+    opacity: 0.95;
+    filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.8));
+  }
+}
+@keyframes dialGleam {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
   }
 }
 

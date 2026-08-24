@@ -137,15 +137,28 @@ export function SplineTelemetry({
           {/* Glowing Peak Node at 310,25 */}
           <circle cx="310" cy="25" r="7" fill="#141924" stroke="#c084fc" strokeWidth="2.5" />
           <circle cx="310" cy="25" r="3.5" fill="#f0abfc" />
-
-          {/* Value Callout Badge */}
-          <g transform="translate(310, 15)">
-            <rect x="-14" y="-22" width="28" height="18" rx="6" fill="#1e1b4b" stroke="#c084fc" strokeWidth="1" />
-            <text x="0" y="-10" fill="#f8fafc" fontSize="10.5" fontWeight="800" textAnchor="middle">
-              {completedCount}
-            </text>
-          </g>
         </svg>
+
+        {/* Un-stretched HTML Value Callout Badge */}
+        <div
+          style={{
+            position: "absolute",
+            left: "77.5%",
+            top: 2,
+            transform: "translateX(-50%)",
+            padding: "2px 8px",
+            borderRadius: 6,
+            background: "#1e1b4b",
+            border: "1px solid #c084fc",
+            fontSize: 11,
+            fontWeight: 800,
+            color: "#f8fafc",
+            boxShadow: "0 2px 8px rgba(192, 132, 252, 0.4)",
+            lineHeight: 1.2,
+          }}
+        >
+          {completedCount}
+        </div>
       </div>
 
       {/* Bottom X-Axis Days */}

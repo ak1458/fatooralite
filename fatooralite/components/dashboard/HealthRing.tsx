@@ -53,24 +53,18 @@ export function HealthRing({ score }: HealthRingProps) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 14,
-          marginTop: 4,
+          marginBottom: 12,
         }}
       >
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--tx)" }}>
-            {lang === "ar" ? "توزيع الإجازة الفورية" : "Live Clearance Breakdown"}
-          </div>
-          <div style={{ fontSize: 11.5, color: "var(--t3)", marginTop: 2 }}>
-            {lang === "ar" ? "معدل الاعتماد مع بوابة ZATCA" : "Real-time Phase-2 clearance gateway status"}
-          </div>
+        <div style={{ fontSize: 12, color: "var(--t3)" }}>
+          {lang === "ar" ? "معدل الاعتماد اللحظي مع بوابة ZATCA" : "Real-time Phase-2 clearance gateway rate"}
         </div>
         <span
           style={{
-            fontSize: 11,
+            fontSize: 10.5,
             fontWeight: 700,
-            padding: "4px 10px",
-            borderRadius: 12,
+            padding: "3px 8px",
+            borderRadius: 6,
             background: "rgba(16, 185, 129, 0.12)",
             color: "#34d399",
             border: "1px solid rgba(16, 185, 129, 0.3)",
@@ -81,8 +75,8 @@ export function HealthRing({ score }: HealthRingProps) {
       </div>
 
       {/* Semicircular Multi-Color Donut Gauge (Reference 1) */}
-      <div style={{ position: "relative", width: "100%", height: 110, display: "flex", justifyContent: "center" }}>
-        <svg viewBox="0 0 240 120" width="220" height="110" style={{ overflow: "visible" }}>
+      <div style={{ position: "relative", width: "100%", height: 125, display: "flex", justifyContent: "center", overflow: "visible" }}>
+        <svg viewBox="0 0 240 120" width="230" height="115" style={{ overflow: "visible" }}>
           <defs>
             <linearGradient id="arcPink" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor="#f43f5e" />
@@ -103,35 +97,36 @@ export function HealthRing({ score }: HealthRingProps) {
           </defs>
 
           {/* Background Track */}
-          <path d="M 20 110 A 100 100 0 0 1 220 110" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="18" strokeLinecap="round" />
+          <path d="M 20 110 A 100 100 0 0 1 220 110" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="16" strokeLinecap="round" />
 
           {/* Segment 1: Successful (Pink/Fuchsia) 90.6% */}
-          <path d="M 20 110 A 100 100 0 0 1 155 20" fill="none" stroke="url(#arcPink)" strokeWidth="18" strokeLinecap="round" />
+          <path d="M 20 110 A 100 100 0 0 1 155 20" fill="none" stroke="url(#arcPink)" strokeWidth="16" strokeLinecap="round" />
 
           {/* Segment 2: Hard Declines (Purple) */}
-          <path d="M 165 24 A 100 100 0 0 1 190 45" fill="none" stroke="url(#arcPurple)" strokeWidth="18" />
+          <path d="M 165 24 A 100 100 0 0 1 190 45" fill="none" stroke="url(#arcPurple)" strokeWidth="16" />
 
           {/* Segment 3: Soft Declines (Cyan) */}
-          <path d="M 196 52 A 100 100 0 0 1 210 75" fill="none" stroke="url(#arcCyan)" strokeWidth="18" />
+          <path d="M 196 52 A 100 100 0 0 1 210 75" fill="none" stroke="url(#arcCyan)" strokeWidth="16" />
 
           {/* Segment 4: Disputed / Refunded (Green) */}
-          <path d="M 214 83 A 100 100 0 0 1 220 110" fill="none" stroke="url(#arcGreen)" strokeWidth="18" strokeLinecap="round" />
+          <path d="M 214 83 A 100 100 0 0 1 220 110" fill="none" stroke="url(#arcGreen)" strokeWidth="16" strokeLinecap="round" />
         </svg>
 
-        {/* Center Percentage Display */}
+        {/* Center Percentage Display (Fully Visible & Unclipped) */}
         <div
           style={{
             position: "absolute",
-            bottom: 4,
+            bottom: 2,
             left: "50%",
             transform: "translateX(-50%)",
             textAlign: "center",
+            width: "100%",
           }}
         >
-          <div style={{ fontSize: 24, fontWeight: 800, color: "var(--tx)", fontFamily: "var(--fdisp)" }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: "var(--tx)", fontFamily: "var(--fdisp)", lineHeight: 1.1 }}>
             {animatedPct.toFixed(1)}%
           </div>
-          <div style={{ fontSize: 10.5, color: "var(--t3)", fontWeight: 600 }}>
+          <div style={{ fontSize: 10.5, color: "var(--t3)", fontWeight: 600, marginTop: 2 }}>
             {lang === "ar" ? "اعتماد فوري" : "Instant Clearance"}
           </div>
         </div>

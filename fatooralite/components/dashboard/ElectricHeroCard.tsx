@@ -26,43 +26,63 @@ export function ElectricHeroCard({
     <div
       style={{
         position: "relative",
-        borderRadius: 24,
+        borderRadius: 16,
         overflow: "hidden",
         border: "1px solid rgba(56, 189, 248, 0.25)",
         background: "linear-gradient(135deg, #091a2e 0%, #050b14 100%)",
         boxShadow: "0 24px 50px -15px rgba(2, 132, 199, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12)",
-        marginBottom: 22,
+        marginBottom: 20,
       }}
     >
-      {/* Luminous Glowing Electric Mesh Waves (Pure SVG Vector) */}
+      {/* Living Animated Luminous Electric Ribbon Waves */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           pointerEvents: "none",
-          opacity: 0.65,
+          opacity: 0.75,
           overflow: "hidden",
         }}
       >
-        <svg viewBox="0 0 1000 400" width="100%" height="100%" preserveAspectRatio="none" fill="none">
+        <svg
+          viewBox="0 0 1000 400"
+          width="100%"
+          height="100%"
+          preserveAspectRatio="none"
+          fill="none"
+          style={{ animation: "fluidWaveFlow 12s ease-in-out infinite alternate" }}
+        >
           <defs>
             <linearGradient id="heroWave1" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.4" />
-              <stop offset="50%" stopColor="#0284c7" stopOpacity="0.2" />
-              <stop offset="100%" stopColor="#10b981" stopOpacity="0.3" />
+              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.5" />
+              <stop offset="50%" stopColor="#0284c7" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#10b981" stopOpacity="0.35" />
             </linearGradient>
             <linearGradient id="heroWave2" x1="100%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#818cf8" stopOpacity="0.35" />
-              <stop offset="60%" stopColor="#38bdf8" stopOpacity="0.15" />
-              <stop offset="100%" stopColor="#059669" stopOpacity="0.25" />
+              <stop offset="0%" stopColor="#818cf8" stopOpacity="0.4" />
+              <stop offset="60%" stopColor="#38bdf8" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#059669" stopOpacity="0.3" />
             </linearGradient>
-            <filter id="heroMeshGlow" x="-10%" y="-10%" width="120%" height="120%">
-              <feGaussianBlur stdDeviation="20" result="blur" />
+            <filter id="heroMeshGlow" x="-15%" y="-15%" width="130%" height="130%">
+              <feGaussianBlur stdDeviation="22" result="blur" />
               <feComposite in="SourceGraphic" in2="blur" operator="over" />
             </filter>
           </defs>
-          <path d="M-100 180 C200 80 400 350 700 150 C900 20 1100 250 1200 120" stroke="url(#heroWave1)" strokeWidth="48" strokeLinecap="round" filter="url(#heroMeshGlow)" />
-          <path d="M-50 260 C250 360 550 80 850 280 C1050 400 1150 150 1250 200" stroke="url(#heroWave2)" strokeWidth="32" strokeLinecap="round" filter="url(#heroMeshGlow)" />
+          <path
+            d="M-100 180 C200 80 400 350 700 150 C900 20 1100 250 1200 120"
+            stroke="url(#heroWave1)"
+            strokeWidth="52"
+            strokeLinecap="round"
+            filter="url(#heroMeshGlow)"
+            style={{ animation: "fluidWaveSecondary 16s ease-in-out infinite alternate" }}
+          />
+          <path
+            d="M-50 260 C250 360 550 80 850 280 C1050 400 1150 150 1250 200"
+            stroke="url(#heroWave2)"
+            strokeWidth="36"
+            strokeLinecap="round"
+            filter="url(#heroMeshGlow)"
+          />
         </svg>
       </div>
 

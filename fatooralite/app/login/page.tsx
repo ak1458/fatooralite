@@ -149,15 +149,15 @@ function LoginForm() {
           style={{
             position: "relative",
             zIndex: 2,
-            margin: "32px 0",
-            borderRadius: 24,
+            margin: "28px 0",
+            borderRadius: 16,
             border: "1px solid rgba(255, 255, 255, 0.12)",
             background: "linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%), #0c1017",
             boxShadow: "0 30px 60px -20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.15)",
             overflow: "hidden",
           }}
         >
-          <div style={{ position: "relative", width: "100%", height: 260, overflow: "hidden" }}>
+          <div style={{ position: "relative", width: "100%", height: 240, overflow: "hidden" }}>
             <Image
               src="/images/auth_vault_hero.jpg"
               alt="Cryptographic Vault"
@@ -177,12 +177,12 @@ function LoginForm() {
                 position: "absolute",
                 top: 14,
                 insetInlineStart: 14,
-                padding: "6px 12px",
-                borderRadius: 20,
-                background: "rgba(7, 9, 14, 0.75)",
+                padding: "5px 10px",
+                borderRadius: 8,
+                background: "rgba(7, 9, 14, 0.8)",
                 backdropFilter: "blur(12px)",
                 border: "1px solid rgba(56, 189, 248, 0.3)",
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: 700,
                 color: "#38bdf8",
                 display: "flex",
