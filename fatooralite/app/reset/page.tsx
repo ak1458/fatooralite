@@ -10,13 +10,13 @@ const L = {
   confirm: { en: "Confirm Password", ar: "تأكيد كلمة المرور" },
   submit: { en: "Update password", ar: "تحديث كلمة المرور" },
   updating: { en: "Updating…", ar: "جاري التحديث…" },
-  success: { en: "Password updated successfully!", ar: "تم تحديث كلمة المرور بنجاح!" },
+  success: { en: "Password updated successfully! Redirecting…", ar: "تم تحديث كلمة المرور بنجاح! جاري التوجيه…" },
   errorMismatch: { en: "Passwords do not match", ar: "كلمات المرور غير متطابقة" },
   errorNoToken: { en: "Missing or invalid token.", ar: "رابط إعادة التعيين مفقود أو غير صالح." },
 };
 
 function ResetForm() {
-  const { lang } = useLang();
+  const { lang, setLang } = useLang();
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -28,9 +28,6 @@ function ResetForm() {
   const [error, setError] = useState("");
   const t = (k: keyof typeof L) => L[k][lang];
 
-  // Derived, not stored: this depends only on the URL, and writing it into
-  // state from an effect costs an extra render pass for a value that can
-  // never change while the page is mounted.
   const tokenError = token ? "" : t("errorNoToken");
 
   async function submit(e: React.FormEvent) {
@@ -62,17 +59,6 @@ function ResetForm() {
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "11px 13px",
-    borderRadius: 11,
-    border: "1px solid var(--bd)",
-    background: "var(--s2)",
-    color: "var(--tx)",
-    fontSize: 14,
-    fontFamily: "inherit",
-  };
-
   return (
     <div
       style={{
@@ -80,32 +66,32 @@ function ResetForm() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "var(--bg)",
+        background: "radial-gradient(100% 100% at 50% 0%, rgba(56, 189, 248, 0.1) 0%, transparent 60%), var(--bg)",
         padding: 24,
       }}
     >
       <div
         style={{
           width: "100%",
-          maxWidth: 380,
-          borderRadius: 20,
-          padding: 30,
+          maxWidth: 420,
+          borderRadius: 24,
+          padding: 36,
           border: "1px solid var(--bd)",
-          background: "var(--s1)",
-          boxShadow: "var(--sh)",
+          background: "linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.01) 100%), var(--s1)",
+          boxShadow: "0 24px 50px -15px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <div
             style={{
-              width: 40,
-              height: 40,
-              borderRadius: 12,
+              width: 42,
+              height: 42,
+              borderRadius: 14,
               background: "linear-gradient(150deg,var(--acb),var(--ac))",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 6px 16px -6px var(--ac)",
+              boxShadow: "0 8px 20px -6px var(--ac)",
             }}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--on-ac)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -113,61 +99,137 @@ function ResetForm() {
               <path d="m9 11 2 2 4-4" />
             </svg>
           </div>
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 700, fontFamily: "var(--fdisp)" }}>{t("title")}</div>
-            <div style={{ fontSize: 12, color: "var(--t3)" }}>{t("sub")}</div>
-          </div>
+          <button
+            type="button"
+            onClick={() => setLang(lang === "en" ? "ar" : "en")}
+            style={{
+              padding: "5px 10px",
+              borderRadius: 8,
+              border: "1px solid var(--bd)",
+              background: "var(--s2)",
+              color: "var(--tx)",
+              fontSize: 11.5,
+              fontWeight: 700,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            {lang === "en" ? "العربية" : "English"}
+          </button>
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ margin: "0 0 6px 0", fontSize: 22, fontWeight: 800, fontFamily: "var(--fdisp)", letterSpacing: "-.02em" }}>
+            {t("title")}
+          </h1>
+          <p style={{ margin: 0, fontSize: 13, color: "var(--t3)", lineHeight: 1.5 }}>
+            {t("sub")}
+          </p>
         </div>
 
         {success ? (
-          <div style={{ color: "var(--ac)", fontSize: 14, textAlign: "center", fontWeight: 600 }}>
-            {t("success")}
+          <div
+            style={{
+              padding: "16px",
+              borderRadius: 12,
+              background: "var(--acs)",
+              border: "1px solid var(--acbd)",
+              color: "var(--ac)",
+              fontSize: 14,
+              textAlign: "center",
+              fontWeight: 700,
+            }}
+          >
+            ✓ {t("success")}
           </div>
         ) : (
           <form onSubmit={submit}>
-            <label style={{ display: "block", marginBottom: 14 }}>
-              <span style={{ display: "block", fontSize: 12, color: "var(--t3)", marginBottom: 5 }}>{t("password")}</span>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, color: "var(--t2)", marginBottom: 6 }}>
+                {t("password")}
+              </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                style={inputStyle}
+                placeholder="••••••••"
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "1px solid var(--bd)",
+                  background: "var(--s2)",
+                  color: "var(--tx)",
+                  fontSize: 14,
+                  fontFamily: "inherit",
+                  outline: "none",
+                }}
                 minLength={8}
                 required
                 disabled={!token}
               />
-            </label>
+            </div>
 
-            <label style={{ display: "block", marginBottom: 14 }}>
-              <span style={{ display: "block", fontSize: 12, color: "var(--t3)", marginBottom: 5 }}>{t("confirm")}</span>
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, color: "var(--t2)", marginBottom: 6 }}>
+                {t("confirm")}
+              </label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                style={inputStyle}
+                placeholder="••••••••"
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "1px solid var(--bd)",
+                  background: "var(--s2)",
+                  color: "var(--tx)",
+                  fontSize: 14,
+                  fontFamily: "inherit",
+                  outline: "none",
+                }}
                 minLength={8}
                 required
                 disabled={!token}
               />
-            </label>
+            </div>
 
-            {(error || tokenError) && <div style={{ color: "var(--dang)", fontSize: 13, marginBottom: 12 }}>{error || tokenError}</div>}
+            {(error || tokenError) && (
+              <div
+                role="alert"
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  background: "var(--dangs)",
+                  border: "1px solid var(--dangbd, var(--bd))",
+                  color: "var(--dang)",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  marginBottom: 16,
+                }}
+              >
+                ✕ {error || tokenError}
+              </div>
+            )}
 
             <button
               type="submit"
               disabled={busy || !token}
               style={{
                 width: "100%",
-                padding: "12px 18px",
-                borderRadius: 11,
+                padding: "13px 20px",
+                borderRadius: 14,
                 border: "none",
                 background: "linear-gradient(150deg,var(--acb),var(--ac))",
                 color: "var(--on-ac)",
                 fontSize: 14,
                 fontWeight: 700,
-                cursor: "pointer",
+                cursor: busy || !token ? "not-allowed" : "pointer",
                 fontFamily: "inherit",
-                opacity: busy ? 0.7 : 1,
+                opacity: busy || !token ? 0.7 : 1,
+                boxShadow: "0 10px 25px -8px var(--ac)",
               }}
             >
               {busy ? t("updating") : t("submit")}
