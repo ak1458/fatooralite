@@ -1,3 +1,5 @@
+> **Engineered & Maintained by [Arranto](https://arranto.com)** — Custom Software & AI Systems Studio.
+
 <div align="center">
 
 # Fatoora Lite Pro
