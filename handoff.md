@@ -2898,3 +2898,8 @@ to `fatoora_audit` only, verified via `scripts/migration-drill.ts` (0
 failures against a fresh empty schema). Full test suite counts and the
 `neondb` drift finding: see `docs/SESSION_HANDOFF_2026-08-18.md`'s Phase 5
 addendum.
+
+
+## 2026-11-07 — Repository presentation
+
+Public repository presentation refreshed on 2026-11-07: concise README, accurate setup and license, and explicit production-gate links. Application behavior and release readiness were not revalidated in this documentation pass.
