@@ -131,13 +131,15 @@ Run commands from the nested fatooralite/ application directory. Database tests 
 
 ## Versions and distribution
 
+[![Source preview](https://img.shields.io/github/v/release/ak1458/fatooralite?include_prereleases&style=flat-square)](https://github.com/ak1458/fatooralite/releases)
+
 Manifest versions are application/workspace metadata, not a certification of release readiness.
 
 | Manifest | Declared version |
 | --- | --- |
 | [fatooralite/package.json](<fatooralite/package.json>) | `0.4.0` |
 
-The repository has source tags (`v0.4.0`, `v0.3.0`, `v0.2.0`, `v0.1.0`), but no published GitHub Release was recorded in this snapshot. [Browse tags](https://github.com/ak1458/fatooralite/tags). Tags and release notes are separate objects.
+A [v0.4.0 historical source preview](https://github.com/ak1458/fatooralite/releases/tag/v0.4.0) is published as a **prerelease** against the pre-existing tag. It supplies source archives and notes, not a newly validated binary or production certification. Current development includes later changes and outstanding gates; compare the tag with the branch before following old setup instructions.
 
 GitHub Packages is a separate registry. This README does not imply that a registry package exists; use the installation path documented here rather than an invented package-install command.
 
