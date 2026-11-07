@@ -1,187 +1,158 @@
-> **Engineered & Maintained by [Arranto](https://arranto.com)** — Custom Software & AI Systems Studio.
+<p align="center"><img src=".github/assets/readme-header.svg" alt="FatooraLite — Arabic &amp; English invoicing · ZATCA integration workflows" width="100%" /></p>
 
-<div align="center">
+# FatooraLite
 
-# Fatoora Lite Pro
+FatooraLite is a multi-tenant invoicing application for Saudi business workflows. Its code combines customer/product records, invoice operations, signing and XML utilities, onboarding, role permissions, and audit-related services in a Next.js application backed by Prisma and PostgreSQL. Arabic and English screens support different reading directions. Integration code and local signature validation are inspectable engineering work; they do not establish regulatory certification or a successful production clearance round trip.
 
-### ZATCA Phase 2 e-invoicing compliance for Saudi SMEs
+[![Stars](https://img.shields.io/github/stars/ak1458/fatooralite?style=flat-square)](https://github.com/ak1458/fatooralite/stargazers)
+[![Watching](https://img.shields.io/github/watchers/ak1458/fatooralite?style=flat-square&label=watching)](https://github.com/ak1458/fatooralite/watchers)
+[![Forks](https://img.shields.io/github/forks/ak1458/fatooralite?style=flat-square)](https://github.com/ak1458/fatooralite/forks)
+[![Activity](https://img.shields.io/github/last-commit/ak1458/fatooralite?style=flat-square)](https://github.com/ak1458/fatooralite/activity)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-64748b?style=flat-square)](LICENSE)
 
-Compliance-first. Bilingual (Arabic-RTL / English). Dark & light. Installable PWA.
+**[How it works](#how-it-works) · [Run locally](#run-locally) · [Configuration](#configuration) · [Commands](#development-commands) · [Versions](#versions-and-distribution) · [License](#license)**
 
-[![CI](https://github.com/ak1458/fatooralite/actions/workflows/ci.yml/badge.svg)](https://github.com/ak1458/fatooralite/actions/workflows/ci.yml)
-[![License: Proprietary](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
-![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)
-![React](https://img.shields.io/badge/React-19-149eca?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon%20%2B%20pgvector-3ecf8e?logo=postgresql)
-![PWA](https://img.shields.io/badge/PWA-installable-5a0fc8?logo=pwa)
+## Interface preview
 
-<img src=".github/screenshots/01-dashboard-dark-ar.png" alt="Fatoora Lite Pro Compliance Command Center" width="900" />
+The following images are existing repository captures; they are not a new acceptance run.
 
-</div>
+![FatooraLite interface — 01-dashboard-dark-ar](.github/screenshots/01-dashboard-dark-ar.png)
 
----
+![FatooraLite interface — 02-dashboard-light-en](.github/screenshots/02-dashboard-light-en.png)
 
-## Overview
+## How it works
 
-**Fatoora Lite Pro** turns an invoice into a ZATCA Phase-2 compliant, cryptographically
-stamped document, clears/reports it through the Fatoora gateway, and keeps an
-auditable archive — through a clean, Arabic-first interface. It is built for
-owner-operated Saudi SMEs and the accountants who serve them: people pulled into
-real-time tax compliance who need compliant invoices + clearance without a full
-accounting suite.
-
-> Not an ERP. Not accounting software. **Compliance, done right.**
-
-## Features
-
-- 🧾 **ZATCA Phase-2 engine** — UBL 2.1 XML, SHA-256 hash, secp256k1 ECDSA
-  cryptographic stamp, TLV/base64 QR, PKCS#10 CSR, previous-invoice-hash chaining.
-- 🔗 **Real Fatoora gateway** — Compliance CSID → Production CSID onboarding, then
-  live clearance (standard) and reporting (simplified) on sandbox or production.
-- 🧮 **Invoice operations** — create, sign, clear, and track standard & simplified
-  invoices with live VAT totals.
-- 🗄️ **Audit vault** — searchable archive of signed XML, QR, and gateway responses.
-- 📊 **Command center & analytics** — compliance health, clearance success, VAT
-  trends, revenue by customer.
-- 🤖 **AI agent** — provider-agnostic (OpenRouter / Anthropic / OpenAI via env),
-  RAG-grounded on pgvector (global ZATCA corpus + per-tenant data), app-wide
-  tool calling with confirm-before-write for financial actions.
-- 🌐 **Bilingual & themed** — Arabic-RTL default + English, dark/light, all via
-  design tokens.
-- 🔐 **Auth + RBAC** — scrypt passwords, role→permission matrix, jose sessions,
-  route guard.
-- 📱 **Installable PWA** — manifest, service worker, offline-aware shell.
-
-## Screenshots
-
-| Compliance Command Center (AR · dark) | Command Center (EN · light) |
-| --- | --- |
-| ![](.github/screenshots/01-dashboard-dark-ar.png) | ![](.github/screenshots/02-dashboard-light-en.png) |
-
-| Invoice Operations | ZATCA Integration + Onboarding |
-| --- | --- |
-| ![](.github/screenshots/03-invoices-light-en.png) | ![](.github/screenshots/04-integration-onboarding.png) |
-
-| Clearance Monitoring | Analytics |
-| --- | --- |
-| ![](.github/screenshots/05-clearance.png) | ![](.github/screenshots/06-analytics.png) |
-
-| AI Assistant | New Invoice |
-| --- | --- |
-| ![](.github/screenshots/07-ai-assistant.png) | ![](.github/screenshots/09-new-invoice.png) |
-
-<div align="center"><img src=".github/screenshots/08-login.png" alt="Login" width="360" /></div>
-
-## Tech stack
-
-| Layer | Choice |
-| --- | --- |
-| Framework | Next.js 16 (App Router) · React 19 |
-| Language | TypeScript (strict) |
-| Styling | Tailwind v4 + CSS variables, `next/font` |
-| Database | Prisma 6 + PostgreSQL (Neon) + pgvector |
-| Crypto / XML | `node:crypto` (secp256k1, scrypt) · node-forge · xmlbuilder2 |
-| Auth | jose (JWT cookies) + scrypt + custom DB roles + `proxy.ts` guard |
-| Tests | Vitest + Testing Library · Playwright |
-| Hosting | Vercel (Node runtime) · PWA |
-
-## Quick start
-
-```bash
-cd fatooralite
-npm install                 # also runs `prisma generate`
-cp .env.example .env
-
-docker compose up -d        # local Postgres with pgvector (or point .env at Neon)
-npm run db:migrate          # apply migrations
-npm run dev                 # http://localhost:3000
-```
-
-A fresh install starts **empty** — register your own company on /register.
-(An optional demo tenant exists for local development only: `SEED_DEMO=true npm run db:seed`.)
-
-### Scripts
-
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Start the dev server |
-| `npm test` | Unit/engine/auth tests (DB tests skip without `TEST_DATABASE_URL`) |
-| `npm run test:e2e` | Playwright (needs the app + DB running) |
-| `npm run lint` · `npm run build` | Lint · production build |
-| `npm run db:migrate` · `db:seed` · `db:studio` | Prisma migrate · seed · studio |
-
-## ZATCA onboarding (go live)
-
-Real clearance needs *your* certificate. Register the entity on the ZATCA Fatoora
-portal, get the OTP, then in the app go to **ZATCA Integration → Onboarding**:
-request the **Compliance CSID** (CSR + OTP), then the **Production CSID**. After
-that, issued invoices clear/report for real. Until then, signing works locally but
-the gateway rejects (no valid CSID). Full steps in [`docs/09-deployment.md`](docs/09-deployment.md).
-
-## Deploy (free tier)
-
-**Neon (Postgres + pgvector) + Vercel (Node host).** Set `DATABASE_URL`/`DIRECT_URL`
-from Neon, import the repo on Vercel with **Root Directory = `fatooralite`**,
-add env vars, deploy, and run `npm run db:migrate` once. The complete
-step-by-step guide (secrets, env matrix, hardening checklist) is
-[`docs/09-deployment.md`](docs/09-deployment.md). (Cloudflare Workers is
-unsuitable — the `node:crypto` engine needs a Node runtime.)
+1. Register a company, complete the application’s onboarding, and work within its tenant and role boundaries.
+2. Maintain customers/products, create invoice data, and pass it through the domain calculations and signing pipeline.
+3. Use the configured ZATCA mode and certificate/onboarding workflow for submission and reconciliation.
+4. Inspect invoice state, audit information, and operations screens; use the production checklist before introducing live customer data.
 
 ## Architecture
 
-Layered and intern-friendly:
+| Path | Purpose |
+| --- | --- |
+| [fatooralite/lib/zatca/](<fatooralite/lib/zatca/>) | Invoice XML, signing, and compliance-engine code. |
+| [fatooralite/lib/](<fatooralite/lib/>) | Database, service, billing, authorization, and provider layers. |
+| [fatooralite/app/](<fatooralite/app/>) | Application screens and API handlers. |
+| [fatooralite/prisma/](<fatooralite/prisma/>) | Database schema and migrations. |
+| [docs/audit/](<docs/audit/>) | Recorded audit findings, decisions, and remediation status. |
+| [docs/](<docs/>) | Architecture, deployment, incident, and backup procedures. |
 
-```
-lib/zatca      pure compliance engine (no I/O) — fully unit-tested
-   ↓
-lib/db         Prisma repositories (injectable client)
-   ↓
-lib/services   orchestration (issue, clearance, onboarding)
-   ↓
-app/api        route handlers (auth-gated)
-   ↓
-app/(app)      UI: app shell + module screens
+## Product and engineering
+
+- Invoice creation, credit/debit notes, customer and product management.
+- XML generation/signing, CSID onboarding, and clearance/reporting integration code.
+- Arabic/English interface, role permissions, and tenant-scoped services.
+- Prisma persistence, audit events, and a provider-based assistant layer.
+
+![Invoice dashboard in Arabic dark mode](.github/screenshots/01-dashboard-dark-ar.png)
+
+## Run locally
+
+```bash
+git clone https://github.com/ak1458/fatooralite.git
+cd fatooralite/fatooralite
+npm install
+cp .env.example .env
 ```
 
-- Colors/fonts only via CSS variables; user-facing text via the typed
-  `Bilingual` shape.
-- Auth + engine are pure and unit-tested; repositories take an injectable client.
+Set up a development PostgreSQL database and the required secrets, then run:
+
+```bash
+npm run db:migrate
+npm run dev
+```
+
+The application lives in **`fatooralite/`**. Keep that directory as the deployment root. New installations require company registration; demo seeding is optional and for development only.
+
+## Architecture and checks
+
+`lib/zatca` → database repositories → services → API routes → application screens.
+
+Available checks inside `fatooralite/`: `npm run lint`, `npm test`, `npm run zatca:validate`, `npm run test:e2e`, and `npm run build`. Database tests require the separate test database and isolation convention in [START-HERE.md](START-HERE.md).
+
+## Current limits
+
+The checked-in handoff records an outstanding real ZATCA round trip requiring the owner's portal OTP, alongside other production gates. Local signing and integration code do not establish regulatory certification or production clearance. Read [current state](START-HERE.md) and [the production checklist](docs/18-production-checklist.md) before a live rollout.
+
 
 ## Configuration
 
-| Env | Purpose |
+Settings template: [fatooralite/.env.example](<fatooralite/.env.example>). Copy it to the application’s local environment file and fill only the integrations you use.
+
+| Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` / `DIRECT_URL` | Postgres (Neon pooled + direct) |
-| `AUTH_SECRET` | session signing secret (required in production) |
-| `AUTH_ENFORCE` | `true` to require login + RBAC on every page |
-| `ZATCA_MODE` | `sandbox` \| `production` |
-| `ZATCA_SANDBOX_BASE_URL` / `ZATCA_PRODUCTION_BASE_URL` | gateway URLs |
-| `ENCRYPTION_KEY` | at-rest encryption for certificate private keys (required in production) |
-| `AI_PROVIDER` (+ key) | `openrouter` (default) | `anthropic` | `openai` |
-| `EMBEDDING_PROVIDER` | `local` (default) | `openai` | `voyage` — RAG embeddings |
+| `DATABASE_URL` | Database connection used by the server or ORM. |
+| `DIRECT_URL` | Direct database connection for the Prisma workflow. |
+| `AUTH_SECRET` | Server-side session signing secret. |
+| `ZATCA_MODE` | Select the documented sandbox/production integration mode. |
+| `ZATCA_SANDBOX_BASE_URL` | Endpoint for the corresponding integration; verify the expected service and environment. |
+| `ZATCA_PRODUCTION_BASE_URL` | Endpoint for the corresponding integration; verify the expected service and environment. |
 
-## Documentation
+Environment files and provider tokens must remain untracked. A public client prefix exposes a value in the browser bundle; it is not a safe place for privileged credentials.
 
-The full documentation suite lives in [`docs/`](docs/README.md) — PRD,
-architecture, functional spec, deployment guide, and AI architecture. Build the
-browsable HTML portal with `npm run docs:build` (inside `fatooralite/`) and open
-`docs/portal/index.html`.
+## Development commands
 
-## Roadmap
+Workspace: [fatooralite/package.json](<fatooralite/package.json>). Run these commands from its directory.
 
-- [x] UI · compliance engine · data model · invoice creation · clearance · audit · auth
-- [x] Real ZATCA gateway + CSID onboarding · PostgreSQL (Neon) · PWA
-- [x] Live dashboard/analytics from the DB · notifications · users & custom roles
-- [x] AI agent: provider-agnostic layer, RAG (pgvector), app-wide tool calling
-- [ ] Billing · multi-entity accountant view · receipt OCR
+| Command | Script defined in manifest |
+| --- | --- |
+| `npm run dev` | `next dev` |
+| `npm run build` | `next build` |
+| `npm run start` | `next start` |
+| `npm run lint` | `eslint` |
+| `npm run test` | `vitest run` |
+| `npm run test:watch` | `vitest` |
+| `npm run test:e2e` | `playwright test` |
+| `npm run db:push` | `prisma db push` |
+| `npm run db:migrate` | `prisma migrate deploy` |
+| `npm run db:migrate:dev` | `prisma migrate dev` |
+| `npm run db:generate` | `prisma generate` |
+| `npm run db:seed` | `tsx prisma/seed.ts` |
+| `npm run db:studio` | `prisma studio` |
+| `npm run docs:build` | `node scripts/build-docs.mjs` |
+| `npm run zatca:validate` | `tsx scripts/validate-zatca.ts` |
+| `npm run ai:ingest-global` | `tsx scripts/ingest-global.ts` |
+| `npm run postinstall` | `prisma generate` |
+
+These are available commands, not a claim that all checks passed in this documentation pass. Connected checks require the services, credentials, and isolated data described above.
+
+## Operational notes
+
+Run commands from the nested fatooralite/ application directory. Database tests must follow the isolation convention in START-HERE.md: schema-pushing files cannot all race against one database. Use an isolated test database and do not seed/reset a live tenant. The checked-in handoff explicitly records outstanding owner-dependent production gates, including the real ZATCA round trip. Required CI currently reports dependency-audit failures; do not replace that gate with a static “passing” badge.
+
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| Prisma cannot connect or a table is missing | Check development DATABASE_URL/DIRECT_URL and apply the repository migrations to the intended database. |
+| Tests race or affect each other | Read the separate-schema/test-isolation instructions in START-HERE.md before using a shared TEST_DATABASE_URL. |
+| Signing works but clearance fails | Local cryptography does not supply valid company credentials, OTP, or CSID onboarding; follow the production integration checklist. |
+
+## Versions and distribution
+
+[![Source preview](https://img.shields.io/github/v/release/ak1458/fatooralite?include_prereleases&style=flat-square)](https://github.com/ak1458/fatooralite/releases)
+
+Manifest versions are application/workspace metadata, not a certification of release readiness.
+
+| Manifest | Declared version |
+| --- | --- |
+| [fatooralite/package.json](<fatooralite/package.json>) | `0.4.0` |
+
+A [v0.4.0 historical source preview](https://github.com/ak1458/fatooralite/releases/tag/v0.4.0) is published as a **prerelease** against the pre-existing tag. It supplies source archives and notes, not a newly validated binary or production certification. Current development includes later changes and outstanding gates; compare the tag with the branch before following old setup instructions.
+
+GitHub Packages is a separate registry. This README does not imply that a registry package exists; use the installation path documented here rather than an invented package-install command.
+
+## Documentation and maintenance
+
+- [START-HERE.md](<START-HERE.md>)
+- [docs/README.md](<docs/README.md>)
+- [docs/18-production-checklist.md](<docs/18-production-checklist.md>)
+- [docs/19-operations-runbook.md](<docs/19-operations-runbook.md>)
+- [docs/21-backup-restore.md](<docs/21-backup-restore.md>)
+
+Include the affected workflow, reproduction steps, and relevant check output when reporting a problem. Do not include credentials or live customer data.
 
 ## License
 
-Proprietary — © 2026 Ashraf Kamal. All rights reserved. Source is public for
-evaluation only; no reuse rights. See [LICENSE](LICENSE). Commercial/licensing
-enquiries: **ashrafkamal1458@gmail.com**.
-
----
-
-<div align="center"><sub>Built with Next.js · Prisma · ZATCA Phase-2 compliance engine</sub></div>
+This repository’s project code is **proprietary / all rights reserved**. Public visibility does not grant unrestricted reuse. Read [LICENSE](<LICENSE>) for the exact terms. Third-party dependencies and bundled components retain their own notices.

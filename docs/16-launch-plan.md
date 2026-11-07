@@ -710,3 +710,8 @@ refuses entirely — inserting nothing — if any row fails validation.
 No OPEN decision (D1–D9) was touched. Full regression, migration
 verification, and exact counts: `docs/SESSION_HANDOFF_2026-08-18.md`'s
 Phase 5 addendum.
+
+
+## 2026-11-07 — Repository documentation refresh
+
+Expanded the project README with source-based workflows, configuration, architecture, command references, release/license boundaries, and presentation assets. No application code, dependencies, database, transport, or release-readiness status changed. Verification for this pass checks documentation links, script references, and published content only.

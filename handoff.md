@@ -2898,3 +2898,8 @@ to `fatoora_audit` only, verified via `scripts/migration-drill.ts` (0
 failures against a fresh empty schema). Full test suite counts and the
 `neondb` drift finding: see `docs/SESSION_HANDOFF_2026-08-18.md`'s Phase 5
 addendum.
+
+
+## 2026-11-07 — Repository documentation refresh
+
+Expanded the project README with source-based workflows, configuration, architecture, command references, release/license boundaries, and presentation assets. No application code, dependencies, database, transport, or release-readiness status changed. Verification for this pass checks documentation links, script references, and published content only.

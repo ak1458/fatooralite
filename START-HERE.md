@@ -647,3 +647,8 @@ regression, and the reason is in the code comment beside it.
    did, what you deliberately did not, and why).
 3. Update this file's **Current state** and **What is left**.
 4. Commit with a real message — no tool attribution.
+
+
+## 2026-11-07 — Repository documentation refresh
+
+Expanded the project README with source-based workflows, configuration, architecture, command references, release/license boundaries, and presentation assets. No application code, dependencies, database, transport, or release-readiness status changed. Verification for this pass checks documentation links, script references, and published content only.
