@@ -2900,6 +2900,6 @@ failures against a fresh empty schema). Full test suite counts and the
 addendum.
 
 
-## 2026-11-07 — Repository presentation
+## 2026-11-07 — Repository documentation refresh
 
-Public repository presentation refreshed on 2026-11-07: concise README, accurate setup and license, and explicit production-gate links. Application behavior and release readiness were not revalidated in this documentation pass.
+Expanded the project README with source-based workflows, configuration, architecture, command references, release/license boundaries, and presentation assets. No application code, dependencies, database, transport, or release-readiness status changed. Verification for this pass checks documentation links, script references, and published content only.

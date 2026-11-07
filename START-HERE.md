@@ -34,10 +34,6 @@ Demo login after seeding: `khalid@almarai.example` / `owner1234`.
 
 ---
 
-## Repository presentation (2026-11-07)
-
-Public repository presentation refreshed on 2026-11-07: concise README, accurate setup and license, and explicit production-gate links. Application behavior and release readiness were not revalidated in this documentation pass.
-
 ## Current state (2026-08-18)
 
 - **A full production audit was run on 2026-08-18** against both audit
@@ -651,3 +647,8 @@ regression, and the reason is in the code comment beside it.
    did, what you deliberately did not, and why).
 3. Update this file's **Current state** and **What is left**.
 4. Commit with a real message — no tool attribution.
+
+
+## 2026-11-07 — Repository documentation refresh
+
+Expanded the project README with source-based workflows, configuration, architecture, command references, release/license boundaries, and presentation assets. No application code, dependencies, database, transport, or release-readiness status changed. Verification for this pass checks documentation links, script references, and published content only.
